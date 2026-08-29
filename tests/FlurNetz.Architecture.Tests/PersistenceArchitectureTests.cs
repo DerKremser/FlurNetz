@@ -3,8 +3,13 @@ using FlurNetz.Persistence.Configuration;
 
 namespace FlurNetz.Architecture.Tests;
 
+/// <summary>
+/// Sichert die technische Isolation der Persistence-Foundation von Fachmodulen und Hosts.
+/// </summary>
 public sealed class PersistenceArchitectureTests
 {
+    // Persistence stellt nur die technische Datenbankbasis bereit; Fachmodule und Adapter
+    // dürfen nicht als transitive Kopplung in diese untere Schicht gelangen.
     private static readonly string[] ForbiddenAssemblyPrefixes =
     [
         "FlurNetz.Engagement",
@@ -24,6 +29,7 @@ public sealed class PersistenceArchitectureTests
     [Fact]
     public void PersistenceHasNoForbiddenProjectReferences()
     {
+        // Verhindert, dass Persistence die Abhängigkeitsrichtung zu Messaging, API, Worker oder Fachmodulen umkehrt.
         var forbiddenReferences = PersistenceAssembly
             .GetReferencedAssemblies()
             .Select(assembly => assembly.Name)
@@ -37,6 +43,7 @@ public sealed class PersistenceArchitectureTests
     [Fact]
     public void PersistenceUsesConsistentNamespaces()
     {
+        // Ein konsistenter Namespace hält die technische API von versehentlich exportierten Fremdtypen getrennt.
         var invalidTypes = PersistenceAssembly
             .GetExportedTypes()
             .Where(type => type.Namespace is null
@@ -50,6 +57,8 @@ public sealed class PersistenceArchitectureTests
     [Fact]
     public void PersistenceContainsNoGenericRepositoryTypes()
     {
+        // Die Foundation liefert Verbindungen, Transaktionen und Migrationen; generische Repositories
+        // würden bereits jetzt fachliche Datenzugriffe und ein ungewolltes Abstraktionsmodell festlegen.
         var forbiddenTypes = PersistenceAssembly
             .GetExportedTypes()
             .Where(type => type.IsGenericType

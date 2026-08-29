@@ -4,8 +4,13 @@ using Npgsql;
 namespace FlurNetz.Persistence.Transactions;
 
 /// <summary>
-/// Owns one PostgreSQL connection and its transaction.
+/// Kapselt eine PostgreSQL-Verbindung und genau deren Transaktion.
 /// </summary>
+/// <remarks>
+/// Die Kapselung stellt sicher, dass alle Befehle innerhalb einer Transaktionsgrenze
+/// dieselbe Verbindung und dieselbe Transaktion verwenden. Der Besitzer dieses Objekts
+/// entscheidet über Commit oder Rollback und gibt anschließend beide Ressourcen frei.
+/// </remarks>
 public sealed class PostgreSqlTransaction : IAsyncDisposable
 {
     private readonly NpgsqlConnection connection;
@@ -19,6 +24,10 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         this.transaction = transaction;
     }
 
+    /// <summary>
+    /// Gibt die von dieser Transaktion besessene PostgreSQL-Verbindung zurück.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">Wenn die Transaktion bereits freigegeben wurde.</exception>
     public NpgsqlConnection Connection
     {
         get
@@ -28,6 +37,10 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Gibt die von dieser Kapselung besessene Datenbanktransaktion zurück.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">Wenn die Transaktion bereits freigegeben wurde.</exception>
     public NpgsqlTransaction Transaction
     {
         get
@@ -37,6 +50,13 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Öffnet eine Verbindung und beginnt darauf eine PostgreSQL-Transaktion.
+    /// </summary>
+    /// <param name="connectionFactory">Fabrik, die die Verbindung bereitstellt.</param>
+    /// <param name="cancellationToken">Token zum Abbrechen des Öffnens oder Beginnens.</param>
+    /// <returns>Eine Transaktionskapsel, die Verbindung und Transaktion besitzt.</returns>
+    /// <exception cref="ArgumentNullException">Wenn <paramref name="connectionFactory"/> fehlt.</exception>
     public static async ValueTask<PostgreSqlTransaction> BeginAsync(
         IPostgreSqlConnectionFactory connectionFactory,
         CancellationToken cancellationToken = default)
@@ -54,6 +74,7 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         {
             if (connection is not null)
             {
+                // Bei einem Fehler vor der Rückgabe existiert noch kein Besitzer für die Verbindung.
                 await connection.DisposeAsync().ConfigureAwait(false);
             }
 
@@ -61,6 +82,12 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Bestätigt die Transaktion und markiert sie als abgeschlossen.
+    /// </summary>
+    /// <param name="cancellationToken">Token zum Abbrechen des Commit-Vorgangs.</param>
+    /// <exception cref="ObjectDisposedException">Wenn die Kapselung bereits freigegeben wurde.</exception>
+    /// <exception cref="InvalidOperationException">Wenn Commit oder Rollback bereits erfolgt ist.</exception>
     public async ValueTask CommitAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -70,6 +97,12 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         completed = true;
     }
 
+    /// <summary>
+    /// Rollt die Transaktion zurück und markiert sie als abgeschlossen.
+    /// </summary>
+    /// <param name="cancellationToken">Token zum Abbrechen des Rollback-Vorgangs.</param>
+    /// <exception cref="ObjectDisposedException">Wenn die Kapselung bereits freigegeben wurde.</exception>
+    /// <exception cref="InvalidOperationException">Wenn Commit oder Rollback bereits erfolgt ist.</exception>
     public async ValueTask RollbackAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -79,6 +112,13 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         completed = true;
     }
 
+    /// <summary>
+    /// Rollt eine noch offene Transaktion zurück und gibt danach Transaktion und Verbindung frei.
+    /// </summary>
+    /// <remarks>
+    /// Der implizite Rollback schützt vor versehentlich offenen Transaktionen, wenn ein
+    /// Aufrufer nach einem Fehler aus dem <c>await using</c>-Bereich fällt.
+    /// </remarks>
     public async ValueTask DisposeAsync()
     {
         if (disposed)
@@ -90,6 +130,7 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         {
             if (!completed)
             {
+                // Dispose darf keine unbestätigten Änderungen im Pool zurücklassen.
                 await transaction.RollbackAsync().ConfigureAwait(false);
                 completed = true;
             }
@@ -98,6 +139,7 @@ public sealed class PostgreSqlTransaction : IAsyncDisposable
         {
             try
             {
+                // Die Transaktion wird vor der Verbindung freigegeben, weil sie von ihr abhängt.
                 await transaction.DisposeAsync().ConfigureAwait(false);
             }
             finally

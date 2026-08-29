@@ -4,8 +4,19 @@ using FlurNetz.Persistence.Transactions;
 
 namespace FlurNetz.Persistence.Migrations;
 
+/// <summary>
+/// Führt explizite SQL-Migrationen gegen PostgreSQL aus und verwaltet deren technische History.
+/// </summary>
+/// <remarks>
+/// Der Runner startet nicht automatisch. Der Host entscheidet ausdrücklich, wann ein Lauf
+/// stattfindet. Jede neue Migration und ihr History-Eintrag werden in derselben Transaktion
+/// ausgeführt; ein Fehler kann daher keine Migration als angewendet registrieren.
+/// </remarks>
 public sealed class MigrationRunner
 {
+    /// <summary>
+    /// Voll qualifizierter Name der technischen Tabelle für angewendete Migrationen.
+    /// </summary>
     public const string MigrationHistoryTableName = "flurnetz_persistence.migration_history";
 
     private const string CreateHistorySql = """
@@ -35,11 +46,25 @@ public sealed class MigrationRunner
     private readonly IPostgreSqlConnectionFactory connectionFactory;
     private readonly IReadOnlyList<IMigrationSource> migrationSources;
 
+    /// <summary>
+    /// Erstellt einen Runner für eine einzelne Migrationsquelle.
+    /// </summary>
+    /// <param name="connectionFactory">Fabrik für PostgreSQL-Verbindungen.</param>
+    /// <param name="migrationSource">Quelle der expliziten SQL-Migrationen.</param>
+    /// <exception cref="ArgumentNullException">Wenn die Verbindungsfabrik fehlt.</exception>
+    /// <exception cref="ArgumentException">Wenn die Migrationsquelle fehlt.</exception>
     public MigrationRunner(IPostgreSqlConnectionFactory connectionFactory, IMigrationSource migrationSource)
         : this(connectionFactory, [migrationSource])
     {
     }
 
+    /// <summary>
+    /// Erstellt einen Runner für mehrere explizit registrierte Migrationsquellen.
+    /// </summary>
+    /// <param name="connectionFactory">Fabrik für PostgreSQL-Verbindungen.</param>
+    /// <param name="migrationSources">Die zu sammelnden Migrationsquellen.</param>
+    /// <exception cref="ArgumentNullException">Wenn eine Sammlung oder die Verbindungsfabrik fehlt.</exception>
+    /// <exception cref="ArgumentException">Wenn eine Sammlung eine Null-Quelle enthält.</exception>
     public MigrationRunner(
         IPostgreSqlConnectionFactory connectionFactory,
         IEnumerable<IMigrationSource> migrationSources)
@@ -56,8 +81,20 @@ public sealed class MigrationRunner
         }
     }
 
+    /// <summary>
+    /// Führt alle noch fehlenden Migrationen in deterministischer Reihenfolge aus.
+    /// </summary>
+    /// <param name="cancellationToken">Token zum Abbrechen vor oder zwischen Migrationen.</param>
+    /// <returns>Anzahl angewendeter und übersprungener Migrationen.</returns>
+    /// <exception cref="InvalidOperationException">Wenn eine Migration doppelt ist oder nach Anwendung geändert wurde.</exception>
+    /// <remarks>
+    /// Das Anlegen der History ist selbst transaktional. Jede einzelne Migration besitzt
+    /// anschließend eine eigene Transaktion, sodass ein Fehler die vorherigen erfolgreichen
+    /// Migrationen nicht zurückrollt.
+    /// </remarks>
     public async Task<MigrationRunResult> RunAsync(CancellationToken cancellationToken = default)
     {
+        // Erst vollständig validieren und sortieren, bevor Schema oder History verändert werden.
         var migrations = MigrationOrdering.Order(
             migrationSources.SelectMany(source => source.GetMigrations()));
 
@@ -89,6 +126,7 @@ public sealed class MigrationRunner
 
     private async Task EnsureHistoryAsync(CancellationToken cancellationToken)
     {
+        // Schema und History-Tabelle werden gemeinsam angelegt, damit ein halbfertiger Metadatenzustand vermieden wird.
         await using var transaction = await PostgreSqlTransaction
             .BeginAsync(connectionFactory, cancellationToken)
             .ConfigureAwait(false);
@@ -121,9 +159,13 @@ public sealed class MigrationRunner
 
     private async Task ApplyMigrationAsync(Migration migration, CancellationToken cancellationToken)
     {
+        // SQL und History-Eintrag teilen bewusst dieselbe Verbindung und Transaktion.
+        // So bleibt eine fehlgeschlagene Migration unsichtbar für spätere Läufe.
         await using var transaction = await PostgreSqlTransaction
             .BeginAsync(connectionFactory, cancellationToken)
             .ConfigureAwait(false);
+
+        var checksum = MigrationChecksum.Compute(migration.Sql);
 
         await transaction.Connection.ExecuteAsync(
                 new CommandDefinition(
@@ -140,7 +182,7 @@ public sealed class MigrationRunner
                         migration.Owner,
                         migration.Version,
                         migration.Name,
-                        Checksum = MigrationChecksum.Compute(migration.Sql)
+                        Checksum = checksum
                     },
                     transaction: transaction.Transaction,
                     cancellationToken: cancellationToken))
@@ -151,6 +193,7 @@ public sealed class MigrationRunner
 
     private static void EnsureMigrationIsUnchanged(Migration migration, AppliedMigration appliedMigration)
     {
+        // Der Hash schützt die Unveränderlichkeit des bereits ausgeführten exakten SQL-Texts.
         var checksum = MigrationChecksum.Compute(migration.Sql);
         if (!string.Equals(appliedMigration.Name, migration.Name, StringComparison.Ordinal)
             || !string.Equals(appliedMigration.Checksum, checksum, StringComparison.Ordinal))

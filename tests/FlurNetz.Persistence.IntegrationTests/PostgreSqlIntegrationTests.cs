@@ -6,6 +6,9 @@ using FlurNetz.Persistence.Transactions;
 
 namespace FlurNetz.Persistence.IntegrationTests;
 
+/// <summary>
+/// Prüft Verbindung, Transaktionsgrenzen und SQL-first-Migrationen gegen echtes PostgreSQL.
+/// </summary>
 public sealed class PostgreSqlIntegrationTests(PostgreSqlFixture database) : IClassFixture<PostgreSqlFixture>
 {
     [Fact]
@@ -30,6 +33,7 @@ public sealed class PostgreSqlIntegrationTests(PostgreSqlFixture database) : ICl
 
         try
         {
+            // Die Tabelle wird außerhalb der zu prüfenden Transaktion angelegt, damit nur der INSERT commit-relevant ist.
             await using (var setupConnection = await factory.OpenConnectionAsync(TestCancellationToken))
             {
                 await setupConnection.ExecuteAsync(
@@ -68,6 +72,7 @@ public sealed class PostgreSqlIntegrationTests(PostgreSqlFixture database) : ICl
 
         try
         {
+            // Der absichtlich nicht bestätigte INSERT muss nach dem Rollback vollständig verschwunden sein.
             await using (var setupConnection = await factory.OpenConnectionAsync(TestCancellationToken))
             {
                 await setupConnection.ExecuteAsync(
@@ -186,6 +191,7 @@ public sealed class PostgreSqlIntegrationTests(PostgreSqlFixture database) : ICl
             owner,
             1,
             "FailedMigration",
+            // Absichtlich ungültiges SQL simuliert einen Fehler nach bereits ausgeführten Statements.
             $"CREATE TABLE {table} (id integer NOT NULL); INSERT INTO {table} (id) VALUES (1); THIS IS NOT VALID SQL;");
         await using var factory = CreateFactory();
         var runner = new MigrationRunner(factory, new MigrationSource([migration]));

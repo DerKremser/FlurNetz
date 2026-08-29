@@ -31,6 +31,7 @@ public sealed class MigrationTests
     [Fact]
     public void MigrationOrderingUsesOwnerVersionAndName()
     {
+        // Die Eingabe ist absichtlich unsortiert; die Foundation muss unabhängig von der Quellreihenfolge stabil bleiben.
         var migrations = new[]
         {
             new Migration("Zeta", 1, "LaterOwner", "SELECT 1;"),
@@ -48,6 +49,7 @@ public sealed class MigrationTests
     [Fact]
     public void MigrationOrderingRejectsDuplicateOwnerAndVersion()
     {
+        // Unterschiedliche Namen dürfen denselben technischen Owner/Version-Schlüssel nicht mehrfach belegen.
         var migrations = new[]
         {
             new Migration("Persistence", 1, "First", "SELECT 1;"),
@@ -62,6 +64,7 @@ public sealed class MigrationTests
     [Fact]
     public void MigrationChecksumIsStableAndChangesWithSql()
     {
+        // Der exakte SQL-Text ist Teil der Unveränderlichkeitsprüfung bereits angewendeter Migrationen.
         var checksum = MigrationChecksum.Compute("SELECT 1;");
 
         Assert.Equal(checksum, MigrationChecksum.Compute("SELECT 1;"));
