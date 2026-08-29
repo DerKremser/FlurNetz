@@ -10,6 +10,20 @@
     <ProjectReference Include="..\..\src\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity\FlurNetz.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Engagement\FlurNetz.Modules.Engagement.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Progression\FlurNetz.Modules.Progression.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Economy\FlurNetz.Modules.Economy.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Rewards\FlurNetz.Modules.Rewards.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Inventory\FlurNetz.Modules.Inventory.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Titles\FlurNetz.Modules.Titles.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Achievements\FlurNetz.Modules.Achievements.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Shop\FlurNetz.Modules.Shop.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Notifications\FlurNetz.Modules.Notifications.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Automation\FlurNetz.Modules.Automation.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Overlay\FlurNetz.Modules.Overlay.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Integrations\FlurNetz.Modules.Integrations.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Administration\FlurNetz.Modules.Administration.csproj" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 
