@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation sowie die physischen Grenzen der vorgesehenen Fachmodule. Die Fachmodule selbst, Hosts und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule sowie die erste fachliche Identity Foundation. Die übrigen Fachmodule, Hosts und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -27,7 +27,13 @@ Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](
 
 `FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards und die minimale `IClock`-Abstraktion.
 
-Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik sowie Projekt-, Namespace- und Typgrenzen.
+Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, die Identity Foundation sowie Projekt-, Namespace- und Typgrenzen.
+
+## Identity Foundation
+
+Identity ist das erste Referenzmodul und besitzt die zentrale interne Identität eines Community-Mitglieds. `FlurNetz.Modules.Identity.Contracts` enthält ausschließlich den stabilen, unveränderlichen Identifier `CommunityIdentityId`; `FlurNetz.Modules.Identity` enthält die minimale Domain-Identität `CommunityIdentity` mit dieser ID.
+
+Externe Plattformkennungen werden später über Auflösung und Mapping auf die interne FlurNetz-Identität bezogen. Sie ersetzen `CommunityIdentityId` nicht. Die Foundation enthält noch keinen Create-Use-Case, keine fachliche Persistenz, keine Plattformkonten, keine Authentifizierung, keine API und keine fachlichen Events. Details stehen in [docs/architecture/identity.md](docs/architecture/identity.md).
 
 ## Persistence Foundation
 
@@ -39,7 +45,7 @@ Es gibt weiterhin keine fachlichen Modulimplementierungen, fachlichen Tabellen o
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine bewusst leere Contracts-Class-Library, eine bewusst leere Implementierungs-Class-Library und ein minimales xUnit-v3-Testprojekt. Die Implementierung referenziert ausschließlich das eigene Contracts-Projekt; Cross-Module-Referenzen und fachliche Typen sind noch nicht vorhanden. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben. Identity wird später als erstes Referenzmodul begonnen.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein minimales xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId` und `CommunityIdentity` die erste fachliche Foundation. Die Implementierungen referenzieren ausschließlich das jeweils eigene Contracts-Projekt; Cross-Module-Referenzen und fachliche Typen der übrigen Module sind noch nicht vorhanden. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale Entwicklung
 

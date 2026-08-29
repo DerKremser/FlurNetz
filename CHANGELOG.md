@@ -16,3 +16,5 @@
 - Unit-, Architecture- und echte PostgreSQL-Integrationstests für atomare Verarbeitung, transactional Inbox, Duplicate Redelivery, paralleles Claiming und Poison Messages.
 - Physische Contracts- und Implementierungsprojekte für alle vorgesehenen Fachmodule.
 - Modulbezogene xUnit-v3-Testprojekte und Architekturtests zur Absicherung der Modul- und Assembly-Grenzen.
+- Erste fachliche Identity-Grundlage mit stabiler interner Community-Identity-ID.
+- Minimales Domain-Modell für die interne Community-Identität.
