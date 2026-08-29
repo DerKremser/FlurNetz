@@ -1,0 +1,59 @@
+# Messaging Foundation
+
+`FlurNetz.Messaging` ist die technische Grundlage für spätere Kommunikation zwischen FlurNetz-Modulgrenzen. Sie enthält noch keine fachlichen Events, Module, API, Worker oder externe Broker-Integration.
+
+## Domain Events und Integration Events
+
+Domain Events (`IDomainEvent`) sind interne Prozesssignale. Der `DomainEventDispatcher` liefert sie in expliziter Registrierungsreihenfolge sequenziell an passende Handler. Ein fehlender Handler ist ein No-op, der erste Handler-Fehler wird nicht verschluckt und Cancellation wird weitergereicht. Domain Events werden weder serialisiert noch in der Outbox gespeichert.
+
+Integration Events (`IIntegrationEvent`) sind dagegen stabile technische Nachrichten an einer Modulgrenze. Ihre fachliche Payload bleibt von technischen Metadaten getrennt. Sie werden nicht sofort an einen externen Handler gesendet: `EnqueueAsync` bedeutet zunächst durable Persistierung in der Outbox.
+
+## Envelope, Identität und Versionierung
+
+`IntegrationEventEnvelope` enthält:
+
+- `MessageId`: echte, stabile eindeutige Identität für Outbox, Inbox, Logs und Wiederzustellung;
+- `MessageType`: expliziter logischer Typname, beispielsweise `identity.user-created`;
+- `SchemaVersion`: positive, explizite Payload-Version;
+- `OccurredAtUtc` sowie optional `CorrelationId` und `CausationId`.
+
+Die `IntegrationEventTypeRegistry` wird ausdrücklich durch spätere Module registriert. Sie ordnet die Kombination aus logischem Typ und Version einem CLR-Typ zu, erkennt doppelte Registrierungen und lehnt unbekannte Typen oder Versionen mit einem klaren Fehler ab. Es gibt keine Assembly-Suche und kein `AssemblyQualifiedName` im Wire-Format; Refactorings und Assembly-Versionen verändern dadurch keine persistierte Nachrichtenidentität.
+
+`IntegrationEventJsonSerializer` verwendet ausschließlich `System.Text.Json` und UTF-8. Die Registry entscheidet vor der Deserialisierung über den erlaubten CLR-Typ. Beliebige polymorphe CLR-Typen aus JSON werden nicht aktiviert.
+
+## PostgreSQL-Outbox
+
+`PostgreSqlOutboxPublisher` erhält eine bereits geöffnete `PostgreSqlTransaction`. Er öffnet keine zweite Verbindung und führt keinen eigenen Commit aus. Ein fachlicher Write und der Outbox Insert können deshalb so aussehen:
+
+1. PostgreSQL-Transaktion beginnen;
+2. fachlichen Datenbank-Write auf `transaction.Connection` ausführen;
+3. Integration Event über `EnqueueAsync` in `flurnetz_messaging.outbox_messages` schreiben;
+4. dieselbe Transaktion committen oder zurückrollen.
+
+Der Commit macht beide Änderungen dauerhaft sichtbar. Ein Rollback hinterlässt weder den fachlichen Write noch die Outbox-Nachricht. Die technische Tabelle speichert MessageId, logischen Typ, Schema-Version, JSON-Payload, UTC-Zeitpunkte, optionale Korrelation/Ursache, Status, Versuchszähler, Lease-Informationen und einen gekürzten letzten Fehlertext.
+
+## Processor, Claiming und Lebenszyklus
+
+Der `OutboxProcessor` ist host-unabhängig und führt mit `ProcessBatchAsync` genau einen aufrufbaren Batch-Lauf aus. Er startet keine Endlosschleife und ist kein `BackgroundService`. Ein späterer API-Host, Worker oder Testhost entscheidet über den Aufrufzeitpunkt.
+
+Offene Outbox-Nachrichten werden in einer kurzen PostgreSQL-Transaktion mit `FOR UPDATE SKIP LOCKED` ausgewählt und über `locked_until_utc` geleast. Dabei wird der Versuchszähler atomar erhöht. Ein abgestürzter Processor blockiert eine Nachricht nur bis zum Ablauf des Leases; ein weiterer Lauf kann sie danach erneut übernehmen.
+
+## Inbox und transactional Inbox
+
+`flurnetz_messaging.inbox_messages` besitzt den Schlüssel aus stabiler `consumer_name`-Identität und `message_id`. Ein Consumer wird ausdrücklich benannt und nicht dauerhaft über seinen CLR-Klassennamen identifiziert.
+
+Vor dem Handler wird der Inbox-Eintrag in derselben PostgreSQL-Transaktion eingefügt. `ON CONFLICT DO NOTHING` erkennt eine bereits erfolgreich verarbeitete Zustellung. Bei einem neuen Eintrag führt der Handler seinen Business Write über den `IntegrationEventHandlerContext` auf derselben Connection und Transaction aus. Erst der gemeinsame Commit bestätigt Business Effect und Inbox-Markierung. Wirft der Handler einen Fehler, rollt die Transaktion beides zurück; die Nachricht bleibt retrybar.
+
+Verschiedene Consumer können dieselbe MessageId jeweils einmal verarbeiten. Bei Duplicate Redelivery überspringt die Inbox den bereits erfolgreichen Consumer, während die Outbox-Nachricht kontrolliert abgeschlossen werden kann.
+
+## Retry und Poison Messages
+
+Fehler werden technisch knapp als Typ und bereinigte, begrenzte Nachricht gespeichert; vollständige Payloads und Secrets gehören nicht in `last_error`. Bis `MaxAttempts` erreicht ist, wird eine Nachricht mit `next_attempt_at_utc` und einer einfachen Verzögerung zurückgestellt. Die Zeitplanung verwendet `IClock`.
+
+Nach dem letzten erlaubten Versuch erhält die Nachricht den Status `failed` (Poison). Sie wird nicht erneut ausgewählt und blockiert keine späteren Nachrichten. Unbekannte logische Typen oder Versionen gelten als normale Verarbeitungsfehler und durchlaufen dieselben Retry-/Poison-Regeln.
+
+## Migrationen und Tests
+
+`MessagingMigrationSource` registriert die technischen Tabellen unter dem eindeutigen Migration-Owner `Messaging` beim vorhandenen SQL-first `MigrationRunner`. Es gibt keine fachlichen Migrationen.
+
+Die Unit Tests prüfen Domain-Dispatcher, Registry und Serialisierung. Architecture Tests sichern Namespace, Abhängigkeitsrichtung, fachliche Neutralität und das Fehlen generischer Repositories. Die PostgreSQL-Integrationstests verwenden Testcontainers und prüfen Migration/Idempotenz, atomaren Commit und Rollback, Processor, Inbox-Deduplizierung, transactional Inbox, Retry, Poison, unbekannte Typen, Duplicate Redelivery und paralleles Claiming. SQLite und In-Memory-Datenbanken werden nicht verwendet.
