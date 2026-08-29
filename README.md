@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein neues, modular aufgebautes .NET-Projekt. Der aktuelle Stand ist ein technisches Repository- und Solution-Grundgerüst für die frühe Entwicklung; fachliche Module und Infrastrukturimplementierungen sind noch nicht enthalten.
+FlurNetz ist ein neues, modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst erstmals eine minimale BuildingBlocks-Grundlage sowie erste automatisierte Architekturtests. Fachmodule und Infrastrukturimplementierungen sind noch nicht enthalten.
 
 ## Technische Basis
 
@@ -15,6 +15,12 @@ FlurNetz ist ein neues, modular aufgebautes .NET-Projekt. Der aktuelle Stand ist
 
 PostgreSQL, Dapper, Npgsql und weitere fachliche oder infrastrukturelle Bausteine werden erst in späteren Arbeitsschritten hinzugefügt.
 
+## BuildingBlocks und Architekturtests
+
+`FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards und die minimale `IClock`-Abstraktion.
+
+Die Projekte `FlurNetz.BuildingBlocks.Tests` und `FlurNetz.Architecture.Tests` prüfen das Verhalten dieser Primitives sowie grundlegende Projekt-, Namespace- und Typgrenzen. Fachmodule, Persistence, Messaging, API und Worker sind weiterhin nicht Bestandteil des Projekts.
+
 ## Lokale Entwicklung
 
 Voraussetzung ist das in `global.json` festgelegte stabile .NET-10-SDK.
@@ -25,4 +31,4 @@ dotnet build
 dotnet test
 ```
 
-Die initiale Architektur-Richtung ist in [docs/architecture/overview.md](docs/architecture/overview.md) beschrieben.
+Die initiale Architektur-Richtung ist in [docs/architecture/overview.md](docs/architecture/overview.md) beschrieben. Die Regeln für BuildingBlocks stehen in [docs/architecture/building-blocks.md](docs/architecture/building-blocks.md).

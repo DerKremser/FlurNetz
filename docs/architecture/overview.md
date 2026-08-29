@@ -7,3 +7,7 @@ Identity bildet später die zentrale interne Benutzeridentität. Persistence und
 Streamer.bot wird später als externer Adapter behandelt und lädt keine internen FlurNetz-Assemblies. Interne FlurNetz-Projekte verwenden .NET 10. PostgreSQL ist als primäre relationale Datenbank geplant.
 
 Für zuverlässige spätere Integration Events sind Outbox und Inbox als technische Infrastruktur vorgesehen. In diesem Grundgerüst werden noch keine fachlichen Entitäten, Tabellen, Events, Module oder Infrastrukturimplementierungen definiert.
+
+`FlurNetz.BuildingBlocks` ist bewusst minimal gehalten und enthält ausschließlich domain-neutrale Primitives. Es gibt dort keine fachlichen Modelle, Generic Repositories oder fachlichen Services. Die Architekturtests sichern die heute prüfbaren Projekt- und Namespace-Grenzen automatisiert ab.
+
+Die Regeln für die Aufnahme weiterer gemeinsamer Bausteine sind in [building-blocks.md](building-blocks.md) festgehalten.
