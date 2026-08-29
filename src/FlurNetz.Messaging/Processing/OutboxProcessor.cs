@@ -203,7 +203,6 @@ public sealed class OutboxProcessor
                 if (exception is UnknownIntegrationEventTypeException or UnknownIntegrationEventVersionException)
                 {
                     logger.LogError(
-                        exception,
                         "Outbox message {MessageId} has an unknown integration event type or schema version.",
                         message.MessageId);
                 }
@@ -342,16 +341,14 @@ public sealed class OutboxProcessor
 
     private static string FormatError(Exception exception)
     {
-        var message = string.IsNullOrWhiteSpace(exception.Message)
-            ? "No error message was provided."
-            : exception.Message.ReplaceLineEndings(" ").Trim();
-        const int maxMessageLength = 1800;
-        if (message.Length > maxMessageLength)
+        return exception switch
         {
-            message = message[..maxMessageLength];
-        }
-
-        return $"{exception.GetType().Name}: {message}";
+            UnknownIntegrationEventTypeException unknownType
+                => $"UnknownIntegrationEventTypeException: message type '{unknownType.MessageType}' is not registered.",
+            UnknownIntegrationEventVersionException unknownVersion
+                => $"UnknownIntegrationEventVersionException: message type '{unknownVersion.MessageType}' has no registered schema version '{unknownVersion.SchemaVersion}'.",
+            _ => $"{exception.GetType().Name}: handler processing failed."
+        };
     }
 
     private sealed class SystemClock : IClock

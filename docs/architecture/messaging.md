@@ -48,7 +48,7 @@ Verschiedene Consumer können dieselbe MessageId jeweils einmal verarbeiten. Bei
 
 ## Retry und Poison Messages
 
-Fehler werden technisch knapp als Typ und bereinigte, begrenzte Nachricht gespeichert; vollständige Payloads und Secrets gehören nicht in `last_error`. Bis `MaxAttempts` erreicht ist, wird eine Nachricht mit `next_attempt_at_utc` und einer einfachen Verzögerung zurückgestellt. Die Zeitplanung verwendet `IClock`.
+Fehler werden technisch knapp als Exception-Typ bzw. sicherer Registry-Hinweis gespeichert; vollständige Fehlermeldungen, Payloads und Secrets gehören nicht in `last_error` oder die technischen Logs. Bis `MaxAttempts` erreicht ist, wird eine Nachricht mit `next_attempt_at_utc` und einer einfachen Verzögerung zurückgestellt. Die Zeitplanung verwendet `IClock`.
 
 Nach dem letzten erlaubten Versuch erhält die Nachricht den Status `failed` (Poison). Sie wird nicht erneut ausgewählt und blockiert keine späteren Nachrichten. Unbekannte logische Typen oder Versionen gelten als normale Verarbeitungsfehler und durchlaufen dieselben Retry-/Poison-Regeln.
 
