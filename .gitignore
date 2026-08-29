@@ -1,0 +1,41 @@
+# Build-Ausgaben
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+
+# Test-Ausgaben
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+
+# Visual Studio
+.vs/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+.vscode/
+
+# NuGet-Pakete
+*.nupkg
+*.snupkg
+
+# Lokale Konfiguration und Geheimnisse
+*.env
+*.env.*
+!.env.example
+secrets/
+
+# Betriebssysteme
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
