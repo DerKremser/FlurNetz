@@ -38,6 +38,7 @@ public sealed class ResultTests
     [Fact]
     public void GenericFailure_CarriesErrorWithoutValue()
     {
+        // Ein Failure darf keinen veralteten Erfolgswert mitführen; genau diese Zustandsinvariante wird hier festgehalten.
         var error = new Error("test.failure", "Die Operation ist fehlgeschlagen.");
         var result = Result<string>.Failure(error);
 

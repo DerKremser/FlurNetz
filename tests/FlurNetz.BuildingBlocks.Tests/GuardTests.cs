@@ -15,6 +15,7 @@ public sealed class GuardTests
     [Fact]
     public void NotNull_RejectsNullReference()
     {
+        // Der Nullwert ist hier absichtlich, weil der Guard die technische Eingabeinvariante durchsetzen soll.
         Assert.Throws<ArgumentNullException>(() => Guard.NotNull<Sample>(null, "value"));
     }
 
@@ -29,6 +30,7 @@ public sealed class GuardTests
     [Fact]
     public void NotNullOrWhiteSpace_RejectsWhitespace()
     {
+        // Auch nur aus Leerzeichen bestehende Werte sind für Bezeichner und Nachrichten ungültig.
         Assert.Throws<ArgumentException>(() => Guard.NotNullOrWhiteSpace(" ", "value"));
     }
 

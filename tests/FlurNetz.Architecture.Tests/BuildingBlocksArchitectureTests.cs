@@ -3,8 +3,13 @@ using FlurNetz.BuildingBlocks.Results;
 
 namespace FlurNetz.Architecture.Tests;
 
+/// <summary>
+/// Sichert die bewusst niedrige Abhängigkeits- und Inhaltsgrenze der BuildingBlocks-Schicht.
+/// </summary>
 public sealed class BuildingBlocksArchitectureTests
 {
+    // BuildingBlocks ist die unterste gemeinsame technische Schicht.
+    // Referenzen auf Persistence, Messaging oder Fachmodule würden die Abhängigkeitsrichtung umkehren.
     private static readonly string[] ForbiddenAssemblyPrefixes =
     [
         "FlurNetz.Engagement",
@@ -19,6 +24,7 @@ public sealed class BuildingBlocksArchitectureTests
         "FlurNetz.Worker"
     ];
 
+    // Fachliche Typen gehören in Module und dürfen nicht in die wiederverwendbare Basisschicht durchsickern.
     private static readonly string[] ForbiddenTypeNames =
     [
         "CommunityUser",
@@ -45,6 +51,7 @@ public sealed class BuildingBlocksArchitectureTests
     [Fact]
     public void BuildingBlocks_UsesConsistentNamespaces()
     {
+        // Ein einheitlicher Namespace hält die öffentliche Oberfläche der Basisschicht auffindbar und eindeutig.
         var invalidTypes = BuildingBlocksAssembly
             .GetExportedTypes()
             .Where(type => type.Namespace is null || !type.Namespace.StartsWith("FlurNetz.BuildingBlocks.", StringComparison.Ordinal))
@@ -57,6 +64,7 @@ public sealed class BuildingBlocksArchitectureTests
     [Fact]
     public void BuildingBlocks_ContainsNoForbiddenDomainTypeNames()
     {
+        // Diese Regel verhindert, dass die technische Schicht unbemerkt fachliche Besitzverhältnisse übernimmt.
         var forbiddenTypes = BuildingBlocksAssembly
             .GetExportedTypes()
             .Where(type => ForbiddenTypeNames.Contains(type.Name, StringComparer.Ordinal))
@@ -69,6 +77,7 @@ public sealed class BuildingBlocksArchitectureTests
     [Fact]
     public void ArchitectureTestAssembly_ContainsOnlyTestTypes()
     {
+        // Das Testprojekt darf keine produktiven Exporte vortäuschen, die Architekturregeln umgehen könnten.
         var nonTestTypes = typeof(BuildingBlocksArchitectureTests).Assembly
             .GetExportedTypes()
             .Where(type => !type.Name.EndsWith("Tests", StringComparison.Ordinal))
