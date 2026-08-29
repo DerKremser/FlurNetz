@@ -14,3 +14,5 @@
 - PostgreSQL-Outbox und Inbox für atomare, zuverlässige und deduplizierte Integration Events.
 - Explizite Message-Type-Registry, versionierte System.Text.Json-Serialisierung, Claiming sowie Retry-/Failed-Fehlerbehandlung.
 - Unit-, Architecture- und echte PostgreSQL-Integrationstests für atomare Verarbeitung, transactional Inbox, Duplicate Redelivery, paralleles Claiming und Poison Messages.
+- Physische Contracts- und Implementierungsprojekte für alle vorgesehenen Fachmodule.
+- Modulbezogene xUnit-v3-Testprojekte und Architekturtests zur Absicherung der Modul- und Assembly-Grenzen.

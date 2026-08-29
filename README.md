@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation und die Messaging Foundation. Fachmodule, Hosts und externe Integrationen sind noch nicht enthalten.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation sowie die physischen Grenzen der vorgesehenen Fachmodule. Die Fachmodule selbst, Hosts und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -35,7 +35,11 @@ Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `Flu
 
 `FlurNetz.Persistence.IntegrationTests` testet Verbindungen, Commit/Rollback und den Migration Runner gegen PostgreSQL. Für den automatischen Testlauf wird Docker für Testcontainers benötigt. Alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` auf eine isolierte PostgreSQL-Testdatenbank zeigen.
 
-Es gibt weiterhin keine Fachmodule, fachlichen Tabellen oder fachlichen Repositories. API, Worker und externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Es gibt weiterhin keine fachlichen Modulimplementierungen, fachlichen Tabellen oder fachlichen Repositories. API, Worker und externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+
+## Fachmodule
+
+Für jedes vorgesehene Fachmodul existieren eine bewusst leere Contracts-Class-Library, eine bewusst leere Implementierungs-Class-Library und ein minimales xUnit-v3-Testprojekt. Die Implementierung referenziert ausschließlich das eigene Contracts-Projekt; Cross-Module-Referenzen und fachliche Typen sind noch nicht vorhanden. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben. Identity wird später als erstes Referenzmodul begonnen.
 
 ## Lokale Entwicklung
 
