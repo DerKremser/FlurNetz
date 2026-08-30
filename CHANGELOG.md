@@ -4,6 +4,8 @@
 
 ### Hinzugefügt
 
+- Minimale Rewards-Domain mit Reward Definitions, Packages, Sources und Grant-Records.
+- Erste konkrete Reward Definition für eine spätere Economy-Balance-Gutschrift.
 - Minimale Economy-Domain für nicht-negative Community-Salden.
 - Fachliche Gutschriften und Abbuchungen mit Schutz vor Überziehung und Overflow.
 - Erster persistierter Economy-Vertical-Slice für atomare Community-Salden.

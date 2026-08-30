@@ -92,6 +92,26 @@ null, wirft bei positivem Betrag `InsufficientEconomyBalanceException` und legt 
 Multi-Currency-Struktur werden bewusst nicht vorweggenommen; Events, Messaging, Transfers,
 Rewards, Shop-Funktionalität und API gehören weiterhin nicht zum Slice.
 
+## Aktueller Stand des Rewards-Moduls
+
+Rewards besitzt jetzt eine minimale Domain Foundation. `RewardDefinitionId`, `RewardPackageId`
+und `RewardGrantId` sind getrennte, unveränderliche Guid-basierte Fachtypen. `RewardDefinition`
+trägt ausschließlich ihre Kennung; der erste konkrete Definitionstyp
+`EconomyBalanceRewardDefinition` beschreibt eine positive Economy-Balance-Gutschrift mit einem
+neutralen `long Amount`, ohne Economy zu referenzieren oder den Economy-Zustand zu besitzen.
+
+`RewardPackage` fasst mindestens eine gültige, doppelfreie Definition zusammen und beschreibt
+eine verpflichtende Menge: Bei der späteren V1-Ausführung müssen entweder alle Komponenten
+erfolgreich sein oder keine. `RewardSource` bildet die nicht leere Herkunft aus `SourceType` und
+`SourceId` ab; `SourceType` ist bewusst kein Enum. `RewardGrant` ist einem Empfänger über die
+zentrale `CommunityIdentityId` und genau einer `RewardDefinitionId` zugeordnet. Die spätere
+Eindeutigkeit `SourceType + SourceId + RewardDefinitionId` ist dokumentiert, aber noch nicht
+technisch umgesetzt.
+
+`FlurNetz.Modules.Rewards.Contracts` bleibt leer. Das Rewards-Modul besitzt noch keine
+Persistence, Ausführung, Messaging-, API- oder Worker-Anbindung. XP bleiben Progression-owned;
+Inventory- und Title-Rewards werden erst nach der Existenz der jeweiligen Zielmodule modelliert.
+
 ## Contracts und Implementierung
 
 Die Contracts-Assemblies beschreiben die später öffentliche Modulgrenze. Die Contracts-Assemblies
@@ -102,7 +122,8 @@ seine Domain-Foundation und mit dem Message-Event den ersten öffentlichen Contr
 besitzt mit Domain, Application, Persistence-Adapter, Migration, Consumer und Registrierung
 einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Contract. Economy besitzt
 mit Domain, Application, Persistence-Adapter, Migration und Registrierung ebenfalls einen internen
-Vertical Slice, benötigt aber keinen öffentlichen Contract.
+Vertical Slice, benötigt aber keinen öffentlichen Contract. Rewards besitzt seine Domain
+Foundation, benötigt aber ebenfalls noch keinen öffentlichen Contract.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -112,14 +133,17 @@ für seinen Message-Recording-Slice und registriert Use Case, Repository, Migrat
 Progression nutzt Domain, Application, einen atomaren Store, Migration, Consumer und Registrierung;
 der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy nutzt Domain,
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
-und es gibt keine öffentliche API. Die übrigen
+und es gibt keine öffentliche API. Rewards nutzt in diesem Schritt ausschließlich seine Domain;
+es gibt keine Rewards-Persistence, Ausführung oder Modulregistrierung. Die übrigen
 Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen
 BuildingBlocks-, Persistence- und Messaging-Projekte verwenden. Progression darf zusätzlich
 ausschließlich `Engagement.Contracts` und Messaging verwenden; die Engagement-Implementierung
-bleibt verboten. Cross-Module-Kommunikation erfolgt über freigegebene öffentliche Contracts
+bleibt verboten. Economy und Rewards dürfen jeweils ausschließlich `Identity.Contracts` als
+fachfremden Contract verwenden; Rewards referenziert weder Economy noch
+`Economy.Contracts`. Cross-Module-Kommunikation erfolgt über freigegebene öffentliche Contracts
 und Integration Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine
 vorsorglichen Shared-Entities.
 
@@ -128,10 +152,12 @@ und Engagement-Unit- sowie PostgreSQL-Integrationstests prüfen jeweils die vorh
 und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Progression wird
 zusätzlich mit Domain-, Use-Case-, Migration-, Rollback-, Load- und echten PostgreSQL-
 Concurrency-Tests abgesichert. Economy besitzt eigene Domain-, Use-Case-, Migration-, Lifecycle-,
-Rollback-, Load- und echte PostgreSQL-Concurrency-Tests. Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
+Rollback-, Load- und echte PostgreSQL-Concurrency-Tests. Rewards besitzt ausschließlich
+Domain-Unit-Tests sowie die zugehörigen Architekturtests; es gibt noch keine Rewards-
+Integrationstests. Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
 den vollständigen Outbox-/Inbox-Weg sowie Producer- und Consumer-Atomicity gegen PostgreSQL.
 Die Architecture Tests prüfen zusätzlich Event Ownership, Contract-Minimalität, erlaubte
-Messaging-Kanten und die Consumer-Grenzen automatisiert.
+Messaging-Kanten, die Rewards-Abhängigkeitsgrenze und die Consumer-Grenzen automatisiert.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 

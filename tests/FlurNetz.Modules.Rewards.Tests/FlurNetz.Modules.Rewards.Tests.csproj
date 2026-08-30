@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Rewards\FlurNetz.Modules.Rewards.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Rewards.Contracts\FlurNetz.Modules.Rewards.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 
