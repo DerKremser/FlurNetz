@@ -70,17 +70,36 @@ Progression konsumiert das Engagement-Event über den stabilen Consumer
 `progression.message-engagement-xp`. Eine normalisierte Message wird ausschließlich in
 Progression als `1 XP` interpretiert; Inbox-Eintrag und transaction-aware XP-Grant teilen eine
 Transaktion. Der Consumer wird durch `FlurNetz.Worker` kontinuierlich ausgeführt. Noch nicht
-enthalten sind Level-Logik, Rewards, Economy und eine API-Erweiterung.
+enthalten sind Level-Logik, Rewards und eine API-Erweiterung.
+
+## Aktueller Stand des Economy-Moduls
+
+Economy besitzt jetzt seine minimale Domain-Foundation für den community-bezogenen
+Economy-Zustand einer internen `CommunityIdentityId`. `EconomyBalance` ist ein
+unveränderlicher, auf `long` basierender und nicht-negativer Wert. Positive
+Gutschriften akkumulieren sicher bis `long.MaxValue`; ein Overflow wird sichtbar
+abgelehnt. Positive Abbuchungen dürfen den Saldo nicht überziehen und können ihn
+exakt auf null reduzieren.
+
+`CommunityEconomy` enthält ausschließlich `CommunityIdentityId` und `Balance`, startet
+bei null und verändert den Saldo nur über `Credit` und `Debit`. Die Implementierung
+referenziert neben dem eigenen Contract ausschließlich `Identity.Contracts`.
+`FlurNetz.Modules.Economy.Contracts` bleibt leer; es gibt noch keine Persistence,
+Use Cases, Events, Messaging, Transfers, Rewards, Shop-Funktionalität oder API.
+Eine konkrete Währungsbezeichnung und eine Multi-Currency-Struktur werden bewusst
+nicht vorweggenommen.
 
 ## Contracts und Implementierung
 
 Die Contracts-Assemblies beschreiben die später öffentliche Modulgrenze. Die Contracts-Assemblies
-der übrigen Module bleiben in diesem Schritt bewusst leer und enthalten keine vorsorglichen DTOs,
+der übrigen noch nicht fachlich begonnenen Module bleiben in diesem Schritt bewusst leer und enthalten keine vorsorglichen DTOs,
 Commands, Queries, Services, Repositories, Entities, Value Objects oder Events. Identity bildet
 mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme; Engagement besitzt bereits
 seine Domain-Foundation und mit dem Message-Event den ersten öffentlichen Contract. Progression
 besitzt mit Domain, Application, Persistence-Adapter, Migration, Consumer und Registrierung
-einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Contract.
+einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Contract. Economy besitzt
+mit `EconomyBalance` und `CommunityEconomy` eine Domain-Foundation, benötigt aber ebenfalls noch
+keinen öffentlichen Contract.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
