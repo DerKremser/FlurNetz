@@ -10,9 +10,9 @@ nicht von Rewards modelliert oder direkt verändert; Rewards beschreibt nur die 
 Wirkung und delegiert den tatsächlichen Write an die öffentliche Economy-Fähigkeit.
 
 Der erste und derzeit einzige ausführbare Zieltyp ist
-`EconomyBalanceRewardDefinition`. Inventory- und Title-Rewards werden erst ergänzt, wenn
-die jeweiligen Zielmodule fachlich existieren. XP bleiben vollständig Progression-owned und
-sind kein Reward-Komponententyp.
+`EconomyBalanceRewardDefinition`. Die Inventory-Foundation existiert inzwischen unabhängig von
+Rewards; eine Inventory-Reward-Definition sowie Title-Rewards werden erst in eigenen späteren
+Slices ergänzt. XP bleiben vollständig Progression-owned und sind kein Reward-Komponententyp.
 
 ## Reward Definitions
 

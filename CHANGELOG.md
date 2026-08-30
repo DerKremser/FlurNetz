@@ -4,6 +4,9 @@
 
 ### Hinzugefügt
 
+- Minimale Inventory-Domain für community-bezogene Item-Bestände.
+- Stabile `ItemDefinitionId` sowie nicht-negative, overflow-sichere Inventory-Mengen.
+- Fachliche Bestandsänderungen mit Schutz vor Unterbestand und ohne Rewards-/Shop-Kopplung.
 - Erster persistierter Rewards-Vertical-Slice mit Reward Definitions, Packages und eindeutigen Grant-Records.
 - Atomare Economy-Balance-Rewards über eine schmale öffentliche Economy-Contract-Grenze.
 - Idempotente Grant-Ausführung über `SourceType`, `SourceId` und `RewardDefinitionId` einschließlich Nebenläufigkeits- und Rollback-Tests.
