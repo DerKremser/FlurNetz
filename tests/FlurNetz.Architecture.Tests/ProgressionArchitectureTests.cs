@@ -1,4 +1,8 @@
 using System.Reflection;
+using System.Data.Common;
+using FlurNetz.Messaging.Integration;
+using FlurNetz.Modules.Engagement.Contracts;
+using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Progression.Application;
 using FlurNetz.Modules.Progression.Domain;
 using FlurNetz.Modules.Progression.Migrations;
@@ -17,23 +21,25 @@ public sealed class ProgressionArchitectureTests
         ModuleArchitectureCatalog.LoadAssembly("FlurNetz.Modules.Progression.Contracts");
 
     [Fact]
-    public void ProgressionImplementationReferencesIdentityContractsOnlyAsForeignModule()
+    public void ProgressionImplementationReferencesAllowedForeignContracts()
     {
         var references = GetReferencedAssemblyNames(ProgressionImplementationAssembly);
 
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
         Assert.DoesNotContain("FlurNetz.Modules.Identity", references);
         Assert.DoesNotContain("FlurNetz.Modules.Engagement", references);
-        Assert.DoesNotContain("FlurNetz.Modules.Engagement.Contracts", references);
+        Assert.Contains("FlurNetz.Modules.Engagement.Contracts", references);
     }
 
     [Fact]
-    public void ProgressionImplementationReferencesPersistenceButNoMessaging()
+    public void ProgressionImplementationReferencesPersistenceAndMessagingButNoEngagementImplementation()
     {
         var references = GetReferencedAssemblyNames(ProgressionImplementationAssembly);
 
         Assert.Contains("FlurNetz.Persistence", references);
-        Assert.DoesNotContain("FlurNetz.Messaging", references);
+        Assert.Contains("FlurNetz.Messaging", references);
+        Assert.Contains("FlurNetz.Modules.Engagement.Contracts", references);
+        Assert.DoesNotContain("FlurNetz.Modules.Engagement", references);
         Assert.DoesNotContain("FlurNetz.Api", references);
     }
 
@@ -57,7 +63,6 @@ public sealed class ProgressionArchitectureTests
         var forbiddenNames = new[]
         {
             "Level",
-            "Event",
             "Reward",
             "Coin"
         };
@@ -85,6 +90,46 @@ public sealed class ProgressionArchitectureTests
     {
         Assert.Equal(ProgressionImplementationAssembly, typeof(GrantExperience).Assembly);
         Assert.DoesNotContain(typeof(GrantExperience), ProgressionContractsAssembly.GetTypes());
+    }
+
+    [Fact]
+    public void ProgressionConsumerIsOwnedByTheImplementationAssembly()
+    {
+        Assert.Equal(ProgressionImplementationAssembly, typeof(MessageEngagementRecordedIntegrationEventHandler).Assembly);
+        Assert.Contains(
+            typeof(IIntegrationEventHandler<MessageEngagementRecordedIntegrationEvent>),
+            typeof(MessageEngagementRecordedIntegrationEventHandler).GetInterfaces());
+        Assert.DoesNotContain(
+            typeof(MessageEngagementRecordedIntegrationEventHandler),
+            ProgressionContractsAssembly.GetTypes());
+    }
+
+    [Fact]
+    public void ProgressionDoesNotPublishAnIntegrationEvent()
+    {
+        var publishedEvents = ProgressionImplementationAssembly
+            .GetTypes()
+            .Where(type => typeof(IIntegrationEvent).IsAssignableFrom(type) && !type.IsInterface)
+            .ToArray();
+
+        Assert.Empty(publishedEvents);
+    }
+
+    [Fact]
+    public void ProgressionStoreExposesATransactionAwareAdoNetOperation()
+    {
+        var method = typeof(ICommunityProgressionStore).GetMethod(
+            nameof(ICommunityProgressionStore.GrantExperienceAsync),
+            [
+                typeof(CommunityIdentityId),
+                typeof(long),
+                typeof(DbConnection),
+                typeof(DbTransaction),
+                typeof(CancellationToken)
+            ]);
+
+        Assert.NotNull(method);
+        Assert.Equal(typeof(Task<ExperiencePoints>), method!.ReturnType);
     }
 
     [Fact]

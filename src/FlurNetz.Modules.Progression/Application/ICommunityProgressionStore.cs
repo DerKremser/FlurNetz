@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Progression.Domain;
 
@@ -23,6 +24,27 @@ public interface ICommunityProgressionStore
     Task<ExperiencePoints> GrantExperienceAsync(
         CommunityIdentityId communityIdentityId,
         long amount,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Vergibt XP innerhalb einer bereits bestehenden ADO.NET-Transaktion.
+    /// </summary>
+    /// <param name="communityIdentityId">Die bereits aufgelöste interne Identität.</param>
+    /// <param name="amount">Die positive XP-Menge.</param>
+    /// <param name="connection">Die gemeinsame geöffnete Datenbankverbindung.</param>
+    /// <param name="transaction">Die gemeinsame Datenbanktransaktion.</param>
+    /// <param name="cancellationToken">Token zum Abbrechen des Datenbankvorgangs.</param>
+    /// <returns>Der neue Gesamtwert nach erfolgreichem Business-Write.</returns>
+    /// <remarks>
+    /// Dieser Port verwendet nur neutrale ADO.NET-Verträge, damit ein Inbox-Handler seine
+    /// bereits laufende Messaging-Transaktion durchreichen kann. Der Store führt hier
+    /// keinen eigenen Commit aus.
+    /// </remarks>
+    Task<ExperiencePoints> GrantExperienceAsync(
+        CommunityIdentityId communityIdentityId,
+        long amount,
+        DbConnection connection,
+        DbTransaction transaction,
         CancellationToken cancellationToken = default);
 
     /// <summary>

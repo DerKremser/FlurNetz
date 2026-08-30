@@ -1,4 +1,5 @@
 using FlurNetz.BuildingBlocks.Time;
+using FlurNetz.Messaging.Persistence;
 using FlurNetz.Modules.Engagement.Application;
 using FlurNetz.Modules.Engagement.Migrations;
 using FlurNetz.Modules.Engagement.Persistence;
@@ -12,7 +13,9 @@ namespace FlurNetz.Modules.Engagement;
 /// </summary>
 /// <remarks>
 /// Die technische PostgreSQL-Verbindungsfabrik bleibt Verantwortung des Composition Roots.
-/// Diese Registrierung fügt nur Use Case, Repository, Zeitquelle und Migrationsquelle hinzu.
+/// Diese Registrierung fügt Use Case, Repository, atomaren Recorder, Zeitquelle und
+/// Migrationsquelle hinzu. Registry, Serializer und Outbox-Publisher werden an der
+/// Composition Root explizit bereitgestellt, weil Messaging keine Fachmodule kennen darf.
 /// </remarks>
 public static class EngagementModule
 {
@@ -27,7 +30,10 @@ public static class EngagementModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IClock, SystemClock>();
-        services.AddScoped<IEngagementActivityRepository, EngagementActivityRepository>();
+        services.AddScoped<EngagementActivityRepository>();
+        services.AddScoped<IEngagementActivityRepository>(
+            serviceProvider => serviceProvider.GetRequiredService<EngagementActivityRepository>());
+        services.AddScoped<IMessageEngagementRecorder, PostgreSqlMessageEngagementRecorder>();
         services.AddScoped<RecordMessageEngagement>();
         services.AddSingleton<IMigrationSource, EngagementMigrationSource>();
 

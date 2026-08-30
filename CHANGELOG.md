@@ -4,6 +4,9 @@
 
 ### Hinzugefügt
 
+- Erster zuverlässiger Cross-Module-Workflow von Engagement zu Progression über Outbox und Inbox.
+- Normalisierte Message-Aktivitäten können über den Progression-Consumer einmalig 1 XP vergeben.
+- Atomare Producer- und Consumer-Transaktionen verhindern verlorene beziehungsweise doppelte fachliche Effekte.
 - Erster persistierter Progression-Vertical-Slice für atomare Experience-Point-Vergaben.
 - Progression-eigene PostgreSQL-Migration und nebenläufigkeitssichere XP-Akkumulation.
 - Minimale Progression-Grundlage für nicht-negative Experience Points.

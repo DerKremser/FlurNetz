@@ -1,4 +1,6 @@
 using FlurNetz.Modules.Progression.Application;
+using FlurNetz.Messaging.Integration;
+using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Progression.Migrations;
 using FlurNetz.Modules.Progression.Persistence;
 using FlurNetz.Persistence.Migrations;
@@ -11,13 +13,14 @@ namespace FlurNetz.Modules.Progression;
 /// </summary>
 /// <remarks>
 /// Die technische PostgreSQL-Verbindungsfabrik bleibt Verantwortung des Composition Roots.
-/// Diese Registrierung fügt nur Use Case, atomaren Store und Migrationsquelle hinzu.
-/// Messaging und ein Host-Wiring sind nicht Bestandteil dieses Slices.
+/// Diese Registrierung fügt Use Case, atomaren Store, Consumer und Migrationsquelle hinzu.
+/// Der konkrete Consumer wird weiterhin durch eine explizite Messaging-Registrierung
+/// komponiert; Assembly Scanning und ein dauerhaft laufender Host sind nicht Bestandteil.
 /// </remarks>
 public static class ProgressionModule
 {
     /// <summary>
-    /// Registriert den XP-Use-Case, seinen Persistenzadapter und die Migration.
+    /// Registriert den XP-Use-Case, seinen Persistenzadapter, den Message-Consumer und die Migration.
     /// </summary>
     /// <param name="services">Der Dependency-Injection-Container des Composition Roots.</param>
     /// <returns>Die übergebene Service-Sammlung für weitere Registrierungen.</returns>
@@ -28,6 +31,11 @@ public static class ProgressionModule
 
         services.AddScoped<ICommunityProgressionStore, CommunityProgressionStore>();
         services.AddScoped<GrantExperience>();
+        services.AddScoped<MessageEngagementRecordedIntegrationEventHandler>();
+        services.AddScoped<IIntegrationEventHandlerRegistration>(serviceProvider =>
+            new IntegrationEventHandlerRegistration<MessageEngagementRecordedIntegrationEvent>(
+                MessageEngagementRecordedIntegrationEventHandler.ConsumerName,
+                serviceProvider.GetRequiredService<MessageEngagementRecordedIntegrationEventHandler>()));
         services.AddSingleton<IMigrationSource, ProgressionMigrationSource>();
 
         return services;

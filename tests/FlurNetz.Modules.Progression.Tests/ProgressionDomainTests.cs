@@ -1,6 +1,7 @@
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Progression.Application;
 using FlurNetz.Modules.Progression.Domain;
+using System.Data.Common;
 
 namespace FlurNetz.Modules.Progression.Tests;
 
@@ -215,6 +216,16 @@ public sealed class GrantExperienceTests
             CommunityIdentityId = communityIdentityId;
             Amount = amount;
             CancellationToken = cancellationToken;
+            return Task.FromResult(result);
+        }
+
+        public Task<ExperiencePoints> GrantExperienceAsync(
+            CommunityIdentityId communityIdentityId,
+            long amount,
+            DbConnection connection,
+            DbTransaction transaction,
+            CancellationToken cancellationToken = default)
+        {
             return Task.FromResult(result);
         }
 

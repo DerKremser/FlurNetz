@@ -1,6 +1,9 @@
 # Messaging Foundation
 
-`FlurNetz.Messaging` ist die technische Grundlage für spätere Kommunikation zwischen FlurNetz-Modulgrenzen. Sie enthält noch keine fachlichen Events, Module, API, Worker oder externe Broker-Integration.
+`FlurNetz.Messaging` ist die technische Grundlage für Kommunikation zwischen FlurNetz-
+Modulgrenzen. Der erste reale fachliche Einsatz verbindet Engagement und Progression über
+Outbox, Processor und Inbox. Die Foundation bleibt fachlich neutral und kennt weder die
+Module noch deren Contracts.
 
 ## Domain Events und Integration Events
 
@@ -57,3 +60,23 @@ Nach dem letzten erlaubten Versuch erhält die Nachricht den Status `failed` (Po
 `MessagingMigrationSource` registriert die technischen Tabellen unter dem eindeutigen Migration-Owner `Messaging` beim vorhandenen SQL-first `MigrationRunner`. Es gibt keine fachlichen Migrationen.
 
 Die Unit Tests prüfen Domain-Dispatcher, Registry und Serialisierung. Architecture Tests sichern Namespace, Abhängigkeitsrichtung, fachliche Neutralität und das Fehlen generischer Repositories. Die PostgreSQL-Integrationstests verwenden Testcontainers und prüfen Migration/Idempotenz, atomaren Commit und Rollback, Processor, Inbox-Deduplizierung, transactional Inbox, Retry, Poison, unbekannte Typen, Duplicate Redelivery und paralleles Claiming. SQLite und In-Memory-Datenbanken werden nicht verwendet.
+
+## Erster fachlicher Workflow
+
+Der erste Workflow verwendet die Foundation host-unabhängig im E2E-Test:
+
+`RecordMessageEngagement → Activity + Outbox → engagement.message-recorded v1 → OutboxProcessor → Progression Inbox → 1 XP`
+
+Engagement besitzt und veröffentlicht die Tatsache `MessageEngagementRecordedIntegrationEvent`.
+Der Contract enthält ausschließlich die interne `CommunityIdentityId`; insbesondere keine XP,
+Message-Texte oder Plattformdaten. Activity- und Outbox-Write teilen eine Transaktion.
+
+Progression registriert den Eventtyp explizit und konsumiert ihn mit der stabilen Consumer
+Identity `progression.message-engagement-xp`. Der Handler verwendet die Inbox-Transaktion für
+den transaction-aware Progression-Grant. Dadurch sind Inbox-Eintrag und XP-Write atomar, ein
+Consumer-Fehler bleibt retrybar und Duplicate Delivery erzeugt keinen zweiten fachlichen
+Effekt. Schema v1 bleibt durch den stabilen logischen Message Type und die explizite Registry
+von CLR-Refactorings unabhängig.
+
+Der Workflow-Test führt `OutboxProcessor.ProcessBatchAsync(...)` direkt aus. Ein dauerhaft
+laufender Worker oder BackgroundService ist weiterhin nicht implementiert.

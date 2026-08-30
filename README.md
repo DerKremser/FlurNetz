@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten internen Engagement-Message-Recording-Slice, den ersten persistierten Progression-Vertical-Slice und den ausführbaren API-Host. Eine Engagement-HTTP-Schnittstelle, Progression-Kommunikation, Worker und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer und den ausführbaren API-Host. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet; ein dauerhaft laufender Worker, eine Engagement-HTTP-Schnittstelle und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -27,7 +27,7 @@ Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](
 
 `FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards, die minimale `IClock`-Abstraktion und deren neutrale `SystemClock`-Implementierung.
 
-Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Modules.Progression.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den persistierten Progression-Vertical-Slice einschließlich Nebenläufigkeit, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
+Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Modules.Progression.IntegrationTests`, `FlurNetz.Workflows.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den persistierten Progression-Vertical-Slice einschließlich Nebenläufigkeit, den Ende-zu-Ende-Workflow gegen PostgreSQL, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
 
 ## Identity Foundation und erster Vertical Slice
 
@@ -39,13 +39,14 @@ Der bestehende `CreateCommunityIdentity`-Use-Case ist über `FlurNetz.Api` als `
 
 ## Engagement Message Recording
 
-`FlurNetz.Modules.Engagement` enthält den ersten vollständigen internen Recording-Slice für
-normalisierte Message-Aktivitäten. `RecordMessageEngagement` verwendet eine bereits aufgelöste
-`CommunityIdentityId`, erzeugt den UTC-Zeitpunkt über `IClock` und persistiert die Aktivität über
-den Engagement-eigenen Dapper/PostgreSQL-Adapter und die Modulmigration. Es werden bewusst weder
-Nachrichtentext noch Plattformdaten gespeichert. `Engagement.Contracts` bleibt leer. Es gibt
-noch keine HTTP-Schnittstelle, Events, Progression-Kommunikation, XP-Vergabe oder
-Plattformintegration. Details stehen in [docs/architecture/engagement.md](docs/architecture/engagement.md).
+`FlurNetz.Modules.Engagement` enthält den ersten vollständigen Recording-Slice für normalisierte
+Message-Aktivitäten. `RecordMessageEngagement` verwendet eine bereits aufgelöste
+`CommunityIdentityId`, erzeugt den UTC-Zeitpunkt über `IClock` und persistiert die Aktivität
+gemeinsam mit `MessageEngagementRecordedIntegrationEvent` in der Outbox. Der Contract verwendet
+den stabilen Message Type `engagement.message-recorded` mit Schema-Version `1` und enthält nur
+die interne Identity-Guid. Es werden bewusst weder Nachrichtentext, Plattformdaten noch XP
+gespeichert; Engagement ruft Progression nicht direkt auf. Details stehen in
+[docs/architecture/engagement.md](docs/architecture/engagement.md).
 
 ## Progression Vertical Slice
 
@@ -58,9 +59,10 @@ bleibt bewusst leer.
 
 Der Persistence-Adapter verwendet `CommunityIdentityId` als Primärschlüssel, ein
 `bigint`-XP-Feld mit Nichtnegativ-Check und transaktionales `SELECT FOR UPDATE` gegen Lost
-Updates. Es gibt noch keine automatische XP-Vergabe aus Engagement, keine Level,
-Level-Berechnung, Events, Messaging-, Rewards-Kommunikation oder API-Endpunkt. Details stehen in
-[docs/architecture/progression.md](docs/architecture/progression.md).
+Updates. Der Consumer `progression.message-engagement-xp` verarbeitet das Engagement-Event
+über die Inbox-Transaktion und interpretiert jede normalisierte Message als genau `1 XP`.
+Duplicate Delivery vergibt dadurch nicht doppelt; Level, Rewards, API-Endpunkte und ein Worker
+Host sind weiterhin nicht Bestandteil. Details stehen in [docs/architecture/progression.md](docs/architecture/progression.md).
 
 ## Persistence Foundation
 
@@ -68,11 +70,11 @@ Level-Berechnung, Events, Messaging-, Rewards-Kommunikation oder API-Endpunkt. D
 
 `FlurNetz.Persistence.IntegrationTests` testet Verbindungen, Commit/Rollback und den Migration Runner gegen PostgreSQL. Für den automatischen Testlauf wird Docker für Testcontainers benötigt. Alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` auf eine isolierte PostgreSQL-Testdatenbank zeigen.
 
-Identity, Engagement und Progression besitzen jeweils eine eigene fachliche Tabelle und einen gezielten Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Progression verwendet für konkurrierende XP-Vergaben eine atomare Transaktion mit Zeilensperre und erzeugt keinen Cross-Module-Foreign-Key auf Identity. Der API-Host stellt die Connection-Konfiguration als Composition Root bereit und führt den bestehenden Migration Runner vor dem Listener-Start aus; Engagement und Progression sind dort weiterhin nicht als HTTP-Endpunkte registriert. Worker und externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Identity, Engagement und Progression besitzen jeweils eine eigene fachliche Tabelle und einen gezielten Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression verwendet für konkurrierende XP-Vergaben eine atomare Transaktion mit Zeilensperre und erzeugt keinen Cross-Module-Foreign-Key auf Identity. Der API-Host stellt die Connection-Konfiguration als Composition Root bereit und führt den bestehenden Migration Runner vor dem Listener-Start aus; der Outbox-Processor wird im Workflow-Test direkt aufgerufen, aber noch nicht als Worker betrieben. Engagement und Progression sind weiterhin nicht als HTTP-Endpunkte registriert. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den ersten internen Message-Recording-Slice mit Domain, Use Case, gezieltem Persistence-Adapter und Migration. Progression ergänzt den ersten persistierten XP-Vertical-Slice mit atomarem Store, Migration und Parallelitätstests. Eine automatische Engagement→Progression-Kette existiert noch nicht. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Der erste Ende-zu-Ende-Workflow läuft über Outbox und Inbox; ein dauerhaft laufender Processor-Host existiert noch nicht. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 

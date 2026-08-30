@@ -1,4 +1,6 @@
 using FlurNetz.BuildingBlocks.Time;
+using FlurNetz.Messaging.Integration;
+using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Engagement.Domain;
 using FlurNetz.Modules.Identity.Contracts;
 
@@ -10,11 +12,13 @@ namespace FlurNetz.Modules.Engagement.Application;
 /// <remarks>
 /// Der Aufrufer liefert nur die interne <see cref="CommunityIdentityId"/>. Zeitpunkt und
 /// Aktivitätstyp werden für diesen Slice intern bestimmt; Nachrichtentext und externe
-/// Plattformdaten sind deshalb weder Eingabe noch Bestandteil des Use Cases.
+/// Plattformdaten sind deshalb weder Eingabe noch Bestandteil des Use Cases. Das erzeugte
+/// Integration Event bleibt eine Engagement-Tatsache; die spätere XP-Interpretation gehört
+/// ausschließlich in den Progression-Consumer.
 /// </remarks>
 public sealed class RecordMessageEngagement
 {
-    private readonly IEngagementActivityRepository repository;
+    private readonly IMessageEngagementRecorder recorder;
     private readonly IClock clock;
 
     /// <summary>
@@ -24,17 +28,17 @@ public sealed class RecordMessageEngagement
     /// <param name="clock">Die testbare UTC-Zeitquelle.</param>
     /// <exception cref="ArgumentNullException">Wenn eine Abhängigkeit fehlt.</exception>
     public RecordMessageEngagement(
-        IEngagementActivityRepository repository,
+        IMessageEngagementRecorder recorder,
         IClock clock)
     {
-        ArgumentNullException.ThrowIfNull(repository);
+        ArgumentNullException.ThrowIfNull(recorder);
         ArgumentNullException.ThrowIfNull(clock);
-        this.repository = repository;
+        this.recorder = recorder;
         this.clock = clock;
     }
 
     /// <summary>
-    /// Erzeugt und persistiert eine Message-Aktivität.
+    /// Erzeugt und persistiert eine Message-Aktivität gemeinsam mit ihrem Outbox-Event.
     /// </summary>
     /// <param name="communityIdentityId">Die bereits aufgelöste interne Community-Identity-ID.</param>
     /// <param name="cancellationToken">Token zum Abbrechen der Persistierung.</param>
@@ -48,8 +52,16 @@ public sealed class RecordMessageEngagement
     {
         var id = EngagementActivityId.New();
         var activity = EngagementActivity.CreateMessage(id, communityIdentityId, clock.UtcNow);
+        var integrationEvent = new MessageEngagementRecordedIntegrationEvent(
+            activity.CommunityIdentityId.Value);
+        var envelope = new IntegrationEventEnvelope(
+            Guid.NewGuid(),
+            MessageEngagementRecordedIntegrationEvent.MessageType,
+            MessageEngagementRecordedIntegrationEvent.SchemaVersion,
+            activity.OccurredAtUtc,
+            integrationEvent);
 
-        await repository.AddAsync(activity, cancellationToken).ConfigureAwait(false);
+        await recorder.RecordAsync(activity, envelope, cancellationToken).ConfigureAwait(false);
 
         return id;
     }
