@@ -4,6 +4,8 @@
 
 ### Hinzugefügt
 
+- Erster Engagement-Vertical-Slice zum Aufzeichnen normalisierter Message-Aktivitäten.
+- Engagement-eigene PostgreSQL-Migration und Persistenz für Community-Aktivitäten.
 - Fachliche Engagement-Grundlage für normalisierte Community-Aktivitäten.
 - Engagement-Aktivitäten verwenden die interne `CommunityIdentityId` statt externer Plattformidentitäten.
 - Initiales Repository- und Solution-Grundgerüst für FlurNetz.

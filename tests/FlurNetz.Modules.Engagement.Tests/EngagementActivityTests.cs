@@ -1,3 +1,5 @@
+using FlurNetz.BuildingBlocks.Time;
+using FlurNetz.Modules.Engagement.Application;
 using FlurNetz.Modules.Engagement.Domain;
 using FlurNetz.Modules.Identity.Contracts;
 
@@ -52,46 +54,126 @@ public sealed class EngagementActivityIdTests
 
 public sealed class EngagementActivityTests
 {
+    private static readonly DateTimeOffset OccurredAtUtc =
+        new(2026, 8, 29, 12, 0, 0, TimeSpan.Zero);
+
     [Fact]
-    public void Create_CarriesBothProvidedIds()
+    public void CreateMessage_CarriesAllProvidedValues()
     {
         var activityId = EngagementActivityId.New();
         var communityIdentityId = CommunityIdentityId.New();
 
-        var activity = EngagementActivity.Create(activityId, communityIdentityId);
+        var activity = EngagementActivity.CreateMessage(activityId, communityIdentityId, OccurredAtUtc);
 
         Assert.Equal(activityId, activity.Id);
         Assert.Equal(communityIdentityId, activity.CommunityIdentityId);
+        Assert.Equal(EngagementActivityType.Message, activity.Type);
+        Assert.Equal(OccurredAtUtc, activity.OccurredAtUtc);
     }
 
     [Fact]
-    public void Create_RejectsAnInvalidEngagementActivityId()
+    public void CreateMessage_RejectsInvalidIds()
     {
+        var activityId = EngagementActivityId.New();
         var communityIdentityId = CommunityIdentityId.New();
 
         Assert.Throws<ArgumentException>(() =>
-            EngagementActivity.Create(default, communityIdentityId));
+            EngagementActivity.CreateMessage(default, communityIdentityId, OccurredAtUtc));
+        Assert.Throws<ArgumentException>(() =>
+            EngagementActivity.CreateMessage(activityId, default, OccurredAtUtc));
     }
 
     [Fact]
-    public void Create_RejectsAnInvalidCommunityIdentityId()
+    public void CreateMessage_RejectsNonUtcTimestamp()
     {
-        var activityId = EngagementActivityId.New();
+        var nonUtc = new DateTimeOffset(2026, 8, 29, 14, 0, 0, TimeSpan.FromHours(2));
 
         Assert.Throws<ArgumentException>(() =>
-            EngagementActivity.Create(activityId, default));
+            EngagementActivity.CreateMessage(
+                EngagementActivityId.New(),
+                CommunityIdentityId.New(),
+                nonUtc));
     }
 
     [Fact]
-    public void Ids_AreExposedWithoutSetters()
+    public void Values_AreExposedWithoutSetters()
     {
-        var idProperty = typeof(EngagementActivity).GetProperty(nameof(EngagementActivity.Id));
-        var communityIdentityIdProperty = typeof(EngagementActivity)
-            .GetProperty(nameof(EngagementActivity.CommunityIdentityId));
+        var properties = typeof(EngagementActivity)
+            .GetProperties()
+            .Where(property => property.DeclaringType == typeof(EngagementActivity))
+            .ToArray();
 
-        Assert.NotNull(idProperty);
-        Assert.Null(idProperty!.SetMethod);
-        Assert.NotNull(communityIdentityIdProperty);
-        Assert.Null(communityIdentityIdProperty!.SetMethod);
+        Assert.Equal(
+            [
+                nameof(EngagementActivity.Id),
+                nameof(EngagementActivity.CommunityIdentityId),
+                nameof(EngagementActivity.Type),
+                nameof(EngagementActivity.OccurredAtUtc)
+            ],
+            properties.Select(property => property.Name).ToArray());
+        Assert.All(properties, property => Assert.Null(property.SetMethod));
+    }
+}
+
+public sealed class RecordMessageEngagementTests
+{
+    private static readonly DateTimeOffset OccurredAtUtc =
+        new(2026, 8, 29, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task ExecuteAsync_PersistsMessageUsingTheClockTimestamp()
+    {
+        var repository = new InMemoryEngagementActivityRepository();
+        var useCase = new RecordMessageEngagement(repository, new FixedClock(OccurredAtUtc));
+        var communityIdentityId = CommunityIdentityId.New();
+
+        var id = await useCase.ExecuteAsync(communityIdentityId, TestContext.Current.CancellationToken);
+
+        var activity = Assert.Single(repository.Activities);
+        Assert.Equal(id, activity.Id);
+        Assert.Equal(communityIdentityId, activity.CommunityIdentityId);
+        Assert.Equal(EngagementActivityType.Message, activity.Type);
+        Assert.Equal(OccurredAtUtc, activity.OccurredAtUtc);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CreatesDistinctActivitiesForSeparateExecutions()
+    {
+        var repository = new InMemoryEngagementActivityRepository();
+        var useCase = new RecordMessageEngagement(repository, new FixedClock(OccurredAtUtc));
+        var communityIdentityId = CommunityIdentityId.New();
+
+        var first = await useCase.ExecuteAsync(communityIdentityId, TestContext.Current.CancellationToken);
+        var second = await useCase.ExecuteAsync(communityIdentityId, TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(first, second);
+        Assert.Equal(2, repository.Activities.Count);
+    }
+
+    private sealed class InMemoryEngagementActivityRepository : IEngagementActivityRepository
+    {
+        public List<EngagementActivity> Activities { get; } = [];
+
+        public Task AddAsync(
+            EngagementActivity activity,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Activities.Add(activity);
+            return Task.CompletedTask;
+        }
+
+        public Task<EngagementActivity?> GetByIdAsync(
+            EngagementActivityId id,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Activities.SingleOrDefault(activity => activity.Id == id));
+        }
+    }
+
+    private sealed class FixedClock(DateTimeOffset utcNow) : IClock
+    {
+        public DateTimeOffset UtcNow => utcNow;
     }
 }
