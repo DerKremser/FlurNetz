@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>FlurNetz.Api</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <UserSecretsId>flurnetz-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Identity\FlurNetz.Modules.Identity.csproj" />
+    <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

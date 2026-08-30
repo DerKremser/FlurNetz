@@ -20,3 +20,6 @@
 - Minimales Domain-Modell für die interne Community-Identität.
 - Erster Identity-Vertical-Slice zum Erzeugen, Persistieren und Laden einer internen Community-Identität.
 - Identity-eigene PostgreSQL-Migration für die minimale `community_identities`-Tabelle sowie echte PostgreSQL-Integrationstests.
+- Erster ausführbarer ASP.NET-Core-API-Host als Composition Root.
+- HTTP-Endpunkt `POST /api/identities` zur Erzeugung interner Community-Identitäten.
+- Echte API-Integrationstests vom HTTP-Request bis zur PostgreSQL-Persistierung.

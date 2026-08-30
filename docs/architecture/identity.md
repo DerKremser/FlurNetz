@@ -37,6 +37,13 @@ Cross-Module-Verträge. Andere Module verwenden künftig die interne `CommunityI
 externe Plattformkennungen werden erst an einer späteren Resolution-/Mapping-Grenze
 zugeordnet.
 
-Dieser Slice enthält noch keine API oder HTTP-Schicht, keine Plattformkonten, keine
-Authentifizierung, keine Profile, keine fachlichen Domain- oder Integration Events und
-keine Messaging-/Outbox-Integration.
+## HTTP-Adapter
+
+Der bestehende `CreateCommunityIdentity`-Use-Case ist jetzt über den API-Adapter
+`POST /api/identities` erreichbar. Der Endpunkt erzeugt keine eigene Identität, sondern
+ruft ausschließlich den Use Case auf; die HTTP-Grenze übersetzt dessen
+`CommunityIdentityId.Value` in ein API-Response-DTO. Details zur Host-Konfiguration und zum
+Response-Vertrag stehen in [api.md](api.md).
+
+Plattformkonten, Authentifizierung, Profile, fachliche Domain- oder Integration Events und
+Messaging-/Outbox-Runtime bleiben weiterhin außerhalb dieses Slices.
