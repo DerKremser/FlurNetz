@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlurNetz.Modules.Rewards.Contracts\FlurNetz.Modules.Rewards.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

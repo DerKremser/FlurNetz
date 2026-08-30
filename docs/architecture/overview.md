@@ -1,6 +1,6 @@
 # Architekturübersicht
 
-FlurNetz wird modular aufgebaut. Die physischen Grenzen der vorgesehenen Fachmodule sind jetzt als getrennte Contracts- und Implementierungs-Assemblies angelegt. Identity ist das erste Modul mit einem bewusst minimalen fachlichen Vertical Slice und einer API; Engagement kann eine normalisierte Message-Aktivität gemeinsam mit einer Outbox-Nachricht persistieren; Progression konsumiert diese Nachricht und vergibt atomar 1 XP; Economy persistiert atomare Community-Salden mit PostgreSQL-Zeilensperren. Die übrigen noch nicht begonnenen Fachmodule enthalten keine Fachlogik, fachlichen Entities, Tabellen oder konkreten Events. Mit `FlurNetz.Api` und `FlurNetz.Worker` besitzt FlurNetz zwei unabhängige ausführbare Hosts. Fachmodule greifen nicht auf fremde Implementierungen oder Tabellen zu; Cross-Module-Kommunikation erfolgt über öffentliche Contracts und Integration Events.
+FlurNetz wird modular aufgebaut. Die physischen Grenzen der vorgesehenen Fachmodule sind jetzt als getrennte Contracts- und Implementierungs-Assemblies angelegt. Identity ist das erste Modul mit einem bewusst minimalen fachlichen Vertical Slice und einer API; Engagement kann eine normalisierte Message-Aktivität gemeinsam mit einer Outbox-Nachricht persistieren; Progression konsumiert diese Nachricht und vergibt atomar 1 XP; Economy persistiert atomare Community-Salden mit PostgreSQL-Zeilensperren; Rewards besitzt nun ein minimales Domainmodell für Reward Definitions, Packages, Sources und Grant-Records. Die übrigen noch nicht begonnenen Fachmodule enthalten keine Fachlogik, fachlichen Entities, Tabellen oder konkreten Events. Mit `FlurNetz.Api` und `FlurNetz.Worker` besitzt FlurNetz zwei unabhängige ausführbare Hosts. Fachmodule greifen nicht auf fremde Implementierungen oder Tabellen zu; Cross-Module-Kommunikation erfolgt über öffentliche Contracts und Integration Events.
 
 Identity bildet mit `CommunityIdentityId` und der minimalen `CommunityIdentity` die zentrale interne Identität eines Community-Mitglieds. Der erste Slice erzeugt diese Identität, persistiert sie in der Identity-eigenen PostgreSQL-Tabelle und lädt sie über die interne ID. Engagement nimmt eine bereits aufgelöste `CommunityIdentityId` an und persistiert intern eine Message-Aktivität mit UTC-Zeitpunkt; es fragt Identity nicht ab und verwendet keinen Cross-Module-Foreign-Key. Externe Plattformkennungen werden an Integrationsgrenzen aufgelöst und ersetzen die interne Identität nicht. Persistence und Messaging werden als getrennte technische Infrastruktur aufgebaut; externe Systeme werden über Adapter integriert.
 
@@ -9,7 +9,7 @@ Progression hält mit `CommunityProgression` den aktuellen XP-Wert einer einzeln
 lazy beim ersten Grant und unterstützt positive, überlaufsichere Akkumulation. Die atomare
 Read/Modify/Write-Operation verwendet PostgreSQL-Zeilensperren gegen Lost Updates. Der erste
 Engagement→Progression-Workflow läuft über Outbox und Inbox; weder Level-Logik noch
-Rewards oder API gehören zu diesem Stand.
+Rewards-Ausführung oder API gehören zu diesem Progression-Slice.
 
 Economy hält mit `CommunityEconomy` den neutralen Economy-Saldo genau einer internen
 `CommunityIdentityId`. `EconomyBalance` ist immutable, auf `long` basierend und nicht-negativ;
@@ -19,6 +19,15 @@ angelegt. Der interne Store führt Credits und Debits atomar mit `SELECT FOR UPD
 fehlgeschlagener Debit auf einen fehlenden Zustand erzeugt keine Zeile. Eine konkrete
 Währungsbezeichnung, Multi-Currency, Messaging, Events, Transfers, Rewards, Shop und API sind
 noch nicht Bestandteil dieses Economy-Slices.
+
+Rewards beschreibt mit `RewardDefinition` und dem ersten konkreten Typ
+`EconomyBalanceRewardDefinition` eine gewünschte spätere Economy-Balance-Gutschrift, verändert
+Economy aber noch nicht. `RewardPackage` bündelt mindestens eine gültige und doppelfreie
+Definition als verpflichtende Menge; `RewardSource` beschreibt die fachliche Herkunft und
+`RewardGrant` genau eine Definition-Ausführung für eine `CommunityIdentityId`. Die spätere
+Eindeutigkeit `SourceType + SourceId + RewardDefinitionId` ist dokumentiert, aber noch nicht
+persistiert oder technisch ausgeführt. `Rewards.Contracts` bleibt leer; XP bleiben vollständig
+Progression-owned. Details stehen in [rewards.md](rewards.md).
 
 Streamer.bot wird später als externer Adapter behandelt und lädt keine internen FlurNetz-Assemblies. Interne FlurNetz-Projekte verwenden .NET 10. PostgreSQL ist die primäre relationale Datenbank; die technische Grundlage dafür liegt in `FlurNetz.Persistence` mit Npgsql und Dapper.
 
@@ -32,4 +41,4 @@ Die Persistence Foundation stellt einen SQL-first Migration Runner und eine tech
 
 `FlurNetz.Messaging` darf auf BuildingBlocks und Persistence zeigen, nicht umgekehrt. Die Outbox verwendet die vorhandene Persistence-Transaktionskapselung; die unabhängigen Hosts rufen den Processor ausdrücklich auf. Es gibt keinen externen Message Broker.
 
-Die Fachmodule verwenden jeweils das Muster `FlurNetz.Modules.<Module>.Contracts` und `FlurNetz.Modules.<Module>`. Die Implementierung darf nur ihr eigenes Contracts-Projekt und ausdrücklich erlaubte technische Infrastruktur sowie öffentliche Cross-Module-Contracts referenzieren; Engagement verwendet zusätzlich `Identity.Contracts`, Persistence und Messaging, um Activity und Outbox atomar zu speichern. Progression verwendet zusätzlich `Identity.Contracts`, Persistence, Messaging und ausschließlich `Engagement.Contracts`, um das Event als `1 XP` zu interpretieren. Economy verwendet zusätzlich ausschließlich `Identity.Contracts` und besitzt noch keine technische Infrastruktur oder öffentliche fachliche Verträge. Fremde Modulimplementierungen sind ausgeschlossen. Identity bleibt das erste Referenzmodul; Engagement veröffentlicht jetzt die erste fachliche Integration-Nachricht und Progression ist der erste Consumer. Der E2E-Workflow ist implementiert, getestet und wird durch den unabhängigen Worker-Host dauerhaft betrieben. Die vollständige Modul-Liste und Umsetzungsreihenfolge stehen in [modules.md](modules.md).
+Die Fachmodule verwenden jeweils das Muster `FlurNetz.Modules.<Module>.Contracts` und `FlurNetz.Modules.<Module>`. Die Implementierung darf nur ihr eigenes Contracts-Projekt und ausdrücklich erlaubte technische Infrastruktur sowie öffentliche Cross-Module-Contracts referenzieren; Engagement verwendet zusätzlich `Identity.Contracts`, Persistence und Messaging, um Activity und Outbox atomar zu speichern. Progression verwendet zusätzlich `Identity.Contracts`, Persistence, Messaging und ausschließlich `Engagement.Contracts`, um das Event als `1 XP` zu interpretieren. Economy und Rewards verwenden zusätzlich ausschließlich `Identity.Contracts`; Rewards besitzt noch keine technische Infrastruktur, Ausführung oder öffentliche fachliche Verträge. Fremde Modulimplementierungen sind ausgeschlossen. Identity bleibt das erste Referenzmodul; Engagement veröffentlicht jetzt die erste fachliche Integration-Nachricht und Progression ist der erste Consumer. Der E2E-Workflow ist implementiert, getestet und wird durch den unabhängigen Worker-Host dauerhaft betrieben. Die vollständige Modul-Liste und Umsetzungsreihenfolge stehen in [modules.md](modules.md).
