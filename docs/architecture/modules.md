@@ -48,13 +48,27 @@ als vollständiges Engagement-Modul ausgebaut: Es gibt ausschließlich den Activ
 keinen Nachrichtentext, keine Plattformdaten, keine Events, keine Progression-Kommunikation und
 keine API-Erweiterung.
 
+## Aktueller Stand des Progression-Moduls
+
+Progression besitzt die minimale Domain-Foundation für den fachlichen Fortschritt einer
+Community-Identität. `ExperiencePoints` modelliert nicht-negative, auf `long` basierende XP
+mit sicherer Addition; `CommunityProgression` ordnet den Wert einer bestehenden
+`CommunityIdentityId` zu und startet mit `0` XP. Positive XP können akkumuliert werden.
+
+`FlurNetz.Modules.Progression.Contracts` bleibt bewusst leer. Es gibt noch keinen persistierten
+Vertical Slice und keine Level-Logik, Persistence, Messaging- oder Engagement-Kommunikation,
+Events, Rewards oder API-Erweiterung. Die einzige fachfremde Projektabhängigkeit der
+Implementierung ist `FlurNetz.Modules.Identity.Contracts`.
+
 ## Contracts und Implementierung
 
 Die Contracts-Assemblies beschreiben die später öffentliche Modulgrenze. Die Contracts-Assemblies
 der übrigen Module bleiben in diesem Schritt bewusst leer und enthalten keine vorsorglichen DTOs,
 Commands, Queries, Services, Repositories, Entities, Value Objects oder Events. Identity bildet
 mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme; Engagement besitzt zwar
-bereits seine Domain-Foundation, benötigt aber noch keinen öffentlichen Contract.
+bereits seine Domain-Foundation, benötigt aber noch keinen öffentlichen Contract. Progression
+besitzt ebenfalls eine interne Domain-Foundation, benötigt in diesem Schritt aber noch keinen
+öffentlichen Contract.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -72,7 +86,8 @@ Shared-Entities.
 Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
 und Engagement-Unit- sowie PostgreSQL-Integrationstests prüfen jeweils die vorhandenen Domain-
 und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Die Architecture
-Tests prüfen die Assembly-, Referenz- und Namespace-Grenzen automatisiert.
+Tests prüfen die Assembly-, Referenz- und Namespace-Grenzen automatisiert; Progression wird in
+diesem Foundation-Schritt durch fokussierte Domain- und Architecture-Tests abgesichert.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 

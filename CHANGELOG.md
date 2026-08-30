@@ -4,6 +4,8 @@
 
 ### Hinzugefügt
 
+- Minimale Progression-Grundlage für nicht-negative Experience Points.
+- Community-bezogener Progressionszustand auf Basis der internen `CommunityIdentityId`.
 - Erster Engagement-Vertical-Slice zum Aufzeichnen normalisierter Message-Aktivitäten.
 - Engagement-eigene PostgreSQL-Migration und Persistenz für Community-Aktivitäten.
 - Fachliche Engagement-Grundlage für normalisierte Community-Aktivitäten.

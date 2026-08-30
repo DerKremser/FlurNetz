@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten internen Engagement-Message-Recording-Slice und den ausführbaren API-Host. Eine Engagement-HTTP-Schnittstelle, Progression-Kommunikation, Worker und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten internen Engagement-Message-Recording-Slice, die Progression-Domain-Foundation und den ausführbaren API-Host. Eine Engagement-HTTP-Schnittstelle, Progression-Kommunikation, Worker und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -27,7 +27,7 @@ Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](
 
 `FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards, die minimale `IClock`-Abstraktion und deren neutrale `SystemClock`-Implementierung.
 
-Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
+Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, die Progression-Domain-Foundation, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
 
 ## Identity Foundation und erster Vertical Slice
 
@@ -47,6 +47,17 @@ Nachrichtentext noch Plattformdaten gespeichert. `Engagement.Contracts` bleibt l
 noch keine HTTP-Schnittstelle, Events, Progression-Kommunikation, XP-Vergabe oder
 Plattformintegration. Details stehen in [docs/architecture/engagement.md](docs/architecture/engagement.md).
 
+## Progression Foundation
+
+`FlurNetz.Modules.Progression` enthält das minimale Domain-Fundament für den fachlichen
+Fortschritt einer internen `CommunityIdentityId`. `ExperiencePoints` sind nicht-negativ,
+immutable und werden ohne stilles `long`-Overflow akkumuliert. `CommunityProgression` startet
+mit `0` XP und akzeptiert positive XP-Vergaben. `Progression.Contracts` bleibt bewusst leer.
+
+Es gibt noch keine Level, Level-Berechnung, Persistence, Events, Messaging-, Engagement- oder
+Rewards-Kommunikation und keinen API-Endpunkt. Details stehen in
+[docs/architecture/progression.md](docs/architecture/progression.md).
+
 ## Persistence Foundation
 
 `FlurNetz.Persistence` verwendet PostgreSQL, Npgsql und Dapper ohne ORM und ohne Generic Repository. Migrationen werden als explizite SQL-Texte von ihren jeweiligen Besitzern bereitgestellt, deterministisch ausgeführt und in `flurnetz_persistence.migration_history` nachverfolgt. Bereits angewendete Migrationen sind unveränderlich; eine abweichende SQL-Checksum führt zu einem Fehler.
@@ -57,7 +68,7 @@ Identity und Engagement besitzen jeweils eine eigene fachliche Tabelle und einen
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den ersten internen Message-Recording-Slice mit Domain, Use Case, gezieltem Persistence-Adapter und Migration. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den ersten internen Message-Recording-Slice mit Domain, Use Case, gezieltem Persistence-Adapter und Migration. Progression besitzt als bewusst begrenzte Ausnahme die beschriebene Domain-Foundation, aber noch keinen Vertical Slice. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 
