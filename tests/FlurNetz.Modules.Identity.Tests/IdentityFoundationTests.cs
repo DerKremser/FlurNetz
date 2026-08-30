@@ -53,16 +53,6 @@ public sealed class CommunityIdentityIdTests
 public sealed class CommunityIdentityTests
 {
     [Fact]
-    public void Create_AcceptsValidIdentityId()
-    {
-        var id = CommunityIdentityId.New();
-
-        var identity = CommunityIdentity.Create(id);
-
-        Assert.NotNull(identity);
-    }
-
-    [Fact]
     public void Create_CarriesTheProvidedId()
     {
         var id = CommunityIdentityId.Create(Guid.Parse("4c3d1c3e-9b8e-4b5e-9f6c-7d4e8c2f1a06"));

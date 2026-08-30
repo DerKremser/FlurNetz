@@ -81,8 +81,8 @@ public sealed class IdentityArchitectureTests
     [Fact]
     public void CentralIdentityAssembliesContainNoExternalPlatformIdentityTypes()
     {
-        var centralIdentityTypes = IdentityContractsAssembly.GetExportedTypes()
-            .Concat(IdentityImplementationAssembly.GetExportedTypes())
+        var centralIdentityTypes = IdentityContractsAssembly.GetTypes()
+            .Concat(IdentityImplementationAssembly.GetTypes())
             .Where(IsExternalPlatformIdentityType)
             .Select(type => type.FullName)
             .ToArray();
