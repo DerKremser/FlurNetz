@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

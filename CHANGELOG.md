@@ -18,3 +18,5 @@
 - Modulbezogene xUnit-v3-Testprojekte und Architekturtests zur Absicherung der Modul- und Assembly-Grenzen.
 - Erste fachliche Identity-Grundlage mit stabiler interner Community-Identity-ID.
 - Minimales Domain-Modell für die interne Community-Identität.
+- Erster Identity-Vertical-Slice zum Erzeugen, Persistieren und Laden einer internen Community-Identität.
+- Identity-eigene PostgreSQL-Migration für die minimale `community_identities`-Tabelle sowie echte PostgreSQL-Integrationstests.

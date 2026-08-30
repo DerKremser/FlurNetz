@@ -2,6 +2,7 @@ using System.Reflection;
 using FlurNetz.BuildingBlocks.Results;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Identity.Domain;
+using FlurNetz.Modules.Identity.Migrations;
 
 namespace FlurNetz.Architecture.Tests;
 
@@ -10,12 +11,6 @@ namespace FlurNetz.Architecture.Tests;
 /// </summary>
 public sealed class IdentityArchitectureTests
 {
-    private static readonly string[] ForbiddenInfrastructureAssemblies =
-    [
-        "FlurNetz.Persistence",
-        "FlurNetz.Messaging"
-    ];
-
     private static readonly string[] ExternalPlatformNames =
     [
         "Twitch",
@@ -42,7 +37,7 @@ public sealed class IdentityArchitectureTests
     public void IdentityContractsReferenceNoPersistenceOrMessaging()
     {
         var forbiddenReferences = GetReferencedAssemblyNames(IdentityContractsAssembly)
-            .Where(name => ForbiddenInfrastructureAssemblies.Contains(name, StringComparer.Ordinal))
+            .Where(name => name is "FlurNetz.Persistence" or "FlurNetz.Messaging")
             .ToArray();
 
         Assert.Empty(forbiddenReferences);
@@ -60,13 +55,12 @@ public sealed class IdentityArchitectureTests
     }
 
     [Fact]
-    public void IdentityImplementationReferencesNoPersistenceOrMessaging()
+    public void IdentityImplementationReferencesPersistenceButNoMessaging()
     {
-        var forbiddenReferences = GetReferencedAssemblyNames(IdentityImplementationAssembly)
-            .Where(name => ForbiddenInfrastructureAssemblies.Contains(name, StringComparer.Ordinal))
-            .ToArray();
+        var references = GetReferencedAssemblyNames(IdentityImplementationAssembly);
 
-        Assert.Empty(forbiddenReferences);
+        Assert.Contains("FlurNetz.Persistence", references);
+        Assert.DoesNotContain("FlurNetz.Messaging", references);
     }
 
     [Fact]
@@ -79,6 +73,14 @@ public sealed class IdentityArchitectureTests
     }
 
     [Fact]
+    public void IdentityContractsExposeOnlyTheInternalIdentityIdentifier()
+    {
+        var exportedTypes = IdentityContractsAssembly.GetExportedTypes();
+
+        Assert.Equal([typeof(CommunityIdentityId)], exportedTypes);
+    }
+
+    [Fact]
     public void CentralIdentityAssembliesContainNoExternalPlatformIdentityTypes()
     {
         var centralIdentityTypes = IdentityContractsAssembly.GetTypes()
@@ -88,6 +90,31 @@ public sealed class IdentityArchitectureTests
             .ToArray();
 
         Assert.Empty(centralIdentityTypes);
+    }
+
+    [Fact]
+    public void IdentityContractsContainNoPersistenceOrApplicationPortTypes()
+    {
+        var forbiddenTypes = IdentityContractsAssembly.GetExportedTypes()
+            .Where(type => type.Name.Contains("Repository", StringComparison.Ordinal)
+                || type.Name.Contains("Store", StringComparison.Ordinal)
+                || type.Name.Contains("Migration", StringComparison.Ordinal)
+                || type.Name.Contains("Command", StringComparison.Ordinal)
+                || type.Name.Contains("Handler", StringComparison.Ordinal))
+            .Select(type => type.FullName)
+            .ToArray();
+
+        Assert.Empty(forbiddenTypes);
+    }
+
+    [Fact]
+    public void IdentityOwnsTheFirstIdentityMigration()
+    {
+        var migration = Assert.Single(new IdentityMigrationSource().GetMigrations());
+
+        Assert.Equal("Identity", migration.Owner);
+        Assert.Equal(1L, migration.Version);
+        Assert.Equal("CreateCommunityIdentities", migration.Name);
     }
 
     private static string[] GetReferencedAssemblyNames(Assembly assembly) => assembly
