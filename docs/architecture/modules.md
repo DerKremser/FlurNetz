@@ -19,15 +19,36 @@ FlurNetz bildet die vorgesehenen Fachmodule zunächst als physische Assembly-Gre
 | Integrations | `FlurNetz.Modules.Integrations.Contracts` | `FlurNetz.Modules.Integrations` |
 | Administration | `FlurNetz.Modules.Administration.Contracts` | `FlurNetz.Modules.Administration` |
 
+## Aktueller Stand des Identity-Moduls
+
+Identity ist das erste Modul mit einer fachlichen Foundation. `FlurNetz.Modules.Identity.Contracts`
+enthält ausschließlich den stabilen internen Identifier `CommunityIdentityId`. Die
+Implementierungs-Assembly enthält unter `Domain/` die minimale `CommunityIdentity`, die nur
+diese unveränderliche ID trägt.
+
+Damit ist noch kein vollständiger Identity-Use-Case implementiert. Insbesondere gibt es keine
+fachliche Persistenz, Migration, Repositories, API, Plattformkonten, Authentifizierung oder
+fachlichen Events.
+
 ## Contracts und Implementierung
 
-Die Contracts-Assembly beschreibt ausschließlich die später öffentliche Modulgrenze. Sie bleibt in diesem Schritt bewusst leer und enthält keine vorsorglichen DTOs, Commands, Queries, Services, Repositories, Entities, Value Objects oder Events.
+Die Contracts-Assemblies beschreiben die später öffentliche Modulgrenze. Die Contracts-Assemblies
+der übrigen Module bleiben in diesem Schritt bewusst leer und enthalten keine vorsorglichen DTOs,
+Commands, Queries, Services, Repositories, Entities, Value Objects oder Events. Identity bildet
+mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme und enthält darüber hinaus
+keine vorsorglichen Verträge.
 
-Die Implementierungs-Assembly ist der spätere Ort für Domain, Application, interne Persistence-Adapter, interne Event Handler und die Modulregistrierung. Auch sie bleibt in diesem Schritt fachlich leer und referenziert nur das eigene Contracts-Projekt.
+Die Implementierungs-Assembly ist der spätere Ort für Domain, Application, interne
+Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity enthält bereits
+die minimale Domain-Identität `CommunityIdentity` und referenziert nur das eigene
+Contracts-Projekt. Die übrigen Implementierungs-Assemblies bleiben in diesem Schritt fachlich
+leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche Contracts und Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine vorsorglichen Shared-Entities.
 
-Die modulbezogenen Testprojekte sind zunächst ebenfalls technisch minimal. Fachliche Tests kommen mit den jeweiligen Vertical Slices hinzu. Die Architecture Tests prüfen die Assembly-, Referenz- und Namespace-Grenzen automatisiert.
+Die modulbezogenen Testprojekte sind zunächst technisch minimal. Das Identity-Testprojekt prüft
+die Invarianten der Foundation; weitere fachliche Tests kommen mit den jeweiligen Vertical Slices
+hinzu. Die Architecture Tests prüfen die Assembly-, Referenz- und Namespace-Grenzen automatisiert.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 
@@ -46,7 +67,9 @@ Die modulbezogenen Testprojekte sind zunächst ebenfalls technisch minimal. Fach
 13. Integrations
 14. Administration
 
-Diese Reihenfolge dokumentiert nur die spätere Umsetzung. In diesem Schritt wird keine Fachlogik begonnen. Identity wird später als erstes Referenzmodul mit einer minimalen internen Community Identity implementiert.
+Diese Reihenfolge dokumentiert die Umsetzung. Identity besitzt als erstes Referenzmodul bereits
+eine minimale interne Community Identity; der vollständige Identity-Use-Case folgt in einem
+separaten Vertical Slice.
 
 ## Cross-Cutting-Fähigkeiten
 
