@@ -30,11 +30,12 @@ Der Runner legt bei Bedarf die technische Tabelle `flurnetz_persistence.migratio
 
 Bereits angewendete Migrationen werden übersprungen, wenn Identität und Checksum unverändert sind. Wird derselbe Owner/Version mit anderem Namen oder verändertem SQL erneut bereitgestellt, schlägt der Lauf klar fehl; angewendete Migrationen werden nicht stillschweigend überschrieben. Jede Migration und ihr History-Eintrag werden in derselben PostgreSQL-Transaction ausgeführt. Ein SQL-Fehler rollt daher auch die Migration und ihre Registrierung zurück.
 
-Der Host entscheidet später ausdrücklich, wann der Runner aufgerufen wird. Der erste fachliche
-Besitzer einer Migration ist jetzt Identity: `Identity:1:CreateCommunityIdentities` legt die
-Tabelle `community_identities` mit ausschließlich `id uuid primary key` an. Die SQL-Quelle liegt
-im Identity-Modul; `FlurNetz.Persistence` bleibt frei von fachlichen Tabellen und Migrationen.
-Es gibt weiterhin keine automatische Ausführung beim Prozessstart.
+Der ausführbare API-Host stellt die Connection-Konfiguration als Composition Root bereit und
+ruft den bestehenden Runner vor dem Listener-Start auf. Ein Fehler wird geloggt und beendet den
+Startup, damit kein nicht initialisierter Host als betriebsbereit erscheint. Der erste fachliche
+Besitzer einer Migration ist Identity: `Identity:1:CreateCommunityIdentities` legt die Tabelle
+`community_identities` mit ausschließlich `id uuid primary key` an. Die SQL-Quelle liegt im
+Identity-Modul; `FlurNetz.Persistence` bleibt frei von fachlichen Tabellen und Migrationen.
 
 ## Tests
 

@@ -31,8 +31,9 @@ Der Slice kann eine neue interne Identität erzeugen, in PostgreSQL speichern un
 wieder laden. Die fachliche Tabelle enthält ausschließlich den UUID-Primärschlüssel `id`.
 Migration und Persistenz werden durch echte PostgreSQL-Integrationstests geprüft.
 
-Weiterhin nicht enthalten sind eine API, HTTP-Schicht, weitere Identity-Use-Cases,
-Plattformkonten, Authentifizierung, Profile sowie fachliche Domain- oder Integration Events.
+Der vorhandene Use Case ist jetzt über `FlurNetz.Api` als HTTP-Adapter erreichbar. Weiterhin
+nicht enthalten sind weitere Identity-Use-Cases, Plattformkonten, Authentifizierung, Profile
+sowie fachliche Domain- oder Integration Events.
 
 ## Contracts und Implementierung
 
