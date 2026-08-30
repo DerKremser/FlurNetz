@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, die Engagement-Foundation und den ersten ausführbaren API-Host. Ein Engagement-Recording-Use-Case, Worker und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten internen Engagement-Message-Recording-Slice und den ausführbaren API-Host. Eine Engagement-HTTP-Schnittstelle, Progression-Kommunikation, Worker und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -25,9 +25,9 @@ Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](
 
 ## BuildingBlocks und Architekturtests
 
-`FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards und die minimale `IClock`-Abstraktion.
+`FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards, die minimale `IClock`-Abstraktion und deren neutrale `SystemClock`-Implementierung.
 
-Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, den Identity-Vertical-Slice, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
+Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
 
 ## Identity Foundation und erster Vertical Slice
 
@@ -37,13 +37,14 @@ Der erste Identity-Use-Case erzeugt eine neue `CommunityIdentityId`, bildet die 
 
 Der bestehende `CreateCommunityIdentity`-Use-Case ist über `FlurNetz.Api` als `POST /api/identities` erreichbar. Der HTTP-Adapter akzeptiert keinen Request-Body und gibt bei Erfolg ausschließlich ein API-Response-DTO mit der erzeugten ID zurück. Plattformkonten, Authentifizierung, Profile und fachliche Domain- oder Integration Events sind weiterhin nicht enthalten. Details stehen in [docs/architecture/identity.md](docs/architecture/identity.md) und [docs/architecture/api.md](docs/architecture/api.md).
 
-## Engagement Foundation
+## Engagement Message Recording
 
-`FlurNetz.Modules.Engagement` enthält die minimale fachliche Grundlage für normalisierte
-Community-Aktivitäten. `EngagementActivity` verwendet die interne `CommunityIdentityId` aus
-`Identity.Contracts`; `EngagementActivityId` bleibt auf die Engagement-Implementierung
-beschränkt. `Engagement.Contracts` ist bewusst leer. Es gibt noch keinen Recording-Use-Case,
-keine Aktivitätstypen, Persistenz, Events, Progression-Kommunikation, API-Erweiterung oder
+`FlurNetz.Modules.Engagement` enthält den ersten vollständigen internen Recording-Slice für
+normalisierte Message-Aktivitäten. `RecordMessageEngagement` verwendet eine bereits aufgelöste
+`CommunityIdentityId`, erzeugt den UTC-Zeitpunkt über `IClock` und persistiert die Aktivität über
+den Engagement-eigenen Dapper/PostgreSQL-Adapter und die Modulmigration. Es werden bewusst weder
+Nachrichtentext noch Plattformdaten gespeichert. `Engagement.Contracts` bleibt leer. Es gibt
+noch keine HTTP-Schnittstelle, Events, Progression-Kommunikation, XP-Vergabe oder
 Plattformintegration. Details stehen in [docs/architecture/engagement.md](docs/architecture/engagement.md).
 
 ## Persistence Foundation
@@ -52,11 +53,11 @@ Plattformintegration. Details stehen in [docs/architecture/engagement.md](docs/a
 
 `FlurNetz.Persistence.IntegrationTests` testet Verbindungen, Commit/Rollback und den Migration Runner gegen PostgreSQL. Für den automatischen Testlauf wird Docker für Testcontainers benötigt. Alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` auf eine isolierte PostgreSQL-Testdatenbank zeigen.
 
-Identity besitzt als erstes Modul eine fachliche Tabelle und einen gezielten Repository-Adapter. Weitere fachliche Modulimplementierungen, Tabellen oder Repositories gibt es nicht. Der API-Host stellt die Connection-Konfiguration als Composition Root bereit und führt den bestehenden Migration Runner vor dem Listener-Start aus. Worker und externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Identity und Engagement besitzen jeweils eine eigene fachliche Tabelle und einen gezielten Repository-Adapter; beide fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Der API-Host stellt die Connection-Konfiguration als Composition Root bereit und führt den bestehenden Migration Runner vor dem Listener-Start aus; Engagement ist dort weiterhin nicht als HTTP-Endpunkt registriert. Worker und externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement besitzt nur seine minimale Foundation und verarbeitet oder persistiert noch keine Aktivitäten. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den ersten internen Message-Recording-Slice mit Domain, Use Case, gezieltem Persistence-Adapter und Migration. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 

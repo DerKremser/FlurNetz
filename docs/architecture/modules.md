@@ -37,13 +37,16 @@ sowie fachliche Domain- oder Integration Events.
 
 ## Aktueller Stand des Engagement-Moduls
 
-Die Engagement-Foundation ist vorhanden. `FlurNetz.Modules.Engagement` enthält die minimale
-`EngagementActivity` mit einer modulinternen `EngagementActivityId` und der direkt verwendeten
-`CommunityIdentityId` aus `FlurNetz.Modules.Identity.Contracts`.
+Der erste vollständige Engagement-Recording-Vertical-Slice ist vorhanden. `RecordMessageEngagement`
+erzeugt eine normalisierte Message-Aktivität mit `EngagementActivityId`, der direkt verwendeten
+`CommunityIdentityId` aus `FlurNetz.Modules.Identity.Contracts` und einem UTC-Zeitpunkt aus
+`IClock`. Die Aktivität wird über den internen Repository-Port und den Dapper/PostgreSQL-Adapter
+gespeichert; die Migration `Engagement:1:CreateEngagementActivities` gehört dem Engagement-Modul.
 
-`FlurNetz.Modules.Engagement.Contracts` bleibt bewusst leer. Es gibt noch keinen Recording-
-Use-Case, keine Activity Types, keine Persistenz, keine Events, keine Progression-Kommunikation,
-keine API-Erweiterung und keine Plattformintegration.
+`FlurNetz.Modules.Engagement.Contracts` bleibt bewusst leer. Engagement ist damit noch nicht
+als vollständiges Engagement-Modul ausgebaut: Es gibt ausschließlich den Activity Type `Message`,
+keinen Nachrichtentext, keine Plattformdaten, keine Events, keine Progression-Kommunikation und
+keine API-Erweiterung.
 
 ## Contracts und Implementierung
 
@@ -56,19 +59,20 @@ bereits seine Domain-Foundation, benötigt aber noch keinen öffentlichen Contra
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
 aktuell nur Domain, Application, den Persistenzadapter, die fachliche Migration und die
-Registrierung der tatsächlich vorhandenen Komponenten. Die übrigen Implementierungs-Assemblies
-bleiben fachlich leer.
+Registrierung der tatsächlich vorhandenen Komponenten. Engagement nutzt dieselben Schichten
+für seinen Message-Recording-Slice und registriert Use Case, Repository, Migration und Uhr.
+Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
-darf in diesem Foundation-Schritt ausschließlich den eigenen Contract und `Identity.Contracts`
-verwenden. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche
+darf ausschließlich den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten
+technischen BuildingBlocks- und Persistence-Projekte verwenden. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche
 Contracts und Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine vorsorglichen
 Shared-Entities.
 
 Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
-Unit- und PostgreSQL-Integrationstests prüfen Domain, Use Case, Migration, Commit/Rollback,
-Primärschlüssel und Laden. Die Architecture Tests prüfen die Assembly-, Referenz- und
-Namespace-Grenzen automatisiert.
+und Engagement-Unit- sowie PostgreSQL-Integrationstests prüfen jeweils die vorhandenen Domain-
+und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Die Architecture
+Tests prüfen die Assembly-, Referenz- und Namespace-Grenzen automatisiert.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 

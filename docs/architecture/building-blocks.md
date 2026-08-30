@@ -6,7 +6,7 @@
 
 - fachlich neutrale Result-/Error-Typen
 - generische technische Guards
-- kleine technische Abstraktionen wie `IClock`
+- kleine technische Abstraktionen wie `IClock` sowie die neutrale `SystemClock`
 
 ## Nicht erlaubte Inhalte
 

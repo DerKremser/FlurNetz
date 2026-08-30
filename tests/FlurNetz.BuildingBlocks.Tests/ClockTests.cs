@@ -14,6 +14,18 @@ public sealed class ClockTests
         Assert.Equal(expected, clock.UtcNow);
     }
 
+    [Fact]
+    public void SystemClock_ReturnsUtcTimestamp()
+    {
+        var before = DateTimeOffset.UtcNow;
+
+        var current = new SystemClock().UtcNow;
+
+        var after = DateTimeOffset.UtcNow;
+        Assert.Equal(TimeSpan.Zero, current.Offset);
+        Assert.InRange(current, before, after);
+    }
+
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;

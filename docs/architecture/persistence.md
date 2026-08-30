@@ -34,9 +34,13 @@ Der ausführbare API-Host stellt die Connection-Konfiguration als Composition Ro
 ruft den bestehenden Runner vor dem Listener-Start auf. Ein Fehler wird geloggt und beendet den
 Startup, damit kein nicht initialisierter Host als betriebsbereit erscheint. Der erste fachliche
 Besitzer einer Migration ist Identity: `Identity:1:CreateCommunityIdentities` legt die Tabelle
-`community_identities` mit ausschließlich `id uuid primary key` an. Die SQL-Quelle liegt im
-Identity-Modul; `FlurNetz.Persistence` bleibt frei von fachlichen Tabellen und Migrationen.
+`community_identities` mit ausschließlich `id uuid primary key` an. Engagement besitzt nun als
+weiteres Modul die Migration `Engagement:1:CreateEngagementActivities` für seine Tabelle
+`engagement_activities`. Beide SQL-Quellen liegen in ihren Modulen; `FlurNetz.Persistence`
+bleibt frei von fachlichen Tabellen und Migrationen. Die fachliche `community_identity_id` in
+Engagement ist ein Cross-Module-Identifier und erzeugt bewusst keinen Foreign Key auf die
+Identity-Tabelle.
 
 ## Tests
 
-`FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
+`FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.

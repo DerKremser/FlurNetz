@@ -351,11 +351,6 @@ public sealed class OutboxProcessor
         };
     }
 
-    private sealed class SystemClock : IClock
-    {
-        public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
-    }
-
     private sealed class OutboxMessage
     {
         public Guid MessageId { get; init; }

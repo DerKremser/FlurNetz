@@ -2,41 +2,60 @@
 
 ## Verantwortung
 
-`FlurNetz.Modules.Engagement` bildet künftig normalisierte Community-Aktivitäten ab. Das
-Modul arbeitet dabei ausschließlich mit einer bereits aufgelösten internen
-`CommunityIdentityId`.
+`FlurNetz.Modules.Engagement` bildet normalisierte Community-Aktivitäten ab. Die erste
+konkrete Aktivität ist `Message`: Eine bereits durch Identity aufgelöste interne
+`CommunityIdentityId` hat eine Community-Nachricht erzeugt.
 
 Der verbindliche Ablauf lautet:
 
 `Externe Plattformidentität` → `Identity Resolution` → `CommunityIdentityId` → `Engagement`
 
-Externe Plattformkennungen sind deshalb weder die zentrale Benutzeridentität noch Teil der
-aktuellen Engagement-Domain.
+Engagement prüft die Existenz der Identität nicht selbst und fragt keine Identity-Tabelle ab.
+Die Auflösung ist vor dem Recording abgeschlossen. Externe Plattformkennungen sind weder die
+zentrale Benutzeridentität noch Teil der Engagement-Domain.
 
-## Foundation
+## Erster Recording-Vertical-Slice
 
-Die Implementierung enthält zunächst nur:
+`RecordMessageEngagement` erhält ausschließlich die `CommunityIdentityId`. Der Use Case erzeugt
+eine `EngagementActivityId`, bestimmt `OccurredAtUtc` über `IClock`, erstellt eine Message-
+Aktivität und speichert sie über den Engagement-eigenen Persistenz-Port. Der UTC-Zeitpunkt und
+die Aktivitätsart sind unveränderlich Teil der Domain-Entity.
 
-- `EngagementActivityId` als unveränderlichen, modulinternen Identifier auf Basis einer nicht leeren
-  `Guid`;
-- `EngagementActivity` mit `EngagementActivityId Id` und `CommunityIdentityId CommunityIdentityId`.
+`EngagementActivity` enthält aktuell genau:
 
-`EngagementActivityId` liegt bewusst in `FlurNetz.Modules.Engagement` und nicht in
-`FlurNetz.Modules.Engagement.Contracts`, weil aktuell kein anderes Modul diese Kennung benötigt.
-`Engagement.Contracts` bleibt daher bewusst leer.
+- `EngagementActivityId Id`;
+- `CommunityIdentityId CommunityIdentityId`;
+- `EngagementActivityType Type` mit ausschließlich `Message`;
+- `DateTimeOffset OccurredAtUtc` mit UTC-Offset.
 
-Die Foundation legt noch keinen Activity-Type-Katalog fest. Zeitpunkt, konkrete Aktivitätsart
-und weitere Daten entstehen erst mit dem ersten realen Recording-Use-Case.
+Message speichert bewusst keinen Nachrichtentext, keine Message-ID, keinen Channel und keine
+Emotes. Ebenso werden keine Plattform-, XP-, Coin- oder Reward-Daten übernommen.
+
+## Persistenz
+
+`EngagementActivityRepository` verwendet gezielte parametrisierte Dapper-SQLs und die vorhandene
+`PostgreSqlTransaction`. Die Engagement-eigene Migration `Engagement:1:CreateEngagementActivities`
+legt `engagement_activities` mit `id`, `community_identity_id`, `activity_type` und
+`occurred_at_utc` an. Der Aktivitätstyp wird stabil als logischer Code `message` gespeichert;
+Zeitpunkte werden als `timestamptz` persistiert.
+
+`community_identity_id` ist ein fachlicher Cross-Module-Identifier. Die Engagement-Tabelle
+besitzt deshalb bewusst keinen Foreign Key auf `community_identities` oder eine andere
+Identity-Tabelle. Engagement besitzt seine Daten selbst.
+
+`EngagementActivityId` und der Repository-Port bleiben in der Implementierungs-Assembly. Da
+aktuell kein anderes Modul einen öffentlichen Engagement-Vertrag benötigt, bleibt
+`FlurNetz.Modules.Engagement.Contracts` bewusst leer.
 
 ## Bewusst nicht enthalten
 
 Dieser Stand enthält noch:
 
-- keine Persistence, Tabellen, Migration oder Repositories;
-- kein Messaging, keine Domain- oder Integration Events und keine Outbox;
+- keine Domain- oder Integration Events und keine Outbox;
 - keine Progression-Kommunikation und keine XP-, Coin-, Reward- oder Item-Logik;
-- keinen Recording-Use-Case und keine API-Erweiterung;
+- keine API-Erweiterung und keinen öffentlichen HTTP-Recording-Endpunkt;
 - keine Twitch-, Discord-, YouTube-, Kick- oder Streamer.bot-Integration.
 
-Die einzige neue Cross-Module-Abhängigkeit der Engagement-Implementierung ist
-`FlurNetz.Modules.Identity.Contracts`. Die Identity-Implementierung wird nicht referenziert.
+Der Message-Slice ist intern über Use Case, Repository, Migration und Modulregistrierung
+vollständig funktionsfähig. Weitere Aktivitätstypen werden erst mit konkretem fachlichem Bedarf
+eingeführt.

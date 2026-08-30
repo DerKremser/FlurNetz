@@ -1,7 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <RootNamespace>FlurNetz.Modules.Engagement.Tests</RootNamespace>
+    <RootNamespace>FlurNetz.Modules.Engagement.IntegrationTests</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -11,10 +11,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Engagement\FlurNetz.Modules.Engagement.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Engagement.Contracts\FlurNetz.Modules.Engagement.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Engagement\FlurNetz.Modules.Engagement.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 
