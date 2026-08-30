@@ -4,6 +4,8 @@
 
 ### Hinzugefügt
 
+- Minimale Economy-Domain für nicht-negative Community-Salden.
+- Fachliche Gutschriften und Abbuchungen mit Schutz vor Überziehung und Overflow.
 - Erster dauerhaft laufender FlurNetz-Worker zur kontinuierlichen Verarbeitung der PostgreSQL-Outbox.
 - Explizite Runtime-Komposition des Engagement-Message-Events mit dem Progression-Consumer.
 - Erster zuverlässiger Cross-Module-Workflow von Engagement zu Progression über Outbox und Inbox.

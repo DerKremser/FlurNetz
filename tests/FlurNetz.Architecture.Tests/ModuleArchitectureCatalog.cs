@@ -56,6 +56,8 @@ internal static class ModuleArchitectureCatalog
                     [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
                 "Progression" =>
                     [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts", "FlurNetz.Modules.Engagement.Contracts"],
+                "Economy" =>
+                    [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
                 _ => [ContractsAssemblyName]
             };
     }
