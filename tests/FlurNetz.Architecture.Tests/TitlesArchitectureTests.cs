@@ -56,6 +56,23 @@ public sealed class TitlesArchitectureTests
     }
 
     [Fact]
+    public void TitlesFoundationContainsProductiveTypesOnlyInDomainNamespace()
+    {
+        const string domainNamespace = "FlurNetz.Modules.Titles.Domain";
+
+        var typesOutsideDomain = TitlesImplementationAssembly
+            .GetTypes()
+            .Where(type =>
+                type.Namespace is null ||
+                (!StringComparer.Ordinal.Equals(type.Namespace, domainNamespace) &&
+                 !type.Namespace.StartsWith(domainNamespace + ".", StringComparison.Ordinal)))
+            .Select(type => type.FullName)
+            .ToArray();
+
+        Assert.Empty(typesOutsideDomain);
+    }
+
+    [Fact]
     public void TitlesFoundationContainsNoPrematureCatalogOrPersistenceTypes()
     {
         Assert.Null(TitlesImplementationAssembly.GetType("FlurNetz.Modules.Titles.Domain.TitleDefinition"));
