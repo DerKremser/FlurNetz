@@ -67,7 +67,7 @@ public sealed class ApiArchitectureTests
     [Fact]
     public void PublicApiTypesUseTheApiNamespace()
     {
-        var invalidTypes = ApiAssembly.GetExportedTypes()
+        var invalidTypes = ApiAssembly.GetTypes()
             .Where(type => type.Namespace is null
                 || !type.Namespace.StartsWith("FlurNetz.Api", StringComparison.Ordinal))
             .Select(type => type.FullName)
