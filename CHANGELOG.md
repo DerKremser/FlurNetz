@@ -4,6 +4,8 @@
 
 ### Hinzugefügt
 
+- Fachliche Engagement-Grundlage für normalisierte Community-Aktivitäten.
+- Engagement-Aktivitäten verwenden die interne `CommunityIdentityId` statt externer Plattformidentitäten.
 - Initiales Repository- und Solution-Grundgerüst für FlurNetz.
 - Technische PostgreSQL-Persistenzgrundlage mit Npgsql und Dapper.
 - SQL-first Migration Runner mit Migration Ownership, Migration-History und unveränderlichen SQL-Checksums.

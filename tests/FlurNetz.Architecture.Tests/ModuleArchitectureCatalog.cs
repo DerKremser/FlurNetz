@@ -7,6 +7,15 @@ namespace FlurNetz.Architecture.Tests;
 /// </summary>
 internal static class ModuleArchitectureCatalog
 {
+    public static IReadOnlyList<string> ExternalPlatformNames { get; } =
+    [
+        "Twitch",
+        "Discord",
+        "YouTube",
+        "Kick",
+        "StreamerBot"
+    ];
+
     public static IReadOnlyList<ModuleDefinition> Modules { get; } =
     [
         new("Identity"),
@@ -39,5 +48,10 @@ internal static class ModuleArchitectureCatalog
         public string ImplementationNamespace => $"FlurNetz.Modules.{Name}";
 
         public string ContractsNamespace => $"FlurNetz.Modules.{Name}.Contracts";
+
+        public IReadOnlyList<string> AllowedImplementationModuleReferences =>
+            Name == "Engagement"
+                ? [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"]
+                : [ContractsAssemblyName];
     }
 }

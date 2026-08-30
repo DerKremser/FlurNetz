@@ -35,13 +35,23 @@ Der vorhandene Use Case ist jetzt über `FlurNetz.Api` als HTTP-Adapter erreichb
 nicht enthalten sind weitere Identity-Use-Cases, Plattformkonten, Authentifizierung, Profile
 sowie fachliche Domain- oder Integration Events.
 
+## Aktueller Stand des Engagement-Moduls
+
+Die Engagement-Foundation ist vorhanden. `FlurNetz.Modules.Engagement` enthält die minimale
+`EngagementActivity` mit einer modulinternen `EngagementActivityId` und der direkt verwendeten
+`CommunityIdentityId` aus `FlurNetz.Modules.Identity.Contracts`.
+
+`FlurNetz.Modules.Engagement.Contracts` bleibt bewusst leer. Es gibt noch keinen Recording-
+Use-Case, keine Activity Types, keine Persistenz, keine Events, keine Progression-Kommunikation,
+keine API-Erweiterung und keine Plattformintegration.
+
 ## Contracts und Implementierung
 
 Die Contracts-Assemblies beschreiben die später öffentliche Modulgrenze. Die Contracts-Assemblies
 der übrigen Module bleiben in diesem Schritt bewusst leer und enthalten keine vorsorglichen DTOs,
 Commands, Queries, Services, Repositories, Entities, Value Objects oder Events. Identity bildet
-mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme und enthält darüber hinaus
-keine vorsorglichen Verträge.
+mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme; Engagement besitzt zwar
+bereits seine Domain-Foundation, benötigt aber noch keinen öffentlichen Contract.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -49,7 +59,11 @@ aktuell nur Domain, Application, den Persistenzadapter, die fachliche Migration 
 Registrierung der tatsächlich vorhandenen Komponenten. Die übrigen Implementierungs-Assemblies
 bleiben fachlich leer.
 
-Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche Contracts und Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine vorsorglichen Shared-Entities.
+Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
+darf in diesem Foundation-Schritt ausschließlich den eigenen Contract und `Identity.Contracts`
+verwenden. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche
+Contracts und Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine vorsorglichen
+Shared-Entities.
 
 Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
 Unit- und PostgreSQL-Integrationstests prüfen Domain, Use Case, Migration, Commit/Rollback,
