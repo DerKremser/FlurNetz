@@ -213,6 +213,54 @@ public sealed class CommunityInventoryEntryTests
     }
 
     [Fact]
+    public void Rehydrate_RestoresIdentifiersAndQuantity()
+    {
+        var communityIdentityId = CommunityIdentityId.New();
+        var itemDefinitionId = ItemDefinitionId.New();
+        var quantity = InventoryQuantity.Create(42);
+
+        var entry = CommunityInventoryEntry.Rehydrate(
+            communityIdentityId,
+            itemDefinitionId,
+            quantity);
+
+        Assert.Equal(communityIdentityId, entry.CommunityIdentityId);
+        Assert.Equal(itemDefinitionId, entry.ItemDefinitionId);
+        Assert.Equal(quantity, entry.Quantity);
+    }
+
+    [Fact]
+    public void Rehydrate_AllowsZeroQuantity()
+    {
+        var entry = CommunityInventoryEntry.Rehydrate(
+            CommunityIdentityId.New(),
+            ItemDefinitionId.New(),
+            InventoryQuantity.Zero);
+
+        Assert.Equal(InventoryQuantity.Zero, entry.Quantity);
+    }
+
+    [Fact]
+    public void Rehydrate_RejectsAnInvalidCommunityIdentityId()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            CommunityInventoryEntry.Rehydrate(
+                default,
+                ItemDefinitionId.New(),
+                InventoryQuantity.Create(1)));
+    }
+
+    [Fact]
+    public void Rehydrate_RejectsAnInvalidItemDefinitionId()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            CommunityInventoryEntry.Rehydrate(
+                CommunityIdentityId.New(),
+                default,
+                InventoryQuantity.Create(1)));
+    }
+
+    [Fact]
     public void Add_IncreasesTheQuantity()
     {
         var entry = CreateEntry();

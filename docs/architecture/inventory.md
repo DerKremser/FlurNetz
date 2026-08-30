@@ -1,4 +1,4 @@
-# Inventory-Foundation
+# Inventory
 
 ## Verantwortung
 
@@ -7,53 +7,89 @@ Item-Typen für eine interne `CommunityIdentityId`. Inventory verwendet dafür a
 zentrale Identität aus `FlurNetz.Modules.Identity.Contracts`; es führt keine zweite Benutzerkennung
 ein und kennt keine externen Plattformidentitäten.
 
-Die Foundation beschreibt nur die fachliche Bestandsposition und ihre Mengeninvarianten. Herkunft,
-Belohnungslogik, Preise, Käufe, Shop-Produkte und Darstellung gehören nicht zu Inventory.
+Herkunft, Reward-Ausführung, Preise, Käufe, Shop-Produkte und Darstellung gehören weiterhin nicht
+zu Inventory. Der erste persistierte Slice ergänzt ausschließlich den eigenen Bestand und dessen
+atomare PostgreSQL-Persistenz.
 
-## ItemDefinitionId
+## Domain
 
 `ItemDefinitionId` ist ein unveränderlicher, Guid-basierter Fachtyp. Leere GUIDs werden abgelehnt.
-Die Kennung identifiziert ausschließlich den fachlichen Typ eines inventarisierbaren Gegenstands.
-Ein Item-Katalog mit Name, Beschreibung, Icon, Kategorie, Seltenheit, Status oder weiteren
-Metadaten wird in diesem Schritt bewusst nicht vorweggenommen.
-
-Die Definition eines Item-Typs ist von seinem konkreten Community-Bestand getrennt. Damit wird
-keine spätere Shop-, Rewards- oder UI-Semantik in die Inventory-Domain gezogen.
-
-## InventoryQuantity
+Die Kennung identifiziert den Typ eines inventarisierbaren Gegenstands. Ein Item-Katalog mit Name,
+Beschreibung, Icon, Kategorie, Seltenheit oder Status wird nicht vorweggenommen.
 
 `InventoryQuantity` ist ein unveränderlicher Werttyp auf Basis von `long`. Die Menge ist immer
-nicht-negativ; `InventoryQuantity.Zero` ist gültig. `Create(long)` akzeptiert null und positive
-Werte und lehnt negative Werte ab.
-
-`Add(long)` und `Remove(long)` akzeptieren ausschließlich positive Änderungen. Eine Addition
-oberhalb von `long.MaxValue` wird als `OverflowException` sichtbar abgelehnt. Eine Entnahme,
-für die der vorhandene Bestand nicht ausreicht, führt zu
-`InsufficientInventoryQuantityException`. Eine Entnahme bis exakt null ist zulässig. Da der
-Werttyp immutable ist, verändert eine fehlgeschlagene Operation den ursprünglichen Wert nicht.
-
-## CommunityInventoryEntry
+nicht-negativ. `Add(long)` und `Remove(long)` akzeptieren ausschließlich positive Änderungen,
+Addition schützt vor Overflow und Entnahme vor Unterbestand.
 
 `CommunityInventoryEntry` verbindet genau eine gültige `CommunityIdentityId` mit genau einer
-gültigen `ItemDefinitionId`. Diese Kombination beschreibt die fachliche Bestandsposition.
-Neue Positionen starten mit `InventoryQuantity.Zero`. Beide Kennungen sind unveränderlich; die
-Menge kann nur über die fachlichen Methoden `Add` und `Remove` verändert werden.
+gültigen `ItemDefinitionId`. `Create` erzeugt eine neue Position bei Menge null; `Rehydrate`
+rekonstruiert einen bereits persistierten Zustand. IDs sind unveränderlich und die Menge kann nur
+über die fachlichen Methoden `Add` und `Remove` verändert werden.
 
-Die Foundation trifft noch keine Aussage darüber, ob eine spätere Persistenz Positionen mit
-Menge null speichert oder löscht. Diese Lifecycle-Entscheidung gehört in den ersten realen
-Persistence-Slice und wird nicht aus der Domain-Foundation vorweggenommen.
+## Persistenz und Lifecycle
 
-## Modulgrenzen und bewusste Ausschlüsse
+Inventory besitzt die Tabelle `community_inventory_entries` mit genau den Spalten:
 
-`FlurNetz.Modules.Inventory.Contracts` bleibt bewusst leer, weil in diesem Schritt noch kein
-echter Cross-Module-Caller einen öffentlichen Inventory-Contract benötigt. Die Domain-Typen
-bleiben im Implementierungsprojekt. Die einzige fachfremde Referenz der Inventory-Implementierung
-ist `FlurNetz.Modules.Identity.Contracts`.
+- `community_identity_id uuid not null`
+- `item_definition_id uuid not null`
+- `quantity bigint not null`
 
-Noch nicht enthalten sind:
+Der Composite Primary Key besteht aus
+`(community_identity_id, item_definition_id)`. Die Datenbank erzwingt zusätzlich
+`quantity >= 0`. Es gibt bewusst keinen Foreign Key auf Identity und keine Item-Definitionstabelle.
+Die `CommunityIdentityId` bleibt ein Cross-Module-Identifier; `ItemDefinitionId` bleibt eine
+Inventory-eigene Fachkennung ohne vorgezogenen Katalog.
 
-- Persistence, SQL-Migrationen, Repository oder Store
-- Application Use Cases oder Modulregistrierung
+Die Persistenz ist bewusst sparse:
+
+- Ein positiver Bestand wird als Zeile gespeichert.
+- `Add` legt eine fehlende Position innerhalb seiner Transaktion zunächst mit Menge null an,
+  sperrt sie mit `SELECT FOR UPDATE`, rehydriert die Domain und persistiert erst die fachlich
+  gültige positive Menge.
+- Ein fehlgeschlagener erster `Add` wird vollständig zurückgerollt und hinterlässt keine Nullzeile.
+- `Remove` legt eine fehlende Position nicht an. Fachlich entspricht sie Menge null und eine
+  positive Entnahme schlägt mit `InsufficientInventoryQuantityException` fehl.
+- Sinkt eine vorhandene Menge exakt auf null, wird die Zeile innerhalb derselben Transaktion
+  gelöscht.
+- Ein reines Laden erzeugt niemals eine Bestandsposition.
+
+Diese Lifecycle-Regel verhindert dauerhaft bedeutungslose Nullbestände und macht das Nichtvorhandensein
+einer Zeile zur persistenten Repräsentation von Bestand null.
+
+## Application und Persistence-Grenze
+
+`ICommunityInventoryStore` ist ein rein modulinterner Port. Er bietet atomare Operationen für
+`Add`, `Remove` und das Laden genau einer Position. `AddInventoryQuantity` und
+`RemoveInventoryQuantity` enthalten keine SQL- oder Transaktionslogik und delegieren an diese
+Persistenzgrenze.
+
+`CommunityInventoryStore` implementiert den Port mit Dapper und der technischen
+`FlurNetz.Persistence`-Foundation. Jede Mutation verwendet eine eigene
+`PostgreSqlTransaction`; Lesen, Zeilensperre, Rehydration, Domain-Mutation und Update beziehungsweise
+Delete liegen in derselben Transaktion. Dadurch werden Lost Updates bei parallelen Änderungen an
+derselben Bestandsposition verhindert.
+
+Es gibt bewusst keinen transaction-aware öffentlichen Inventory-Contract und keinen Overload für
+fremde Modultransaktionen. Eine solche Grenze wird erst eingeführt, wenn ein realer Caller wie
+Rewards oder Shop sie tatsächlich benötigt.
+
+## Migration und Registrierung
+
+`Inventory:1:CreateCommunityInventoryEntries` gehört ausschließlich dem Inventory-Modul und legt
+nur die Inventory-eigene Tabelle an. Die Migration enthält keine Cross-Module-Foreign-Keys.
+
+`AddInventoryModule` registriert den Store, die beiden internen Use Cases und
+`InventoryMigrationSource`. Kein Host verdrahtet Inventory in diesem Slice; API, Worker und
+Runtime-Trigger bleiben unberührt.
+
+## Contracts und bewusste Ausschlüsse
+
+`FlurNetz.Modules.Inventory.Contracts` bleibt leer. Der persistierte Slice benötigt noch keinen
+öffentlichen Cross-Module-Vertrag. Die Inventory-Implementierung darf ausschließlich den eigenen
+Contract, `Identity.Contracts` und die technische `FlurNetz.Persistence`-Assembly referenzieren.
+
+Weiterhin nicht enthalten sind:
+
 - Messaging, Integration Events, Domain Events, Inbox oder Outbox
 - Reward-Definitionen, Reward-Ausführung oder eine Rewards-Abhängigkeit
 - Shop-Produkte, Käufe, Preise oder eine Shop-Abhängigkeit
@@ -61,6 +97,13 @@ Noch nicht enthalten sind:
 - Item-Katalog, Namen, Beschreibungen, Icons, Kategorien oder Seltenheiten
 - Stack-Limits, einzigartige Item-Instanzen oder Instanzzustände
 - Ausrüstung, Verbrauch, Handel, Transfer, Ablaufzeiten oder Ownership-Historie
+- öffentliche transaction-aware Inventory-Capabilities
 
-Persistence sowie spätere Rewards- und Shop-Komposition werden als getrennte Slices ergänzt,
-wenn deren konkrete fachliche Anforderungen vorliegen.
+## Tests
+
+Die Unit Tests prüfen Domain-Rehydration, Mengeninvarianten, Immutability und die beiden internen
+Use Cases. Das eigene PostgreSQL-Integrationstestprojekt prüft Migration und Check-Constraint,
+Composite Key, Lazy-Add, Sparse-Zero-Lifecycle, Laden, Rollback, Isolation verschiedener
+Identitäten und Item-Definitionen sowie konkurrierende Adds und Removes mit echten
+PostgreSQL-Zeilensperren. Architekturtests sichern Contracts-Leere, Typ-Ownership und die
+verbotenen Messaging-, Rewards- und Shop-Abhängigkeiten ab.
