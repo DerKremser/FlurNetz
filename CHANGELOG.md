@@ -4,6 +4,8 @@
 
 ### Hinzugefügt
 
+- Erster persistierter Progression-Vertical-Slice für atomare Experience-Point-Vergaben.
+- Progression-eigene PostgreSQL-Migration und nebenläufigkeitssichere XP-Akkumulation.
 - Minimale Progression-Grundlage für nicht-negative Experience Points.
 - Community-bezogener Progressionszustand auf Basis der internen `CommunityIdentityId`.
 - Erster Engagement-Vertical-Slice zum Aufzeichnen normalisierter Message-Aktivitäten.
