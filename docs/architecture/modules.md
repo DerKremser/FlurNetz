@@ -139,6 +139,22 @@ eigenen Contract ausschließlich `Identity.Contracts` und die technische Persist
 Messaging, Rewards- und Shop-Anbindung, Item-Katalog, API, Admin UI und Worker bleiben ausgeschlossen.
 Details stehen in [inventory.md](inventory.md).
 
+## Aktueller Stand des Titles-Moduls
+
+Titles besitzt jetzt die minimale Domain-Foundation für community-bezogene Titel.
+`TitleDefinitionId` ist eine stabile, nicht leere Guid-Fachkennung. `CommunityTitles` gehört
+genau einer `CommunityIdentityId`, startet ohne Freischaltungen und ohne aktuelle Auswahl und
+kann beliebig viele unterschiedliche Titel idempotent freischalten.
+
+Höchstens ein bereits freigeschalteter Titel kann als aktueller Titel ausgewählt sein.
+`TitleNotUnlockedException` schützt diese Invariante; das Leeren der aktuellen Auswahl verändert
+keine Freischaltung. Eine Freischaltung wählt einen Titel nicht automatisch aus.
+
+`FlurNetz.Modules.Titles.Contracts` bleibt leer. Die Implementierung referenziert ausschließlich
+den eigenen Contract und `Identity.Contracts`. Persistence, Rehydration, Titelkatalog,
+Lock-/Revoke-Semantik, Messaging, Rewards-, Achievement- und Shop-Anbindung, API, Admin UI und
+Worker bleiben bewusst ausgeschlossen. Details stehen in [titles.md](titles.md).
+
 ## Contracts und Implementierung
 
 Die Contracts-Assemblies beschreiben die später öffentliche Modulgrenze. Die Contracts-Assemblies
@@ -151,7 +167,7 @@ einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Con
 mit Domain, Application, Persistence-Adapter, Migration und Registrierung ebenfalls einen internen
 Vertical Slice sowie den neutralen Credit-Capability-Contract für atomare Komposition. Rewards besitzt
 mit Domain, Application, Katalog, Grant-Executor, Migration und Registrierung den ersten persistierten
-ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt Domain, interne Use Cases, atomaren Store, Migration und Registrierung; auch sein Contracts-Projekt bleibt leer.
+ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt Domain, interne Use Cases, atomaren Store, Migration und Registrierung; auch sein Contracts-Projekt bleibt leer. Titles besitzt ausschließlich seine minimale Domain-Foundation; sein Contracts-Projekt bleibt ebenfalls leer.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -163,7 +179,7 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
 und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
 Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Titles nutzt derzeit ausschließlich seine Domain und noch keine Application-, Persistence- oder Runtime-Schicht. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen
@@ -186,7 +202,7 @@ Concurrency-Tests abgesichert. Economy besitzt eigene Domain-, Use-Case-, Migrat
 Rollback-, Load- und echte PostgreSQL-Concurrency-Tests. Rewards besitzt Domain- und
 Application-Unit-Tests, Architekturtests sowie ein eigenes echtes PostgreSQL-
 Integrationstestprojekt für Migration, Katalog, Atomicity, Idempotenz und Nebenläufigkeit.
-Inventory besitzt Domain- und Application-Unit-Tests, eigene Architekturgrenzen sowie echte PostgreSQL-Integrationstests für Migration, Sparse-Lifecycle, Rollback und Nebenläufigkeit.
+Inventory besitzt Domain- und Application-Unit-Tests, eigene Architekturgrenzen sowie echte PostgreSQL-Integrationstests für Migration, Sparse-Lifecycle, Rollback und Nebenläufigkeit. Titles besitzt Domain-Unit-Tests und eigene Architekturtests für seine Foundation-Grenzen.
 Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
 den vollständigen Outbox-/Inbox-Weg sowie Producer- und Consumer-Atomicity gegen PostgreSQL.
 Die Architecture Tests prüfen zusätzlich Event Ownership, Contract-Minimalität, erlaubte
