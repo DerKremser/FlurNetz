@@ -6,6 +6,9 @@
 
 - Minimale Economy-Domain für nicht-negative Community-Salden.
 - Fachliche Gutschriften und Abbuchungen mit Schutz vor Überziehung und Overflow.
+- Erster persistierter Economy-Vertical-Slice für atomare Community-Salden.
+- Nebenläufigkeitssichere Gutschriften und Abbuchungen mit PostgreSQL-Row-Locking.
+- Economy-eigene Migration mit Datenbankinvariante für nicht-negative Salden.
 - Erster dauerhaft laufender FlurNetz-Worker zur kontinuierlichen Verarbeitung der PostgreSQL-Outbox.
 - Explizite Runtime-Komposition des Engagement-Message-Events mit dem Progression-Consumer.
 - Erster zuverlässiger Cross-Module-Workflow von Engagement zu Progression über Outbox und Inbox.

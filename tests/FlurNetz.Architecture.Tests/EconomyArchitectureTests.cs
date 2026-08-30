@@ -1,26 +1,28 @@
 namespace FlurNetz.Architecture.Tests;
 
 /// <summary>
-/// Sichert die bewusst minimale Assembly-Grenze der Economy-Foundation ab.
+/// Sichert die bewusst minimale Assembly-Grenze des Economy-Vertical-Slices ab.
 /// </summary>
 public sealed class EconomyArchitectureTests
 {
     [Fact]
-    public void EconomyImplementationReferencesOnlyAllowedModuleAssemblies()
+    public void EconomyImplementationReferencesOnlyApprovedProjects()
     {
         var references = ModuleArchitectureCatalog
             .LoadAssembly("FlurNetz.Modules.Economy")
             .GetReferencedAssemblies()
             .Select(assembly => assembly.Name)
-            .Where(name => name is not null && name.StartsWith("FlurNetz.Modules.", StringComparison.Ordinal))
+            .Where(name => name is not null && name.StartsWith("FlurNetz.", StringComparison.Ordinal))
             .Select(name => name!)
             .ToArray();
 
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
+        Assert.Contains("FlurNetz.Persistence", references);
         var allowedReferences = new HashSet<string>(StringComparer.Ordinal)
         {
             "FlurNetz.Modules.Economy.Contracts",
-            "FlurNetz.Modules.Identity.Contracts"
+            "FlurNetz.Modules.Identity.Contracts",
+            "FlurNetz.Persistence"
         };
 
         Assert.All(
