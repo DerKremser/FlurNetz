@@ -11,14 +11,6 @@ namespace FlurNetz.Architecture.Tests;
 /// </summary>
 public sealed class IdentityArchitectureTests
 {
-    private static readonly string[] ExternalPlatformNames =
-    [
-        "Twitch",
-        "Discord",
-        "YouTube",
-        "StreamerBot"
-    ];
-
     private static Assembly IdentityContractsAssembly => typeof(CommunityIdentityId).Assembly;
 
     private static Assembly IdentityImplementationAssembly => typeof(CommunityIdentity).Assembly;
@@ -128,7 +120,7 @@ public sealed class IdentityArchitectureTests
     {
         var typeName = type.Name.Split('`')[0];
 
-        return ExternalPlatformNames.Any(platformName =>
+        return ModuleArchitectureCatalog.ExternalPlatformNames.Any(platformName =>
             typeName.StartsWith(platformName, StringComparison.Ordinal)
             && (typeName.EndsWith("Id", StringComparison.Ordinal)
                 || typeName.EndsWith("Identifier", StringComparison.Ordinal)

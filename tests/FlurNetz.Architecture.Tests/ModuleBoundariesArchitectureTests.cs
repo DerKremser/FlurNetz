@@ -67,7 +67,7 @@ public sealed class ModuleBoundariesArchitectureTests
                 .ToArray();
 
             var unexpectedReferences = moduleReferences
-                .Where(name => !StringComparer.Ordinal.Equals(name, module.ContractsAssemblyName))
+                .Where(name => !module.AllowedImplementationModuleReferences.Contains(name, StringComparer.Ordinal))
                 .ToArray();
 
             Assert.Empty(unexpectedReferences);

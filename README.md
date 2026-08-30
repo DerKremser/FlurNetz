@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice und den ersten ausführbaren API-Host. Ein Worker und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, die Engagement-Foundation und den ersten ausführbaren API-Host. Ein Engagement-Recording-Use-Case, Worker und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -37,6 +37,15 @@ Der erste Identity-Use-Case erzeugt eine neue `CommunityIdentityId`, bildet die 
 
 Der bestehende `CreateCommunityIdentity`-Use-Case ist über `FlurNetz.Api` als `POST /api/identities` erreichbar. Der HTTP-Adapter akzeptiert keinen Request-Body und gibt bei Erfolg ausschließlich ein API-Response-DTO mit der erzeugten ID zurück. Plattformkonten, Authentifizierung, Profile und fachliche Domain- oder Integration Events sind weiterhin nicht enthalten. Details stehen in [docs/architecture/identity.md](docs/architecture/identity.md) und [docs/architecture/api.md](docs/architecture/api.md).
 
+## Engagement Foundation
+
+`FlurNetz.Modules.Engagement` enthält die minimale fachliche Grundlage für normalisierte
+Community-Aktivitäten. `EngagementActivity` verwendet die interne `CommunityIdentityId` aus
+`Identity.Contracts`; `EngagementActivityId` bleibt auf die Engagement-Implementierung
+beschränkt. `Engagement.Contracts` ist bewusst leer. Es gibt noch keinen Recording-Use-Case,
+keine Aktivitätstypen, Persistenz, Events, Progression-Kommunikation, API-Erweiterung oder
+Plattformintegration. Details stehen in [docs/architecture/engagement.md](docs/architecture/engagement.md).
+
 ## Persistence Foundation
 
 `FlurNetz.Persistence` verwendet PostgreSQL, Npgsql und Dapper ohne ORM und ohne Generic Repository. Migrationen werden als explizite SQL-Texte von ihren jeweiligen Besitzern bereitgestellt, deterministisch ausgeführt und in `flurnetz_persistence.migration_history` nachverfolgt. Bereits angewendete Migrationen sind unveränderlich; eine abweichende SQL-Checksum führt zu einem Fehler.
@@ -47,7 +56,7 @@ Identity besitzt als erstes Modul eine fachliche Tabelle und einen gezielten Rep
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Cross-Module-Referenzen und fachliche Typen der übrigen Module sind noch nicht vorhanden. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement besitzt nur seine minimale Foundation und verarbeitet oder persistiert noch keine Aktivitäten. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 
