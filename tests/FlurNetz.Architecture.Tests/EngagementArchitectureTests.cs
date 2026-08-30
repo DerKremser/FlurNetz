@@ -1,5 +1,7 @@
 using System.Reflection;
 using FlurNetz.BuildingBlocks.Time;
+using FlurNetz.Messaging.Integration;
+using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Engagement.Application;
 using FlurNetz.Modules.Engagement.Domain;
 using FlurNetz.Modules.Engagement.Migrations;
@@ -29,12 +31,12 @@ public sealed class EngagementArchitectureTests
     }
 
     [Fact]
-    public void EngagementImplementationReferencesNoForbiddenProjects()
+    public void EngagementImplementationReferencesMessagingButNoProgression()
     {
         var references = GetReferencedAssemblyNames(EngagementImplementationAssembly);
 
         Assert.DoesNotContain("FlurNetz.Modules.Identity", references);
-        Assert.DoesNotContain("FlurNetz.Messaging", references);
+        Assert.Contains("FlurNetz.Messaging", references);
         Assert.DoesNotContain("FlurNetz.Modules.Progression", references);
         Assert.DoesNotContain("FlurNetz.Modules.Progression.Contracts", references);
         Assert.DoesNotContain("FlurNetz.Api", references);
@@ -50,9 +52,36 @@ public sealed class EngagementArchitectureTests
     }
 
     [Fact]
-    public void EngagementContractsRemainEmpty()
+    public void EngagementContractsOwnTheMessageIntegrationEvent()
     {
-        Assert.Empty(EngagementContractsAssembly.GetExportedTypes());
+        Assert.Equal([typeof(MessageEngagementRecordedIntegrationEvent)], EngagementContractsAssembly.GetExportedTypes());
+        Assert.Contains(
+            typeof(IIntegrationEvent),
+            typeof(MessageEngagementRecordedIntegrationEvent).GetInterfaces());
+
+        var references = GetReferencedAssemblyNames(EngagementContractsAssembly);
+        Assert.Contains("FlurNetz.Messaging", references);
+        Assert.DoesNotContain("FlurNetz.Persistence", references);
+        Assert.DoesNotContain("FlurNetz.Modules.Progression", references);
+        Assert.DoesNotContain("FlurNetz.Modules.Engagement", references);
+    }
+
+    [Fact]
+    public void EngagementEventContractContainsNoProgressionSemantics()
+    {
+        var properties = typeof(MessageEngagementRecordedIntegrationEvent)
+            .GetProperties()
+            .Select(property => property.Name)
+            .ToArray();
+
+        Assert.Equal([nameof(MessageEngagementRecordedIntegrationEvent.CommunityIdentityId)], properties);
+        Assert.DoesNotContain(properties, property =>
+            property.Contains("Xp", StringComparison.OrdinalIgnoreCase)
+            || property.Contains("Experience", StringComparison.OrdinalIgnoreCase)
+            || property.Contains("Reward", StringComparison.OrdinalIgnoreCase)
+            || property.Contains("Level", StringComparison.OrdinalIgnoreCase)
+            || property.Contains("Platform", StringComparison.OrdinalIgnoreCase)
+            || property.Contains("MessageText", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

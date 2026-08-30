@@ -1,5 +1,6 @@
 using Dapper;
 using FlurNetz.BuildingBlocks.Time;
+using FlurNetz.Messaging.Integration;
 using FlurNetz.Modules.Engagement.Application;
 using FlurNetz.Modules.Engagement.Domain;
 using FlurNetz.Modules.Engagement.Migrations;
@@ -93,7 +94,9 @@ public sealed class EngagementPostgreSqlIntegrationTests(EngagementPostgreSqlFix
         await PrepareEngagementAsync(factory);
 
         var repository = new EngagementActivityRepository(factory);
-        var useCase = new RecordMessageEngagement(repository, new FixedClock(TestNow));
+        var useCase = new RecordMessageEngagement(
+            new RepositoryMessageEngagementRecorder(repository),
+            new FixedClock(TestNow));
         var communityIdentityId = CommunityIdentityId.New();
 
         var id = await useCase.ExecuteAsync(communityIdentityId, TestToken);
@@ -201,7 +204,9 @@ public sealed class EngagementPostgreSqlIntegrationTests(EngagementPostgreSqlFix
         await using var factory = CreateFactory();
         await PrepareEngagementAsync(factory);
         var repository = new EngagementActivityRepository(factory);
-        var useCase = new RecordMessageEngagement(repository, new FixedClock(TestNow));
+        var useCase = new RecordMessageEngagement(
+            new RepositoryMessageEngagementRecorder(repository),
+            new FixedClock(TestNow));
         var communityIdentityId = CommunityIdentityId.New();
 
         var ids = new[]
@@ -289,6 +294,18 @@ public sealed class EngagementPostgreSqlIntegrationTests(EngagementPostgreSqlFix
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;
+    }
+
+    private sealed class RepositoryMessageEngagementRecorder(IEngagementActivityRepository repository)
+        : IMessageEngagementRecorder
+    {
+        public Task RecordAsync(
+            EngagementActivity activity,
+            IntegrationEventEnvelope envelope,
+            CancellationToken cancellationToken = default)
+        {
+            return repository.AddAsync(activity, cancellationToken);
+        }
     }
 
     private sealed class ColumnInfo

@@ -43,18 +43,47 @@ Zeitpunkte werden als `timestamptz` persistiert.
 besitzt deshalb bewusst keinen Foreign Key auf `community_identities` oder eine andere
 Identity-Tabelle. Engagement besitzt seine Daten selbst.
 
-`EngagementActivityId` und der Repository-Port bleiben in der Implementierungs-Assembly. Da
-aktuell kein anderes Modul einen öffentlichen Engagement-Vertrag benötigt, bleibt
-`FlurNetz.Modules.Engagement.Contracts` bewusst leer.
+`EngagementActivityId` und die Persistence-Ports bleiben in der Implementierungs-Assembly.
+`FlurNetz.Modules.Engagement.Contracts` enthält jetzt ausschließlich das erste öffentliche
+Integration Event dieses Moduls.
+
+## Integration Event und Producer-Atomicity
+
+Nach erfolgreicher Domain-Erzeugung erstellt `RecordMessageEngagement` ein
+`MessageEngagementRecordedIntegrationEvent`. Der Contract liegt bewusst in Engagement, weil
+Engagement die fachliche Tatsache besitzt: „Eine normalisierte Message-Aktivität wurde
+aufgezeichnet.“ Der stabile logische Typ ist `engagement.message-recorded`, die Schema-Version
+ist `1`. Die Payload enthält ausschließlich die interne `CommunityIdentityId` als `Guid`.
+
+Das Event enthält weder XP noch eine Progressionsanweisung, Reward-, Level-, Coin- oder
+Plattformdaten. `EngagementActivityId` bleibt modulintern. Der Envelope verwendet exakt den
+`EngagementActivity.OccurredAtUtc`-Zeitpunkt, erzeugt eine eigene nicht leere technische
+`MessageId` und lässt `CorrelationId` sowie `CausationId` leer, solange keine echte Korrelation
+existiert. Das Event ist eine Tatsache und kein Command zur XP-Vergabe.
+
+Der interne `IMessageEngagementRecorder` garantiert über
+`PostgreSqlMessageEngagementRecorder`, dass Activity-INSERT und Outbox-INSERT des bestehenden
+`PostgreSqlOutboxPublisher` in derselben `PostgreSqlTransaction` liegen. Erst der gemeinsame
+Commit macht beide Writes dauerhaft sichtbar; ein Publish nach einem separaten Activity-Commit
+findet nicht statt. Der Recorder verwendet den bestehenden transaction-aware
+`EngagementActivityRepository`-Pfad und dupliziert kein Activity-SQL.
+
+Die Registry wird explizit mit Eventtyp, Message Type und Schema-Version komponiert. Es gibt
+kein Assembly Scanning und kein Messaging- oder Progressionswissen in der technischen
+Messaging-Foundation.
 
 ## Bewusst nicht enthalten
 
 Dieser Stand enthält noch:
 
-- keine Domain- oder Integration Events und keine Outbox;
-- keine Progression-Kommunikation und keine XP-, Coin-, Reward- oder Item-Logik;
+- keine Domain Events, keine automatische XP-Regel und keine Progressionsimplementierung;
+- keine Level-, Coin-, Reward- oder Item-Logik;
 - keine API-Erweiterung und keinen öffentlichen HTTP-Recording-Endpunkt;
 - keine Twitch-, Discord-, YouTube-, Kick- oder Streamer.bot-Integration.
+
+Engagement veröffentlicht das Event, ruft Progression aber nicht direkt auf und kennt die
+fachliche Regel „Message → 1 XP“ nicht. Der Outbox-Processor wird in diesem Schritt noch nicht
+als dauerhaft laufender Host betrieben.
 
 Der Message-Slice ist intern über Use Case, Repository, Migration und Modulregistrierung
 vollständig funktionsfähig. Weitere Aktivitätstypen werden erst mit konkretem fachlichem Bedarf

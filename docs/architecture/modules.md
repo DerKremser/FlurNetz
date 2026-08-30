@@ -40,13 +40,14 @@ sowie fachliche Domain- oder Integration Events.
 Der erste vollständige Engagement-Recording-Vertical-Slice ist vorhanden. `RecordMessageEngagement`
 erzeugt eine normalisierte Message-Aktivität mit `EngagementActivityId`, der direkt verwendeten
 `CommunityIdentityId` aus `FlurNetz.Modules.Identity.Contracts` und einem UTC-Zeitpunkt aus
-`IClock`. Die Aktivität wird über den internen Repository-Port und den Dapper/PostgreSQL-Adapter
-gespeichert; die Migration `Engagement:1:CreateEngagementActivities` gehört dem Engagement-Modul.
+`IClock`. Die Aktivität wird gemeinsam mit einem `MessageEngagementRecordedIntegrationEvent`
+über den atomaren Recorder und den bestehenden PostgreSQL-Outbox-Publisher persistiert; die
+Migration `Engagement:1:CreateEngagementActivities` gehört dem Engagement-Modul.
 
-`FlurNetz.Modules.Engagement.Contracts` bleibt bewusst leer. Engagement ist damit noch nicht
-als vollständiges Engagement-Modul ausgebaut: Es gibt ausschließlich den Activity Type `Message`,
-keinen Nachrichtentext, keine Plattformdaten, keine Events, keine Progression-Kommunikation und
-keine API-Erweiterung.
+`FlurNetz.Modules.Engagement.Contracts` enthält als ersten öffentlichen Vertrag das Event mit
+dem stabilen Message Type `engagement.message-recorded` und Schema-Version `1`. Die Payload
+enthält nur die interne `CommunityIdentityId`; XP, Message-Text, Plattformdaten und
+Progressionsanweisungen sind ausgeschlossen. Engagement ruft Progression nicht direkt auf.
 
 ## Aktueller Stand des Progression-Moduls
 
@@ -59,45 +60,53 @@ bei der ersten Vergabe und persistiert die positive XP-Akkumulation atomar in Po
 Die Persistence-Mutation verwendet eine modulinterne Port-/Adapter-Grenze, eine gemeinsame
 Transaktion und `SELECT FOR UPDATE`, damit parallele Vergaben keine Lost Updates erzeugen.
 Die Tabelle verwendet `CommunityIdentityId` als Primärschlüssel und besitzt bewusst keinen
-Foreign Key auf Identity. `FlurNetz.Modules.Progression.Contracts` bleibt leer; die einzige
-fachfremde Projektabhängigkeit der Implementierung ist `FlurNetz.Modules.Identity.Contracts`,
-zusätzlich zu der erlaubten technischen Abhängigkeit auf `FlurNetz.Persistence`.
+Foreign Key auf Identity. `FlurNetz.Modules.Progression.Contracts` bleibt leer.
+Die fachfremde fachliche Projektabhängigkeit der Implementierung ist
+`FlurNetz.Modules.Engagement.Contracts`; zusätzlich verwendet sie `Identity.Contracts`,
+`FlurNetz.Persistence` und die technische Messaging-Foundation. Eine Referenz auf die
+Engagement-Implementierung existiert nicht.
 
-Noch nicht enthalten sind Engagement-Kommunikation, Messaging, Events, Rewards,
-Level-Logik oder API-Erweiterung.
+Progression konsumiert das Engagement-Event über den stabilen Consumer
+`progression.message-engagement-xp`. Eine normalisierte Message wird ausschließlich in
+Progression als `1 XP` interpretiert; Inbox-Eintrag und transaction-aware XP-Grant teilen eine
+Transaktion. Noch nicht enthalten sind Level-Logik, Rewards, Economy, API-Erweiterung und ein
+dauerhaft laufender Worker-Host.
 
 ## Contracts und Implementierung
 
 Die Contracts-Assemblies beschreiben die später öffentliche Modulgrenze. Die Contracts-Assemblies
 der übrigen Module bleiben in diesem Schritt bewusst leer und enthalten keine vorsorglichen DTOs,
 Commands, Queries, Services, Repositories, Entities, Value Objects oder Events. Identity bildet
-mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme; Engagement besitzt zwar
-bereits seine Domain-Foundation, benötigt aber noch keinen öffentlichen Contract. Progression
-besitzt mit Domain, Application, Persistence-Adapter, Migration und Registrierung einen
-internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Contract.
+mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme; Engagement besitzt bereits
+seine Domain-Foundation und mit dem Message-Event den ersten öffentlichen Contract. Progression
+besitzt mit Domain, Application, Persistence-Adapter, Migration, Consumer und Registrierung
+einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Contract.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
 aktuell nur Domain, Application, den Persistenzadapter, die fachliche Migration und die
 Registrierung der tatsächlich vorhandenen Komponenten. Engagement nutzt dieselben Schichten
 für seinen Message-Recording-Slice und registriert Use Case, Repository, Migration und Uhr.
-Progression nutzt Domain, Application, einen atomaren Store, Migration und Registrierung;
+Progression nutzt Domain, Application, einen atomaren Store, Migration, Consumer und Registrierung;
 der API-Host verdrahtet den neuen Slice in diesem Schritt noch nicht. Die übrigen
 Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
-darf ausschließlich den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten
-technischen BuildingBlocks- und Persistence-Projekte verwenden. Progression darf ausschließlich
-den eigenen Contract, `Identity.Contracts` und `FlurNetz.Persistence` verwenden. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche
-Contracts und Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine vorsorglichen
-Shared-Entities.
+darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen
+BuildingBlocks-, Persistence- und Messaging-Projekte verwenden. Progression darf zusätzlich
+ausschließlich `Engagement.Contracts` und Messaging verwenden; die Engagement-Implementierung
+bleibt verboten. Cross-Module-Kommunikation erfolgt über freigegebene öffentliche Contracts
+und Integration Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine
+vorsorglichen Shared-Entities.
 
 Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
 und Engagement-Unit- sowie PostgreSQL-Integrationstests prüfen jeweils die vorhandenen Domain-
 und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Progression wird
 zusätzlich mit Domain-, Use-Case-, Migration-, Rollback-, Load- und echten PostgreSQL-
-Concurrency-Tests abgesichert. Die Architecture Tests prüfen die Assembly-, Referenz- und
-Namespace-Grenzen automatisiert.
+Concurrency-Tests abgesichert. Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
+den vollständigen Outbox-/Inbox-Weg sowie Producer- und Consumer-Atomicity gegen PostgreSQL.
+Die Architecture Tests prüfen zusätzlich Event Ownership, Contract-Minimalität, erlaubte
+Messaging-Kanten und die Consumer-Grenzen automatisiert.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 

@@ -56,10 +56,33 @@ Die PostgreSQL-Integrationstests prüfen Migration und Idempotenz, lazy First Gr
 Folgevergaben, Laden, Not-Found, Rollback, Overflow, den Datenbank-Check, die fehlende
 Identity-Tabelle sowie 20 parallele erste und 20 parallele spätere Vergaben.
 
-`FlurNetz.Modules.Progression.Contracts` bleibt bewusst leer, weil dieser Slice noch
-keinen realen Cross-Module-Vertrag benötigt. Persistence-Port, Use Case, Adapter und
-Migration bleiben in der Implementierungs-Assembly.
+`FlurNetz.Modules.Progression.Contracts` bleibt bewusst leer, weil Progression für den Consumer
+keinen eigenen öffentlichen Vertrag benötigt. Persistence-Port, Use Case, Adapter, Migration
+und Consumer bleiben in der Implementierungs-Assembly.
 
-Noch nicht Bestandteil dieses Slices sind Messaging, Engagement-Kommunikation,
-Integration- oder Domain-Events, Level oder Level-Berechnung, Rewards und API-Endpunkte.
-Der spätere Engagement→Progression-Workflow wird separat über Messaging geplant.
+## Messaging-Consumer
+
+Progression konsumiert `MessageEngagementRecordedIntegrationEvent` aus
+`FlurNetz.Modules.Engagement.Contracts`. Das Event ist eine fachliche Tatsache, kein Command;
+Progression interpretiert es mit der ausschließlich hier definierten Policy:
+`MessageExperiencePoints = 1`. Engagement kennt diese Regel nicht.
+
+Der Consumer besitzt die stabile Inbox-Identität `progression.message-engagement-xp`. Er
+rekonstruiert `CommunityIdentityId` über `CommunityIdentityId.Create(...)` und führt den Grant
+über `CommunityProgression.GrantExperience(1)` aus. Es gibt keinen Identity-Lookup und keine
+Referenz auf `FlurNetz.Modules.Engagement`.
+
+Der transaction-aware Overload von `ICommunityProgressionStore` nimmt nur `DbConnection` und
+`DbTransaction` entgegen. Der Handler reicht `IntegrationEventHandlerContext.Connection` und
+`.Transaction` aus der Inbox-Zustellung durch. Damit verwendet der Consumer den gemeinsamen
+Grant-Kern, ohne eine zweite unabhängige PostgreSQL-Transaktion zu öffnen:
+
+`Inbox INSERT → Initialize → SELECT FOR UPDATE → Rehydrate → Domain Grant → UPDATE → COMMIT`
+
+Schlägt die Domain-Mutation fehl, werden Inbox-Eintrag und XP-Änderung gemeinsam zurückgerollt.
+Die bestehende Outbox-/Inbox-Retry-Semantik bleibt zuständig. Duplicate Delivery wird allein
+über die Messaging-Inbox erkannt; Progression führt keine eigene Dedup-Tabelle ein.
+
+Progression veröffentlicht in diesem Schritt kein neues Integration Event. Noch nicht
+Bestandteil sind Level oder Level-Berechnung, Rewards, Economy, API-Endpunkte und ein dauerhaft
+laufender Worker- oder Background-Processor-Host.

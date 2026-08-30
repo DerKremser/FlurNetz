@@ -1,4 +1,5 @@
 using Dapper;
+using System.Data.Common;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Progression.Application;
 using FlurNetz.Modules.Progression.Domain;
@@ -14,7 +15,8 @@ namespace FlurNetz.Modules.Progression.Persistence;
 /// Der Grant-Pfad initialisiert eine fehlende Zeile mit <c>ON CONFLICT DO NOTHING</c>,
 /// sperrt anschließend genau die Progressionszeile mit <c>FOR UPDATE</c>, rehydriert die
 /// Domain und persistiert die von ihr berechnete Summe. Der gesamte Read/Modify/Write-
-/// Vorgang bleibt in derselben <see cref="PostgreSqlTransaction"/>.
+/// Vorgang bleibt in derselben <see cref="PostgreSqlTransaction"/>. Der transaktionsbewusste
+/// Overload führt keinen Commit aus, damit ein Inbox-Handler seinen gemeinsamen Commit besitzt.
 /// </remarks>
 public sealed class CommunityProgressionStore : ICommunityProgressionStore
 {
@@ -74,53 +76,75 @@ public sealed class CommunityProgressionStore : ICommunityProgressionStore
 
         try
         {
-            await transaction.Connection.ExecuteAsync(
-                    new CommandDefinition(
-                        InitializeSql,
-                        new { CommunityIdentityId = communityIdentityId.Value },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
+            var result = await GrantExperienceAsync(
+                communityIdentityId,
+                amount,
+                transaction.Connection,
+                transaction.Transaction,
+                cancellationToken)
                 .ConfigureAwait(false);
-
-            var row = await transaction.Connection.QuerySingleAsync<CommunityProgressionRow>(
-                    new CommandDefinition(
-                        SelectForUpdateSql,
-                        new { CommunityIdentityId = communityIdentityId.Value },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
-            var progression = CommunityProgression.Rehydrate(
-                CommunityIdentityId.Create(row.CommunityIdentityId),
-                ExperiencePoints.Create(row.ExperiencePoints));
-            progression.GrantExperience(amount);
-
-            var updatedRows = await transaction.Connection.ExecuteAsync(
-                    new CommandDefinition(
-                        UpdateSql,
-                        new
-                        {
-                            CommunityIdentityId = progression.CommunityIdentityId.Value,
-                            ExperiencePoints = progression.ExperiencePoints.Value
-                        },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
-            if (updatedRows != 1)
-            {
-                throw new InvalidOperationException(
-                    "Der Community-Progressionszustand konnte nicht eindeutig aktualisiert werden.");
-            }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return progression.ExperiencePoints;
+            return result;
         }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<ExperiencePoints> GrantExperienceAsync(
+        CommunityIdentityId communityIdentityId,
+        long amount,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        await connection.ExecuteAsync(
+                new CommandDefinition(
+                    InitializeSql,
+                    new { CommunityIdentityId = communityIdentityId.Value },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        var row = await connection.QuerySingleAsync<CommunityProgressionRow>(
+                new CommandDefinition(
+                    SelectForUpdateSql,
+                    new { CommunityIdentityId = communityIdentityId.Value },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        var progression = CommunityProgression.Rehydrate(
+            CommunityIdentityId.Create(row.CommunityIdentityId),
+            ExperiencePoints.Create(row.ExperiencePoints));
+        progression.GrantExperience(amount);
+
+        var updatedRows = await connection.ExecuteAsync(
+                new CommandDefinition(
+                    UpdateSql,
+                    new
+                    {
+                        CommunityIdentityId = progression.CommunityIdentityId.Value,
+                        ExperiencePoints = progression.ExperiencePoints.Value
+                    },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        if (updatedRows != 1)
+        {
+            throw new InvalidOperationException(
+                "Der Community-Progressionszustand konnte nicht eindeutig aktualisiert werden.");
+        }
+
+        return progression.ExperiencePoints;
     }
 
     /// <inheritdoc />

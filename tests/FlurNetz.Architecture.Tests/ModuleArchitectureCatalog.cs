@@ -52,8 +52,10 @@ internal static class ModuleArchitectureCatalog
         public IReadOnlyList<string> AllowedImplementationModuleReferences =>
             Name switch
             {
-                "Engagement" or "Progression" =>
+                "Engagement" =>
                     [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
+                "Progression" =>
+                    [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts", "FlurNetz.Modules.Engagement.Contracts"],
                 _ => [ContractsAssemblyName]
             };
     }

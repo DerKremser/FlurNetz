@@ -1,5 +1,8 @@
 using FlurNetz.BuildingBlocks.Time;
+using FlurNetz.Messaging.Integration;
+using FlurNetz.Messaging.Serialization;
 using FlurNetz.Modules.Engagement.Application;
+using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Engagement.Domain;
 using FlurNetz.Modules.Identity.Contracts;
 
@@ -123,57 +126,113 @@ public sealed class RecordMessageEngagementTests
     [Fact]
     public async Task ExecuteAsync_PersistsMessageUsingTheClockTimestamp()
     {
-        var repository = new InMemoryEngagementActivityRepository();
-        var useCase = new RecordMessageEngagement(repository, new FixedClock(OccurredAtUtc));
+        var recorder = new RecordingMessageEngagementRecorder();
+        var useCase = new RecordMessageEngagement(recorder, new FixedClock(OccurredAtUtc));
         var communityIdentityId = CommunityIdentityId.New();
 
         var id = await useCase.ExecuteAsync(communityIdentityId, TestContext.Current.CancellationToken);
 
-        var activity = Assert.Single(repository.Activities);
+        var activity = Assert.Single(recorder.Activities);
         Assert.Equal(id, activity.Id);
         Assert.Equal(communityIdentityId, activity.CommunityIdentityId);
         Assert.Equal(EngagementActivityType.Message, activity.Type);
         Assert.Equal(OccurredAtUtc, activity.OccurredAtUtc);
+
+        var envelope = Assert.Single(recorder.Envelopes);
+        var integrationEvent = Assert.IsType<MessageEngagementRecordedIntegrationEvent>(envelope.Payload);
+        Assert.Equal(MessageEngagementRecordedIntegrationEvent.MessageType, envelope.MessageType);
+        Assert.Equal(MessageEngagementRecordedIntegrationEvent.SchemaVersion, envelope.SchemaVersion);
+        Assert.Equal(OccurredAtUtc, envelope.OccurredAtUtc);
+        Assert.Equal(communityIdentityId.Value, integrationEvent.CommunityIdentityId);
+        Assert.NotEqual(Guid.Empty, envelope.MessageId);
+        Assert.Null(envelope.CorrelationId);
+        Assert.Null(envelope.CausationId);
+        Assert.Equal(TestContext.Current.CancellationToken, recorder.CancellationToken);
     }
 
     [Fact]
     public async Task ExecuteAsync_CreatesDistinctActivitiesForSeparateExecutions()
     {
-        var repository = new InMemoryEngagementActivityRepository();
-        var useCase = new RecordMessageEngagement(repository, new FixedClock(OccurredAtUtc));
+        var recorder = new RecordingMessageEngagementRecorder();
+        var useCase = new RecordMessageEngagement(recorder, new FixedClock(OccurredAtUtc));
         var communityIdentityId = CommunityIdentityId.New();
 
         var first = await useCase.ExecuteAsync(communityIdentityId, TestContext.Current.CancellationToken);
         var second = await useCase.ExecuteAsync(communityIdentityId, TestContext.Current.CancellationToken);
 
         Assert.NotEqual(first, second);
-        Assert.Equal(2, repository.Activities.Count);
+        Assert.Equal(2, recorder.Activities.Count);
+        Assert.Equal(2, recorder.Envelopes.Select(envelope => envelope.MessageId).Distinct().Count());
     }
 
-    private sealed class InMemoryEngagementActivityRepository : IEngagementActivityRepository
+    private sealed class RecordingMessageEngagementRecorder : IMessageEngagementRecorder
     {
         public List<EngagementActivity> Activities { get; } = [];
 
-        public Task AddAsync(
+        public List<IntegrationEventEnvelope> Envelopes { get; } = [];
+
+        public CancellationToken CancellationToken { get; private set; }
+
+        public Task RecordAsync(
             EngagementActivity activity,
+            IntegrationEventEnvelope envelope,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Activities.Add(activity);
+            Envelopes.Add(envelope);
+            CancellationToken = cancellationToken;
             return Task.CompletedTask;
-        }
-
-        public Task<EngagementActivity?> GetByIdAsync(
-            EngagementActivityId id,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(Activities.SingleOrDefault(activity => activity.Id == id));
         }
     }
 
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow => utcNow;
+    }
+}
+
+public sealed class MessageEngagementRecordedIntegrationEventTests
+{
+    [Fact]
+    public void ConstructorRejectsEmptyCommunityIdentityId()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new MessageEngagementRecordedIntegrationEvent(Guid.Empty));
+    }
+
+    [Fact]
+    public void ContractExposesStableMessageTypeAndSchemaVersion()
+    {
+        Assert.Equal("engagement.message-recorded", MessageEngagementRecordedIntegrationEvent.MessageType);
+        Assert.Equal(1, MessageEngagementRecordedIntegrationEvent.SchemaVersion);
+    }
+
+    [Fact]
+    public void SerializerRoundTripsOnlyTheInternalCommunityIdentityId()
+    {
+        var communityIdentityId = Guid.NewGuid();
+        var registry = new IntegrationEventTypeRegistry();
+        registry.Register<MessageEngagementRecordedIntegrationEvent>(
+            MessageEngagementRecordedIntegrationEvent.MessageType,
+            MessageEngagementRecordedIntegrationEvent.SchemaVersion);
+        var serializer = new IntegrationEventJsonSerializer(registry);
+        var envelope = new IntegrationEventEnvelope(
+            Guid.NewGuid(),
+            MessageEngagementRecordedIntegrationEvent.MessageType,
+            MessageEngagementRecordedIntegrationEvent.SchemaVersion,
+            new DateTimeOffset(2026, 8, 29, 12, 0, 0, TimeSpan.Zero),
+            new MessageEngagementRecordedIntegrationEvent(communityIdentityId));
+
+        var serialized = serializer.Serialize(envelope);
+        var payload = System.Text.Json.JsonDocument.Parse(serialized.Payload).RootElement;
+        var deserialized = Assert.IsType<MessageEngagementRecordedIntegrationEvent>(
+            serializer.Deserialize(serialized));
+
+        Assert.Equal(communityIdentityId, deserialized.CommunityIdentityId);
+        var properties = payload.EnumerateObject().ToArray();
+        Assert.Single(properties);
+        Assert.Equal("communityIdentityId", properties[0].Name);
+        Assert.Equal(communityIdentityId, properties[0].Value.GetGuid());
     }
 }
