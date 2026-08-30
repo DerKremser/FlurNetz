@@ -121,11 +121,12 @@ stehen in [docs/architecture/inventory.md](docs/architecture/inventory.md).
 aktuell ausgewählte Community-Titel. `TitleDefinitionId` ist eine stabile fachliche Kennung;
 `CommunityTitles` ordnet Freischaltungen genau einer `CommunityIdentityId` zu. Freischaltungen
 sind idempotent, wählen einen Titel nicht automatisch aus und nur ein bereits freigeschalteter
-Titel darf als aktueller Titel gesetzt werden. Die aktuelle Auswahl kann wieder geleert werden.
+Titel darf als aktueller Titel gesetzt werden. Die aktuelle Auswahl kann wieder geleert werden;
+das Sperren des aktuellen Titels entfernt die Auswahl automatisch.
 
 `FlurNetz.Modules.Titles.Contracts` bleibt bewusst leer. Ein Titelkatalog mit Name, Farbe,
-Icon oder Seltenheit, Persistence, Rehydration, Lock-/Revoke-Semantik, Messaging, Rewards-/
-Achievement-/Shop-Anbindung, API, Admin UI und Worker sind noch nicht Bestandteil. Details
+Icon oder Seltenheit, Persistence, Rehydration, Messaging, Rewards-/Achievement-/Shop-Anbindung,
+API, Admin UI und Worker sind noch nicht Bestandteil. Details
 stehen in [docs/architecture/titles.md](docs/architecture/titles.md).
 
 ## Persistence Foundation

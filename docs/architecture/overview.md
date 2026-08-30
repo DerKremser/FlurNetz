@@ -43,9 +43,11 @@ Worker gehören weiterhin nicht zum Slice. Details stehen in [inventory.md](inve
 Titles hält mit `CommunityTitles` die freigeschalteten `TitleDefinitionId`-Werte genau einer
 internen `CommunityIdentityId`. Freischaltungen sind idempotent und ändern die aktuelle Auswahl
 nicht automatisch. Höchstens ein bereits freigeschalteter Titel kann aktuell ausgewählt sein;
-die Auswahl kann auch vollständig geleert werden. Ein Titelkatalog, Persistence, Rehydration,
-Lock-/Revoke-Semantik, Messaging sowie Rewards-, Achievement- und Shop-Anbindung sind bewusst
-noch nicht enthalten. `Titles.Contracts` bleibt leer. Details stehen in [titles.md](titles.md).
+die Auswahl kann auch vollständig geleert werden. `Unlock`, `Lock`, `SetCurrent` und
+`ClearCurrent` schützen diese Domain-Invarianten; das Sperren des aktuellen Titels entfernt
+zugleich die aktuelle Auswahl. Ein Titelkatalog, Persistence, Rehydration, Messaging sowie
+Rewards-, Achievement- und Shop-Anbindung sind bewusst noch nicht enthalten. `Titles.Contracts`
+bleibt leer. Details stehen in [titles.md](titles.md).
 
 Streamer.bot wird später als externer Adapter behandelt und lädt keine internen FlurNetz-Assemblies. Interne FlurNetz-Projekte verwenden .NET 10. PostgreSQL ist die primäre relationale Datenbank; die technische Grundlage dafür liegt in `FlurNetz.Persistence` mit Npgsql und Dapper.
 

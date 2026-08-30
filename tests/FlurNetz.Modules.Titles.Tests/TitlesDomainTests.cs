@@ -1,6 +1,6 @@
+using System.Reflection;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Titles.Domain;
-using System.Reflection;
 
 namespace FlurNetz.Modules.Titles.Tests;
 
@@ -15,7 +15,7 @@ public sealed class TitleDefinitionIdTests
     }
 
     [Fact]
-    public void Create_AcceptsNonEmptyGuid()
+    public void Create_AcceptsNonEmptyGuidAndPreservesValue()
     {
         var value = Guid.Parse("b7f954f9-b824-49ea-b47d-2ffbf21817fd");
 
@@ -31,7 +31,7 @@ public sealed class TitleDefinitionIdTests
     }
 
     [Fact]
-    public void EqualValues_AreEqual()
+    public void EqualValues_HaveValueSemantics()
     {
         var value = Guid.Parse("b7f954f9-b824-49ea-b47d-2ffbf21817fd");
 
@@ -70,6 +70,12 @@ public sealed class CommunityTitlesTests
     }
 
     [Fact]
+    public void Create_RejectsInvalidCommunityIdentityId()
+    {
+        Assert.Throws<ArgumentException>(() => CommunityTitles.Create(default));
+    }
+
+    [Fact]
     public void Create_StartsWithoutUnlockedOrCurrentTitle()
     {
         var titles = CreateTitles();
@@ -79,26 +85,21 @@ public sealed class CommunityTitlesTests
     }
 
     [Fact]
-    public void Create_RejectsInvalidCommunityIdentityId()
-    {
-        Assert.Throws<ArgumentException>(() => CommunityTitles.Create(default));
-    }
-
-    [Fact]
-    public void Unlock_AddsTitleWithoutSelectingIt()
+    public void Unlock_AddsTitleAndReturnsTrueWithoutSelectingIt()
     {
         var titles = CreateTitles();
         var titleDefinitionId = TitleDefinitionId.New();
 
-        var newlyUnlocked = titles.Unlock(titleDefinitionId);
+        var changed = titles.Unlock(titleDefinitionId);
 
-        Assert.True(newlyUnlocked);
+        Assert.True(changed);
+        Assert.True(titles.IsUnlocked(titleDefinitionId));
         Assert.Contains(titleDefinitionId, titles.UnlockedTitleDefinitionIds);
         Assert.Null(titles.CurrentTitleDefinitionId);
     }
 
     [Fact]
-    public void Unlock_IsIdempotent()
+    public void Unlock_IsIdempotentAndDoesNotCreateDuplicates()
     {
         var titles = CreateTitles();
         var titleDefinitionId = TitleDefinitionId.New();
@@ -132,13 +133,23 @@ public sealed class CommunityTitlesTests
         Assert.Throws<ArgumentException>(() => titles.Unlock(default));
 
         Assert.Empty(titles.UnlockedTitleDefinitionIds);
+        Assert.Null(titles.CurrentTitleDefinitionId);
+    }
+
+    [Fact]
+    public void IsUnlocked_RejectsInvalidTitleDefinitionId()
+    {
+        var titles = CreateTitles();
+
+        Assert.Throws<ArgumentException>(() => titles.IsUnlocked(default));
     }
 
     [Fact]
     public void UnlockedTitles_AreExposedAsIndependentReadOnlySnapshots()
     {
         var titles = CreateTitles();
-        titles.Unlock(TitleDefinitionId.New());
+        var titleDefinitionId = TitleDefinitionId.New();
+        titles.Unlock(titleDefinitionId);
 
         var first = titles.UnlockedTitleDefinitionIds;
         var second = titles.UnlockedTitleDefinitionIds;
@@ -146,137 +157,200 @@ public sealed class CommunityTitlesTests
         Assert.NotSame(first, second);
         Assert.Single(first);
         Assert.Single(second);
+
+        titles.Lock(titleDefinitionId);
+
+        Assert.Contains(titleDefinitionId, first);
+        Assert.Empty(titles.UnlockedTitleDefinitionIds);
     }
 
     [Fact]
-    public void SelectCurrentTitle_SelectsAnUnlockedTitle()
+    public void Lock_RemovesExistingTitleAndReturnsTrue()
     {
         var titles = CreateTitles();
         var titleDefinitionId = TitleDefinitionId.New();
         titles.Unlock(titleDefinitionId);
 
-        titles.SelectCurrentTitle(titleDefinitionId);
+        var changed = titles.Lock(titleDefinitionId);
 
-        Assert.Equal(titleDefinitionId, titles.CurrentTitleDefinitionId);
+        Assert.True(changed);
+        Assert.False(titles.IsUnlocked(titleDefinitionId));
+        Assert.Empty(titles.UnlockedTitleDefinitionIds);
     }
 
     [Fact]
-    public void SelectCurrentTitle_RejectsLockedTitleWithoutChangingCurrentSelection()
+    public void Lock_IsIdempotentForMissingTitle()
     {
         var titles = CreateTitles();
-        var unlocked = TitleDefinitionId.New();
-        var locked = TitleDefinitionId.New();
-        titles.Unlock(unlocked);
-        titles.SelectCurrentTitle(unlocked);
+        var titleDefinitionId = TitleDefinitionId.New();
 
-        Assert.Throws<TitleNotUnlockedException>(() => titles.SelectCurrentTitle(locked));
+        Assert.False(titles.Lock(titleDefinitionId));
+        Assert.False(titles.Lock(titleDefinitionId));
 
-        Assert.Equal(unlocked, titles.CurrentTitleDefinitionId);
+        Assert.Empty(titles.UnlockedTitleDefinitionIds);
     }
 
     [Fact]
-    public void SelectCurrentTitle_RejectsInvalidTitleDefinitionId()
+    public void Lock_RejectsInvalidTitleDefinitionIdWithoutChangingState()
     {
         var titles = CreateTitles();
 
-        Assert.Throws<ArgumentException>(() => titles.SelectCurrentTitle(default));
+        Assert.Throws<ArgumentException>(() => titles.Lock(default));
 
+        Assert.Empty(titles.UnlockedTitleDefinitionIds);
         Assert.Null(titles.CurrentTitleDefinitionId);
     }
 
     [Fact]
-    public void SelectCurrentTitle_CanSwitchBetweenUnlockedTitles()
+    public void SetCurrent_SelectsAnUnlockedTitleAndReturnsTrue()
+    {
+        var titles = CreateTitles();
+        var titleDefinitionId = TitleDefinitionId.New();
+        titles.Unlock(titleDefinitionId);
+
+        var changed = titles.SetCurrent(titleDefinitionId);
+
+        Assert.True(changed);
+        Assert.Equal(titleDefinitionId, titles.CurrentTitleDefinitionId);
+    }
+
+    [Fact]
+    public void SetCurrent_IsIdempotentForTheCurrentTitle()
+    {
+        var titles = CreateTitles();
+        var titleDefinitionId = TitleDefinitionId.New();
+        titles.Unlock(titleDefinitionId);
+        titles.SetCurrent(titleDefinitionId);
+
+        var changed = titles.SetCurrent(titleDefinitionId);
+
+        Assert.False(changed);
+        Assert.Equal(titleDefinitionId, titles.CurrentTitleDefinitionId);
+    }
+
+    [Fact]
+    public void SetCurrent_ReplacesAnotherUnlockedCurrentTitle()
     {
         var titles = CreateTitles();
         var first = TitleDefinitionId.New();
         var second = TitleDefinitionId.New();
         titles.Unlock(first);
         titles.Unlock(second);
-        titles.SelectCurrentTitle(first);
+        titles.SetCurrent(first);
 
-        titles.SelectCurrentTitle(second);
+        var changed = titles.SetCurrent(second);
 
+        Assert.True(changed);
         Assert.Equal(second, titles.CurrentTitleDefinitionId);
         Assert.Equal(2, titles.UnlockedTitleDefinitionIds.Count);
     }
 
     [Fact]
-    public void SelectCurrentTitle_IsStableWhenSelectingTheCurrentTitleAgain()
-    {
-        var titles = CreateTitles();
-        var titleDefinitionId = TitleDefinitionId.New();
-        titles.Unlock(titleDefinitionId);
-        titles.SelectCurrentTitle(titleDefinitionId);
-
-        titles.SelectCurrentTitle(titleDefinitionId);
-
-        Assert.Equal(titleDefinitionId, titles.CurrentTitleDefinitionId);
-        Assert.Single(titles.UnlockedTitleDefinitionIds);
-    }
-
-    [Fact]
-    public void UnlockingAnotherTitle_DoesNotReplaceCurrentSelection()
+    public void SetCurrent_RejectsLockedTitleWithoutChangingExistingState()
     {
         var titles = CreateTitles();
         var current = TitleDefinitionId.New();
+        var locked = TitleDefinitionId.New();
         titles.Unlock(current);
-        titles.SelectCurrentTitle(current);
+        titles.SetCurrent(current);
 
-        titles.Unlock(TitleDefinitionId.New());
+        Assert.Throws<TitleNotUnlockedException>(() => titles.SetCurrent(locked));
 
         Assert.Equal(current, titles.CurrentTitleDefinitionId);
+        Assert.Single(titles.UnlockedTitleDefinitionIds);
+        Assert.True(titles.IsUnlocked(current));
+        Assert.False(titles.IsUnlocked(locked));
     }
 
     [Fact]
-    public void ClearCurrentTitle_RemovesSelectionWithoutRemovingUnlocks()
-    {
-        var titles = CreateTitles();
-        var titleDefinitionId = TitleDefinitionId.New();
-        titles.Unlock(titleDefinitionId);
-        titles.SelectCurrentTitle(titleDefinitionId);
-
-        titles.ClearCurrentTitle();
-
-        Assert.Null(titles.CurrentTitleDefinitionId);
-        Assert.Contains(titleDefinitionId, titles.UnlockedTitleDefinitionIds);
-    }
-
-    [Fact]
-    public void ClearCurrentTitle_IsSafeWhenNoTitleIsSelected()
+    public void SetCurrent_RejectsInvalidTitleDefinitionIdWithoutChangingState()
     {
         var titles = CreateTitles();
 
-        titles.ClearCurrentTitle();
+        Assert.Throws<ArgumentException>(() => titles.SetCurrent(default));
 
         Assert.Null(titles.CurrentTitleDefinitionId);
         Assert.Empty(titles.UnlockedTitleDefinitionIds);
     }
 
     [Fact]
-    public void CommunityIdentityId_IsImmutable()
+    public void ClearCurrent_RemovesSelectionAndKeepsUnlocks()
     {
-        var property = typeof(CommunityTitles).GetProperty(nameof(CommunityTitles.CommunityIdentityId));
+        var titles = CreateTitles();
+        var titleDefinitionId = TitleDefinitionId.New();
+        titles.Unlock(titleDefinitionId);
+        titles.SetCurrent(titleDefinitionId);
 
-        Assert.NotNull(property);
-        Assert.Null(property!.SetMethod);
+        var changed = titles.ClearCurrent();
+
+        Assert.True(changed);
+        Assert.Null(titles.CurrentTitleDefinitionId);
+        Assert.True(titles.IsUnlocked(titleDefinitionId));
+        Assert.Single(titles.UnlockedTitleDefinitionIds);
     }
 
     [Fact]
-    public void CurrentTitleDefinitionId_HasNoPublicSetter()
+    public void ClearCurrent_IsIdempotentWithoutSelection()
     {
-        var property = typeof(CommunityTitles).GetProperty(nameof(CommunityTitles.CurrentTitleDefinitionId));
+        var titles = CreateTitles();
 
-        Assert.NotNull(property);
-        Assert.Null(property!.GetSetMethod());
+        Assert.False(titles.ClearCurrent());
+        Assert.False(titles.ClearCurrent());
+
+        Assert.Null(titles.CurrentTitleDefinitionId);
     }
 
     [Fact]
-    public void UnlockedTitleDefinitionIds_HasNoSetter()
+    public void LockingCurrentTitle_RemovesSelectionAtTheSameTime()
     {
-        var property = typeof(CommunityTitles).GetProperty(nameof(CommunityTitles.UnlockedTitleDefinitionIds));
+        var titles = CreateTitles();
+        var current = TitleDefinitionId.New();
+        var other = TitleDefinitionId.New();
+        titles.Unlock(current);
+        titles.Unlock(other);
+        titles.SetCurrent(current);
 
-        Assert.NotNull(property);
-        Assert.Null(property!.SetMethod);
+        var changed = titles.Lock(current);
+
+        Assert.True(changed);
+        Assert.Null(titles.CurrentTitleDefinitionId);
+        Assert.False(titles.IsUnlocked(current));
+        Assert.True(titles.IsUnlocked(other));
+    }
+
+    [Fact]
+    public void LockingOtherTitle_LeavesCurrentTitleUnchanged()
+    {
+        var titles = CreateTitles();
+        var current = TitleDefinitionId.New();
+        var other = TitleDefinitionId.New();
+        titles.Unlock(current);
+        titles.Unlock(other);
+        titles.SetCurrent(current);
+
+        titles.Lock(other);
+
+        Assert.Equal(current, titles.CurrentTitleDefinitionId);
+        Assert.True(titles.IsUnlocked(current));
+        Assert.False(titles.IsUnlocked(other));
+    }
+
+    [Fact]
+    public void PublicStatePropertiesCannotBeSetExternally()
+    {
+        var communityIdentityId = typeof(CommunityTitles)
+            .GetProperty(nameof(CommunityTitles.CommunityIdentityId));
+        var currentTitleDefinitionId = typeof(CommunityTitles)
+            .GetProperty(nameof(CommunityTitles.CurrentTitleDefinitionId));
+        var unlockedTitleDefinitionIds = typeof(CommunityTitles)
+            .GetProperty(nameof(CommunityTitles.UnlockedTitleDefinitionIds));
+
+        Assert.NotNull(communityIdentityId);
+        Assert.Null(communityIdentityId!.SetMethod);
+        Assert.NotNull(currentTitleDefinitionId);
+        Assert.Null(currentTitleDefinitionId!.GetSetMethod());
+        Assert.NotNull(unlockedTitleDefinitionIds);
+        Assert.Null(unlockedTitleDefinitionIds!.SetMethod);
     }
 
     [Fact]

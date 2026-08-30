@@ -8,8 +8,8 @@ namespace FlurNetz.Modules.Titles.Domain;
 /// <remarks>
 /// Eine Community-Identität kann beliebig viele unterschiedliche Titel freigeschaltet haben,
 /// aber höchstens einen davon aktuell auswählen. Freischalten ist idempotent und wählt den Titel
-/// nicht automatisch aus. Entziehen, Sperren, Katalogmetadaten und Persistenz gehören nicht in
-/// diese Foundation.
+/// nicht automatisch aus. Sperren des aktuellen Titels entfernt zugleich die aktuelle Auswahl.
+/// Katalogmetadaten und Persistenz gehören nicht in diese Foundation.
 /// </remarks>
 public sealed class CommunityTitles
 {
@@ -51,6 +51,12 @@ public sealed class CommunityTitles
     /// <summary>
     /// Schaltet eine Title-Definition idempotent frei.
     /// </summary>
+    /// <param name="titleDefinitionId">Die freizuschaltende Title-Definition.</param>
+    /// <returns>
+    /// <see langword="true"/>, wenn die Berechtigungsmenge erweitert wurde; andernfalls
+    /// <see langword="false"/>.
+    /// </returns>
+    /// <exception cref="ArgumentException">Wenn die ID leer oder ungültig ist.</exception>
     public bool Unlock(TitleDefinitionId titleDefinitionId)
     {
         EnsureValidTitleDefinitionId(titleDefinitionId);
@@ -58,9 +64,59 @@ public sealed class CommunityTitles
     }
 
     /// <summary>
+    /// Entfernt eine Titelberechtigung idempotent.
+    /// </summary>
+    /// <param name="titleDefinitionId">Die zu sperrende Title-Definition.</param>
+    /// <returns>
+    /// <see langword="true"/>, wenn die Berechtigung entfernt wurde; andernfalls
+    /// <see langword="false"/>.
+    /// </returns>
+    /// <remarks>
+    /// Wird der aktuelle Titel gesperrt, wird die aktuelle Auswahl gleichzeitig entfernt.
+    /// </remarks>
+    /// <exception cref="ArgumentException">Wenn die ID leer oder ungültig ist.</exception>
+    public bool Lock(TitleDefinitionId titleDefinitionId)
+    {
+        EnsureValidTitleDefinitionId(titleDefinitionId);
+
+        if (!_unlockedTitleDefinitionIds.Remove(titleDefinitionId))
+        {
+            return false;
+        }
+
+        if (CurrentTitleDefinitionId == titleDefinitionId)
+        {
+            CurrentTitleDefinitionId = null;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Prüft, ob eine Title-Definition für diese Community-Identität freigeschaltet ist.
+    /// </summary>
+    /// <param name="titleDefinitionId">Die zu prüfende Title-Definition.</param>
+    /// <returns><see langword="true"/>, wenn die ID freigeschaltet ist.</returns>
+    /// <exception cref="ArgumentException">Wenn die ID leer oder ungültig ist.</exception>
+    public bool IsUnlocked(TitleDefinitionId titleDefinitionId)
+    {
+        EnsureValidTitleDefinitionId(titleDefinitionId);
+        return _unlockedTitleDefinitionIds.Contains(titleDefinitionId);
+    }
+
+    /// <summary>
     /// Wählt genau eine bereits freigeschaltete Title-Definition als aktuellen Titel aus.
     /// </summary>
-    public void SelectCurrentTitle(TitleDefinitionId titleDefinitionId)
+    /// <param name="titleDefinitionId">Die auszuwählende Title-Definition.</param>
+    /// <returns>
+    /// <see langword="true"/>, wenn sich die Auswahl geändert hat; andernfalls
+    /// <see langword="false"/>.
+    /// </returns>
+    /// <exception cref="ArgumentException">Wenn die ID leer oder ungültig ist.</exception>
+    /// <exception cref="TitleNotUnlockedException">
+    /// Wenn die Title-Definition nicht freigeschaltet ist.
+    /// </exception>
+    public bool SetCurrent(TitleDefinitionId titleDefinitionId)
     {
         EnsureValidTitleDefinitionId(titleDefinitionId);
 
@@ -69,15 +125,31 @@ public sealed class CommunityTitles
             throw new TitleNotUnlockedException();
         }
 
+        if (CurrentTitleDefinitionId == titleDefinitionId)
+        {
+            return false;
+        }
+
         CurrentTitleDefinitionId = titleDefinitionId;
+        return true;
     }
 
     /// <summary>
     /// Entfernt die aktuelle Auswahl, ohne eine Freischaltung zu verändern.
     /// </summary>
-    public void ClearCurrentTitle()
+    /// <returns>
+    /// <see langword="true"/>, wenn eine Auswahl entfernt wurde; andernfalls
+    /// <see langword="false"/>.
+    /// </returns>
+    public bool ClearCurrent()
     {
+        if (CurrentTitleDefinitionId is null)
+        {
+            return false;
+        }
+
         CurrentTitleDefinitionId = null;
+        return true;
     }
 
     private static void EnsureValidCommunityIdentityId(CommunityIdentityId communityIdentityId)

@@ -5,8 +5,8 @@
 ### Hinzugefügt
 
 - Minimale Titles-Domain für freigeschaltete und aktuell ausgewählte Community-Titel.
-- Stabile `TitleDefinitionId` sowie die Invariante, dass nur freigeschaltete Titel ausgewählt werden können.
-- Idempotente Freischaltungen ohne Persistence-, Rewards-, Achievement- oder Shop-Kopplung.
+- Stabile `TitleDefinitionId` sowie invariantengesicherte `Unlock`-, `Lock`-, `SetCurrent`- und `ClearCurrent`-Operationen.
+- Idempotente Titelberechtigungen ohne Persistence-, Rewards-, Achievement- oder Shop-Kopplung.
 - Erster persistierter Inventory-Vertical-Slice mit atomaren Add-/Remove-Operationen.
 - Inventory-eigene PostgreSQL-Migration mit Composite Primary Key und Nichtnegativ-Check.
 - Sparse Inventory-Persistenz: Bestände bei null werden gelöscht und fehlende Removes legen keine Zeile an.

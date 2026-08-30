@@ -2,70 +2,68 @@
 
 ## Verantwortung
 
-Das Titles-Modul besitzt die fachliche Zuordnung freigeschalteter Titel zu einer internen
-`CommunityIdentityId` sowie die optionale aktuelle Auswahl. Die Foundation modelliert bewusst
-noch keinen Titelkatalog. Ein Titel wird zunächst ausschließlich durch seine stabile
-`TitleDefinitionId` identifiziert.
+Das Titles-Modul besitzt den fachlichen Titelzustand einer internen
+`CommunityIdentityId`. Es verwaltet die Titelberechtigungen dieser Community-Identität
+und die optionale aktuelle Titelauswahl. Externe Plattformidentitäten werden nicht im
+Titles-Modul modelliert.
 
-## TitleDefinitionId
+## `TitleDefinitionId`
 
-`TitleDefinitionId` ist ein unveränderlicher Guid-basierter Fachtyp. Leere GUIDs werden
-abgelehnt. Die Kennung enthält keine Anzeigenamen, Beschreibungen, Farben, Icons, Kategorien,
-Seltenheiten oder andere UI-/Katalogmetadaten.
+`TitleDefinitionId` ist eine unveränderliche, Guid-basierte und stabile fachliche
+Kennung. Sie identifiziert eine Titeldefinition ausschließlich über ihre ID. Namen,
+Anzeigenamen, Beschreibungen, Icons, Farben, CSS, Badges, Kategorien, Seltenheit,
+Sortierung, Übersetzungen, Sichtbarkeit und Unlock-Bedingungen sind keine Bestandteile
+dieser Foundation.
 
-Eine konkrete `TitleDefinition` wird in dieser Foundation nicht eingeführt. Katalogdaten
-werden erst modelliert, wenn ein realer Konfigurations-, Anzeige- oder Administrations-Use-Case
-sie benötigt.
+Ein Titelkatalog beziehungsweise ein `TitleDefinition`-Aggregat wird erst mit einem
+konkreten späteren Bedarf modelliert.
 
-## CommunityTitles
+## `CommunityTitles`
 
-`CommunityTitles` gehört genau einer gültigen `CommunityIdentityId`. Ein neuer Zustand startet
-ohne freigeschaltete Titel und ohne aktuelle Auswahl.
+`CommunityTitles` gehört genau einer gültigen `CommunityIdentityId`. Ein neuer Zustand
+startet ohne freigeschaltete Titel und ohne aktuelle Auswahl. Die freigeschalteten
+`TitleDefinitionId`-Werte werden intern eindeutig gehalten und nach außen nur als
+schreibgeschützter Snapshot lesbar gemacht.
 
-Verbindliche Invarianten:
+Die Domain bietet folgende Operationen:
 
-- Eine Community-Identität kann null bis beliebig viele unterschiedliche Titel freigeschaltet haben.
-- `Unlock` ist idempotent; eine doppelte Freischaltung erzeugt keinen doppelten Zustand.
-- Eine Freischaltung wählt den Titel nicht automatisch aus.
-- Höchstens ein Titel kann aktuell ausgewählt sein.
-- Der aktuelle Titel muss bereits freigeschaltet sein.
-- Die Auswahl eines nicht freigeschalteten Titels schlägt mit `TitleNotUnlockedException` fehl.
-- Die aktuelle Auswahl kann entfernt werden, ohne Freischaltungen zu verändern.
-- Freischaltungen werden als schreibgeschützte Snapshots nach außen gegeben und können den internen Zustand nicht mutieren.
+- `Unlock` schaltet einen Titel idempotent frei und wählt ihn nicht automatisch aus.
+- `Lock` entfernt eine Titelberechtigung idempotent.
+- `SetCurrent` wählt einen freigeschalteten Titel aus und ersetzt eine bestehende Auswahl.
+- `ClearCurrent` entfernt die aktuelle Auswahl, ohne Freischaltungen zu verändern.
 
-## Bewusst keine Lock-/Revoke-Semantik
+Die Rückgabewerte zeigen an, ob sich der Zustand tatsächlich verändert hat. Das Setzen
+eines nicht freigeschalteten Titels wird mit `TitleNotUnlockedException` abgelehnt.
 
-Die Foundation kennt noch kein Entziehen, Sperren oder Zurücknehmen eines bereits
-freigeschalteten Titels. Dafür existiert aktuell kein konkreter fachlicher Caller. Insbesondere
-wird keine spätere Rewards-, Achievement- oder Admin-Semantik vorweggenommen.
+## Invarianten
 
-Wenn ein realer Use Case eine Entziehung benötigt, muss dann ausdrücklich entschieden werden,
-wie sich eine Entziehung des aktuell ausgewählten Titels verhält.
+- Eine Community-Identität kann null bis beliebig viele unterschiedliche Titel besitzen.
+- Es gibt höchstens eine aktuelle Titelauswahl.
+- Ein aktuell ausgewählter Titel ist immer Teil der freigeschalteten Titelmenge.
+- Das Sperren des aktuellen Titels entfernt daher gleichzeitig die aktuelle Auswahl.
+- Fehlgeschlagene Operationen verändern den bestehenden Zustand nicht.
 
-## Modulgrenzen
+## Contracts
 
-`FlurNetz.Modules.Titles` referenziert ausschließlich:
+`FlurNetz.Modules.Titles.Contracts` bleibt in dieser Foundation vollständig leer. Es gibt
+noch keinen Cross-Module-Caller, der einen öffentlichen Titles-Contract benötigt.
 
-- `FlurNetz.Modules.Titles.Contracts`
-- `FlurNetz.Modules.Identity.Contracts`
-
-`FlurNetz.Modules.Titles.Contracts` bleibt bewusst leer. Die Foundation benötigt noch keinen
-öffentlichen Cross-Module-Vertrag.
+`FlurNetz.Modules.Titles` referenziert neben dem eigenen leeren Contracts-Projekt
+ausschließlich `FlurNetz.Modules.Identity.Contracts` und verwendet daraus die zentrale
+`CommunityIdentityId`.
 
 ## Bewusst nicht enthalten
 
-- Persistence, Migrationen, Store oder Repository
-- Rehydration
+- Persistence, PostgreSQL, SQL, Dapper, Migrationen oder Rehydration
+- Repository, Store, Application Use Cases oder Modulregistrierung
 - Messaging, Domain Events, Integration Events, Inbox oder Outbox
-- Rewards- oder Achievement-Anbindung
-- Shop-Anbindung
-- Titelkatalog mit Name, Beschreibung, Farbe, Icon, Kategorie oder Seltenheit
-- zeitlich begrenzte Titel oder Ablaufdaten
-- Titel-Hierarchien, Gruppen oder Prioritäten
-- Lock-, Revoke- oder Remove-Use-Cases
-- API
-- Admin UI
-- Worker
+- Rewards-, Achievement-, Shop-, Inventory-, Progression- oder Economy-Anbindung
+- API, Controller, Endpoints, Admin UI, Worker oder Overlay
+- Titelkatalog und Darstellungsmetadaten
 - Plattformidentitäten oder externe Integrationen
 
-Diese Grenzen bleiben bestehen, bis ein konkreter späterer Slice einen engeren Bedarf belegt.
+## Spätere Slices
+
+Persistence und konkrete Cross-Module-Kompositionen werden erst bei einem konkreten
+fachlichen Bedarf in eigenen Slices ergänzt. Diese Foundation nimmt weder eine spätere
+Tabellenstruktur noch eine Eventstruktur vorweg.

@@ -152,8 +152,10 @@ keine Freischaltung. Eine Freischaltung wählt einen Titel nicht automatisch aus
 
 `FlurNetz.Modules.Titles.Contracts` bleibt leer. Die Implementierung referenziert ausschließlich
 den eigenen Contract und `Identity.Contracts`. Persistence, Rehydration, Titelkatalog,
-Lock-/Revoke-Semantik, Messaging, Rewards-, Achievement- und Shop-Anbindung, API, Admin UI und
-Worker bleiben bewusst ausgeschlossen. Details stehen in [titles.md](titles.md).
+Messaging, Rewards-, Achievement- und Shop-Anbindung, API, Admin UI und Worker bleiben bewusst
+ausgeschlossen. `Unlock`, `Lock`, `SetCurrent` und `ClearCurrent` sind reine Domain-Operationen;
+das Sperren des aktuellen Titels entfernt zugleich die aktuelle Auswahl. Details stehen in
+[titles.md](titles.md).
 
 ## Contracts und Implementierung
 
