@@ -116,9 +116,22 @@ Duplicates sind idempotente No-ops, Partial-State ist ein Fehler.
 Die Migration `Rewards:1:CreateRewardConfigurationAndGrants` und der PostgreSQL-Executor
 liegen im Rewards-Modul. Economy wird über den schmalen öffentlichen Capability-Contract in
 derselben Transaktion gutgeschrieben. `FlurNetz.Modules.Rewards.Contracts` bleibt leer.
-XP bleiben Progression-owned; Inventory- und Title-Rewards werden erst nach der Existenz der
-jeweiligen Zielmodule modelliert. Es gibt noch keinen Runtime-Trigger, keine API und keine
-Worker-Anbindung.
+XP bleiben Progression-owned. Die Inventory-Foundation existiert unabhängig von Rewards;
+eine Inventory-Reward-Definition und Title-Rewards folgen erst in eigenen späteren Slices.
+Es gibt noch keinen Runtime-Trigger, keine API und keine Worker-Anbindung.
+
+## Aktueller Stand des Inventory-Moduls
+
+Inventory besitzt jetzt seine minimale Domain-Foundation für mengenbasierte Bestände.
+`ItemDefinitionId` ist ein unveränderlicher Guid-basierter Fachtyp ohne Katalogmetadaten.
+`InventoryQuantity` verwendet `long`, bleibt immer nicht-negativ und schützt Additionen vor
+Overflow sowie Entnahmen vor Unterbestand. `CommunityInventoryEntry` verbindet genau eine
+`CommunityIdentityId` mit genau einer `ItemDefinitionId` und startet bei Menge null.
+
+`FlurNetz.Modules.Inventory.Contracts` bleibt leer. Die Implementierung referenziert neben dem
+eigenen Contract ausschließlich `Identity.Contracts`. Persistence, Messaging, Rewards- und
+Shop-Anbindung, Item-Katalog, API, Admin UI und Worker sind nicht Bestandteil der Foundation.
+Details stehen in [inventory.md](inventory.md).
 
 ## Contracts und Implementierung
 
@@ -132,7 +145,8 @@ einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Con
 mit Domain, Application, Persistence-Adapter, Migration und Registrierung ebenfalls einen internen
 Vertical Slice sowie den neutralen Credit-Capability-Contract für atomare Komposition. Rewards besitzt
 mit Domain, Application, Katalog, Grant-Executor, Migration und Registrierung den ersten persistierten
-ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer.
+ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt eine
+reine Domain-Foundation; auch sein Contracts-Projekt bleibt leer.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -144,8 +158,8 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
 und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
 Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Die übrigen
-Implementierungs-Assemblies bleiben fachlich leer.
+keine öffentliche API. Inventory nutzt aktuell ausschließlich seine Domain und keine technische
+Infrastruktur. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen
@@ -153,7 +167,9 @@ BuildingBlocks-, Persistence- und Messaging-Projekte verwenden. Progression darf
 ausschließlich `Engagement.Contracts` und Messaging verwenden; die Engagement-Implementierung
 bleibt verboten. Economy darf `Identity.Contracts` und seinen eigenen öffentlichen
 Capability-Contract verwenden; Rewards darf zusätzlich `Identity.Contracts` und
-`Economy.Contracts` verwenden und referenziert keine Economy-Implementierung.
+`Economy.Contracts` verwenden und referenziert keine Economy-Implementierung. Inventory darf
+zusätzlich ausschließlich `Identity.Contracts` verwenden; Rewards, Shop, Messaging und Persistence
+bleiben in der Foundation verboten.
 Cross-Module-Kommunikation erfolgt über freigegebene öffentliche Contracts
 und Integration Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine
 vorsorglichen Shared-Entities.
@@ -165,10 +181,12 @@ zusätzlich mit Domain-, Use-Case-, Migration-, Rollback-, Load- und echten Post
 Concurrency-Tests abgesichert. Economy besitzt eigene Domain-, Use-Case-, Migration-, Lifecycle-,
 Rollback-, Load- und echte PostgreSQL-Concurrency-Tests. Rewards besitzt Domain- und
 Application-Unit-Tests, Architekturtests sowie ein eigenes echtes PostgreSQL-
-Integrationstestprojekt für Migration, Katalog, Atomicity, Idempotenz und Nebenläufigkeit. Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
+Integrationstestprojekt für Migration, Katalog, Atomicity, Idempotenz und Nebenläufigkeit.
+Inventory besitzt Domain-Unit-Tests sowie eigene Architekturgrenzen ohne Persistence-Integrationstests.
+Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
 den vollständigen Outbox-/Inbox-Weg sowie Producer- und Consumer-Atomicity gegen PostgreSQL.
 Die Architecture Tests prüfen zusätzlich Event Ownership, Contract-Minimalität, erlaubte
-Messaging-Kanten, die Rewards-Abhängigkeitsgrenze und die Consumer-Grenzen automatisiert.
+Messaging-Kanten, die Rewards- und Inventory-Abhängigkeitsgrenzen sowie die Consumer-Grenzen automatisiert.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 
