@@ -69,8 +69,8 @@ Engagement-Implementierung existiert nicht.
 Progression konsumiert das Engagement-Event über den stabilen Consumer
 `progression.message-engagement-xp`. Eine normalisierte Message wird ausschließlich in
 Progression als `1 XP` interpretiert; Inbox-Eintrag und transaction-aware XP-Grant teilen eine
-Transaktion. Noch nicht enthalten sind Level-Logik, Rewards, Economy, API-Erweiterung und ein
-dauerhaft laufender Worker-Host.
+Transaktion. Der Consumer wird durch `FlurNetz.Worker` kontinuierlich ausgeführt. Noch nicht
+enthalten sind Level-Logik, Rewards, Economy und eine API-Erweiterung.
 
 ## Contracts und Implementierung
 
@@ -88,7 +88,7 @@ aktuell nur Domain, Application, den Persistenzadapter, die fachliche Migration 
 Registrierung der tatsächlich vorhandenen Komponenten. Engagement nutzt dieselben Schichten
 für seinen Message-Recording-Slice und registriert Use Case, Repository, Migration und Uhr.
 Progression nutzt Domain, Application, einen atomaren Store, Migration, Consumer und Registrierung;
-der API-Host verdrahtet den neuen Slice in diesem Schritt noch nicht. Die übrigen
+der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Die übrigen
 Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement

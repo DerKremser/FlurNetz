@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer und den ausführbaren API-Host. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet; ein dauerhaft laufender Worker, eine Engagement-HTTP-Schnittstelle und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet werden; eine Engagement-HTTP-Schnittstelle und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -19,7 +19,7 @@ Die Persistence Foundation stellt asynchrone PostgreSQL-Verbindungen und technis
 
 `FlurNetz.Messaging` trennt interne Domain Events von serialisierbaren Integration Events. Domain Events werden sequenziell und deterministisch im Prozess verteilt. Integration Events besitzen einen Envelope mit `MessageId`, logischem Nachrichtentyp, Schema-Version und UTC-Zeitpunkt; eine explizite Registry ordnet Typ und Version sicher einem CLR-Payload-Typ zu und `System.Text.Json` übernimmt die UTF-8-Serialisierung.
 
-Die PostgreSQL-Outbox wird über dieselbe `PostgreSqlTransaction` wie ein fachlicher Datenbank-Write befüllt. Dadurch sind Business Write und Outbox Insert gemeinsam commit- oder rollbackfähig. Ein aufrufbarer Outbox Processor verwendet PostgreSQL-Leases, Inbox-Deduplizierung pro stabiler Consumer Identity, Retry und einen isolierten Failed/Poison-Status. Es gibt in diesem Schritt keinen externen Broker und keinen Worker Host.
+Die PostgreSQL-Outbox wird über dieselbe `PostgreSqlTransaction` wie ein fachlicher Datenbank-Write befüllt. Dadurch sind Business Write und Outbox Insert gemeinsam commit- oder rollbackfähig. Ein aufrufbarer Outbox Processor verwendet PostgreSQL-Leases, Inbox-Deduplizierung pro stabiler Consumer Identity, Retry und einen isolierten Failed/Poison-Status. `FlurNetz.Worker` ruft diesen Processor als erster dauerhaft laufender Runtime-Host kontinuierlich auf; es gibt keinen externen Broker.
 
 Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](docs/architecture/messaging.md). Die Tests in `FlurNetz.Messaging.IntegrationTests` verwenden echtes PostgreSQL über Testcontainers; Docker oder alternativ `FLURNETZ_TEST_CONNECTION_STRING` ist dafür erforderlich.
 
@@ -61,8 +61,9 @@ Der Persistence-Adapter verwendet `CommunityIdentityId` als Primärschlüssel, e
 `bigint`-XP-Feld mit Nichtnegativ-Check und transaktionales `SELECT FOR UPDATE` gegen Lost
 Updates. Der Consumer `progression.message-engagement-xp` verarbeitet das Engagement-Event
 über die Inbox-Transaktion und interpretiert jede normalisierte Message als genau `1 XP`.
-Duplicate Delivery vergibt dadurch nicht doppelt; Level, Rewards, API-Endpunkte und ein Worker
-Host sind weiterhin nicht Bestandteil. Details stehen in [docs/architecture/progression.md](docs/architecture/progression.md).
+Duplicate Delivery vergibt dadurch nicht doppelt; Level, Rewards und zusätzliche API-Endpunkte
+sind weiterhin nicht Bestandteil. Der Runtime-Consumer wird durch `FlurNetz.Worker` ausgeführt.
+Details stehen in [docs/architecture/progression.md](docs/architecture/progression.md).
 
 ## Persistence Foundation
 
@@ -70,11 +71,11 @@ Host sind weiterhin nicht Bestandteil. Details stehen in [docs/architecture/prog
 
 `FlurNetz.Persistence.IntegrationTests` testet Verbindungen, Commit/Rollback und den Migration Runner gegen PostgreSQL. Für den automatischen Testlauf wird Docker für Testcontainers benötigt. Alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` auf eine isolierte PostgreSQL-Testdatenbank zeigen.
 
-Identity, Engagement und Progression besitzen jeweils eine eigene fachliche Tabelle und einen gezielten Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression verwendet für konkurrierende XP-Vergaben eine atomare Transaktion mit Zeilensperre und erzeugt keinen Cross-Module-Foreign-Key auf Identity. Der API-Host stellt die Connection-Konfiguration als Composition Root bereit und führt den bestehenden Migration Runner vor dem Listener-Start aus; der Outbox-Processor wird im Workflow-Test direkt aufgerufen, aber noch nicht als Worker betrieben. Engagement und Progression sind weiterhin nicht als HTTP-Endpunkte registriert. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Identity, Engagement und Progression besitzen jeweils eine eigene fachliche Tabelle und einen gezielten Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression verwendet für konkurrierende XP-Vergaben eine atomare Transaktion mit Zeilensperre und erzeugt keinen Cross-Module-Foreign-Key auf Identity. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement und Progression sind weiterhin nicht als HTTP-Endpunkte registriert. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Der erste Ende-zu-Ende-Workflow läuft über Outbox und Inbox; ein dauerhaft laufender Processor-Host existiert noch nicht. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die übrigen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 
@@ -100,6 +101,24 @@ Die erfolgreiche Antwort hat den Status `201 Created` und die Form:
 ```
 
 Der Entwicklungsstand enthält noch kein Authentifizierungssystem und keine Twitch-, Streamer.bot- oder sonstige Plattformintegration.
+
+## Lokale Worker-Ausführung
+
+Der unabhängige Worker-Host verwendet dieselbe Konfigurationskonvention
+ConnectionStrings:FlurNetz und benötigt eine erreichbare PostgreSQL-Datenbank. Beim Start führt
+er ausschließlich die Messaging- und Progression-Migrationen aus, validiert die explizite
+Registry-/Consumer-Komposition und verarbeitet die Outbox danach kontinuierlich.
+engagement_activities wird vom Worker nicht angelegt; der Worker referenziert nur den
+Engagement-Contract.
+
+Start:
+
+    dotnet run --project src/FlurNetz.Worker
+
+Der gestartete Processing-Loop bedeutet, dass Konfiguration, Startup-Migrationen und
+Registry-/Handler-Komposition erfolgreich waren. Der Worker besitzt keinen HTTP-Health-Endpunkt,
+keine Plattformintegration und keine eigene fachliche Retry- oder SQL-Logik. Details stehen in
+[docs/architecture/worker.md](docs/architecture/worker.md).
 
 ## Gesamte lokale Prüfung
 

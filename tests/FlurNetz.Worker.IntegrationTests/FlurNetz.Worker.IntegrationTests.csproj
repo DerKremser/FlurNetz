@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>FlurNetz.Worker.IntegrationTests</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --ignore-exit-code 8</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FlurNetz.Worker\FlurNetz.Worker.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Engagement.Contracts\FlurNetz.Modules.Engagement.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Progression\FlurNetz.Modules.Progression.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

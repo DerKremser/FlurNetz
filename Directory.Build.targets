@@ -1,0 +1,9 @@
+<Project>
+
+  <PropertyGroup Condition="'$(TestingPlatformDotnetTestSupport)' == 'true'">
+    <!-- Die Testprojekte nutzen bereits MTP-Unterstützung; damit dotnet test den
+         eingebetteten xUnit-v3-Runner statt des VSTest-Fallbacks startet. -->
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+  </PropertyGroup>
+
+</Project>

@@ -37,7 +37,7 @@ Der Commit macht beide Änderungen dauerhaft sichtbar. Ein Rollback hinterlässt
 
 ## Processor, Claiming und Lebenszyklus
 
-Der `OutboxProcessor` ist host-unabhängig und führt mit `ProcessBatchAsync` genau einen aufrufbaren Batch-Lauf aus. Er startet keine Endlosschleife und ist kein `BackgroundService`. Ein späterer API-Host, Worker oder Testhost entscheidet über den Aufrufzeitpunkt.
+Der `OutboxProcessor` ist host-unabhängig und führt mit `ProcessBatchAsync` genau einen aufrufbaren Batch-Lauf aus. Er startet keine Endlosschleife und ist kein `BackgroundService`. Der API-Host, `FlurNetz.Worker` oder ein Testhost entscheidet über den Aufrufzeitpunkt.
 
 Offene Outbox-Nachrichten werden in einer kurzen PostgreSQL-Transaktion mit `FOR UPDATE SKIP LOCKED` ausgewählt und über `locked_until_utc` geleast. Dabei wird der Versuchszähler atomar erhöht. Ein abgestürzter Processor blockiert eine Nachricht nur bis zum Ablauf des Leases; ein weiterer Lauf kann sie danach erneut übernehmen.
 
@@ -55,11 +55,21 @@ Fehler werden technisch knapp als Exception-Typ bzw. sicherer Registry-Hinweis g
 
 Nach dem letzten erlaubten Versuch erhält die Nachricht den Status `failed` (Poison). Sie wird nicht erneut ausgewählt und blockiert keine späteren Nachrichten. Unbekannte logische Typen oder Versionen gelten als normale Verarbeitungsfehler und durchlaufen dieselben Retry-/Poison-Regeln.
 
+## Foundation und Runtime Host
+
+Die Messaging Foundation definiert nur die technischen Outbox-/Inbox- und Processor-
+Verträge. Sie startet keinen Prozess und kennt weder Progression noch andere Fachmodule.
+`FlurNetz.Worker` ist der erste separate Runtime-Host: Er registriert die benötigten
+Contracts und Consumer explizit, führt die Messaging- und Progression-Migrationen beim
+Startup aus und ruft danach `OutboxProcessor.ProcessBatchAsync` kontinuierlich auf.
+Die Worker-spezifischen Idle-/Failure-Delays und der Scope pro Batch gehören zum Host, nicht
+zur Foundation. Message-Level-Retry und Lease-Semantik bleiben beim Processor.
+
 ## Migrationen und Tests
 
 `MessagingMigrationSource` registriert die technischen Tabellen unter dem eindeutigen Migration-Owner `Messaging` beim vorhandenen SQL-first `MigrationRunner`. Es gibt keine fachlichen Migrationen.
 
-Die Unit Tests prüfen Domain-Dispatcher, Registry und Serialisierung. Architecture Tests sichern Namespace, Abhängigkeitsrichtung, fachliche Neutralität und das Fehlen generischer Repositories. Die PostgreSQL-Integrationstests verwenden Testcontainers und prüfen Migration/Idempotenz, atomaren Commit und Rollback, Processor, Inbox-Deduplizierung, transactional Inbox, Retry, Poison, unbekannte Typen, Duplicate Redelivery und paralleles Claiming. SQLite und In-Memory-Datenbanken werden nicht verwendet.
+Die Unit Tests prüfen Domain-Dispatcher, Registry und Serialisierung. Architecture Tests sichern Namespace, Abhängigkeitsrichtung, fachliche Neutralität und das Fehlen generischer Repositories. Die PostgreSQL-Integrationstests verwenden Testcontainers und prüfen Migration/Idempotenz, atomaren Commit und Rollback, Processor, Inbox-Deduplizierung, transactional Inbox, Retry, Poison, unbekannte Typen, Duplicate Redelivery und paralleles Claiming. Die Worker-Integrationstests prüfen zusätzlich die echte Host-Schleife, Startup-Migrationen, Verarbeitung nach dem Hoststart und Graceful Shutdown. SQLite und In-Memory-Datenbanken werden nicht verwendet.
 
 ## Erster fachlicher Workflow
 
@@ -78,5 +88,6 @@ Consumer-Fehler bleibt retrybar und Duplicate Delivery erzeugt keinen zweiten fa
 Effekt. Schema v1 bleibt durch den stabilen logischen Message Type und die explizite Registry
 von CLR-Refactorings unabhängig.
 
-Der Workflow-Test führt `OutboxProcessor.ProcessBatchAsync(...)` direkt aus. Ein dauerhaft
-laufender Worker oder BackgroundService ist weiterhin nicht implementiert.
+Der Workflow-Test führt `OutboxProcessor.ProcessBatchAsync(...)` weiterhin direkt aus,
+während `FlurNetz.Worker` denselben Foundation-Processor außerhalb von Tests
+kontinuierlich betreibt.

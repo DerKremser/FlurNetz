@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <RootNamespace>FlurNetz.Worker</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <ProjectReference Include="..\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
+    <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Progression\FlurNetz.Modules.Progression.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Engagement.Contracts\FlurNetz.Modules.Engagement.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>
