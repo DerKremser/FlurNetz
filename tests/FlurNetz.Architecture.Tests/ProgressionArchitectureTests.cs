@@ -1,5 +1,8 @@
 using System.Reflection;
+using FlurNetz.Modules.Progression.Application;
 using FlurNetz.Modules.Progression.Domain;
+using FlurNetz.Modules.Progression.Migrations;
+using FlurNetz.Modules.Progression.Persistence;
 
 namespace FlurNetz.Architecture.Tests;
 
@@ -25,11 +28,11 @@ public sealed class ProgressionArchitectureTests
     }
 
     [Fact]
-    public void ProgressionImplementationReferencesNoInfrastructureOrMessaging()
+    public void ProgressionImplementationReferencesPersistenceButNoMessaging()
     {
         var references = GetReferencedAssemblyNames(ProgressionImplementationAssembly);
 
-        Assert.DoesNotContain("FlurNetz.Persistence", references);
+        Assert.Contains("FlurNetz.Persistence", references);
         Assert.DoesNotContain("FlurNetz.Messaging", references);
         Assert.DoesNotContain("FlurNetz.Api", references);
     }
@@ -49,14 +52,12 @@ public sealed class ProgressionArchitectureTests
     }
 
     [Fact]
-    public void FoundationContainsNoLevelEventsPersistenceOrRewards()
+    public void SliceContainsNoLevelEventsOrRewards()
     {
         var forbiddenNames = new[]
         {
             "Level",
             "Event",
-            "Repository",
-            "Migration",
             "Reward",
             "Coin"
         };
@@ -64,6 +65,48 @@ public sealed class ProgressionArchitectureTests
         var forbiddenTypes = ProgressionImplementationAssembly
             .GetTypes()
             .Where(type => forbiddenNames.Any(name => type.Name.Contains(name, StringComparison.Ordinal)))
+            .Select(type => type.FullName)
+            .ToArray();
+
+        Assert.Empty(forbiddenTypes);
+    }
+
+    [Fact]
+    public void ProgressionPersistenceTypesRemainInTheImplementationAssembly()
+    {
+        Assert.Equal(ProgressionImplementationAssembly, typeof(ICommunityProgressionStore).Assembly);
+        Assert.Equal(ProgressionImplementationAssembly, typeof(CommunityProgressionStore).Assembly);
+        Assert.Equal(ProgressionImplementationAssembly, typeof(ProgressionMigrationSource).Assembly);
+        Assert.DoesNotContain(typeof(ICommunityProgressionStore), ProgressionContractsAssembly.GetTypes());
+    }
+
+    [Fact]
+    public void GrantExperienceAndStoreRemainInTheImplementationAssembly()
+    {
+        Assert.Equal(ProgressionImplementationAssembly, typeof(GrantExperience).Assembly);
+        Assert.DoesNotContain(typeof(GrantExperience), ProgressionContractsAssembly.GetTypes());
+    }
+
+    [Fact]
+    public void ProgressionMigrationHasNoCrossModuleSqlDependency()
+    {
+        var migration = Assert.Single(new ProgressionMigrationSource().GetMigrations());
+
+        Assert.Equal("Progression", migration.Owner);
+        Assert.Equal(1L, migration.Version);
+        Assert.Equal("CreateCommunityProgressions", migration.Name);
+        Assert.DoesNotContain("community_identities", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("engagement_activities", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REFERENCES", migration.Sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ProgressionContainsNoGenericRepositoryTypes()
+    {
+        var forbiddenTypes = ProgressionImplementationAssembly
+            .GetExportedTypes()
+            .Where(type => type.IsGenericType
+                && type.Name.Split('`')[0] is "IRepository" or "Repository" or "GenericRepository")
             .Select(type => type.FullName)
             .ToArray();
 

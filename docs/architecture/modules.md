@@ -50,15 +50,21 @@ keine API-Erweiterung.
 
 ## Aktueller Stand des Progression-Moduls
 
-Progression besitzt die minimale Domain-Foundation für den fachlichen Fortschritt einer
-Community-Identität. `ExperiencePoints` modelliert nicht-negative, auf `long` basierende XP
-mit sicherer Addition; `CommunityProgression` ordnet den Wert einer bestehenden
-`CommunityIdentityId` zu und startet mit `0` XP. Positive XP können akkumuliert werden.
+Progression besitzt den ersten persistierten Vertical Slice für den fachlichen Fortschritt
+einer Community-Identität. `ExperiencePoints` modelliert nicht-negative, auf `long`
+basierende XP mit sicherer Addition; `CommunityProgression` ordnet den Wert einer bestehenden
+`CommunityIdentityId` zu und startet bei `0` XP. `GrantExperience` erzeugt den Zustand lazy
+bei der ersten Vergabe und persistiert die positive XP-Akkumulation atomar in PostgreSQL.
 
-`FlurNetz.Modules.Progression.Contracts` bleibt bewusst leer. Es gibt noch keinen persistierten
-Vertical Slice und keine Level-Logik, Persistence, Messaging- oder Engagement-Kommunikation,
-Events, Rewards oder API-Erweiterung. Die einzige fachfremde Projektabhängigkeit der
-Implementierung ist `FlurNetz.Modules.Identity.Contracts`.
+Die Persistence-Mutation verwendet eine modulinterne Port-/Adapter-Grenze, eine gemeinsame
+Transaktion und `SELECT FOR UPDATE`, damit parallele Vergaben keine Lost Updates erzeugen.
+Die Tabelle verwendet `CommunityIdentityId` als Primärschlüssel und besitzt bewusst keinen
+Foreign Key auf Identity. `FlurNetz.Modules.Progression.Contracts` bleibt leer; die einzige
+fachfremde Projektabhängigkeit der Implementierung ist `FlurNetz.Modules.Identity.Contracts`,
+zusätzlich zu der erlaubten technischen Abhängigkeit auf `FlurNetz.Persistence`.
+
+Noch nicht enthalten sind Engagement-Kommunikation, Messaging, Events, Rewards,
+Level-Logik oder API-Erweiterung.
 
 ## Contracts und Implementierung
 
@@ -67,27 +73,31 @@ der übrigen Module bleiben in diesem Schritt bewusst leer und enthalten keine v
 Commands, Queries, Services, Repositories, Entities, Value Objects oder Events. Identity bildet
 mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme; Engagement besitzt zwar
 bereits seine Domain-Foundation, benötigt aber noch keinen öffentlichen Contract. Progression
-besitzt ebenfalls eine interne Domain-Foundation, benötigt in diesem Schritt aber noch keinen
-öffentlichen Contract.
+besitzt mit Domain, Application, Persistence-Adapter, Migration und Registrierung einen
+internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Contract.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
 aktuell nur Domain, Application, den Persistenzadapter, die fachliche Migration und die
 Registrierung der tatsächlich vorhandenen Komponenten. Engagement nutzt dieselben Schichten
 für seinen Message-Recording-Slice und registriert Use Case, Repository, Migration und Uhr.
-Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+Progression nutzt Domain, Application, einen atomaren Store, Migration und Registrierung;
+der API-Host verdrahtet den neuen Slice in diesem Schritt noch nicht. Die übrigen
+Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf ausschließlich den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten
-technischen BuildingBlocks- und Persistence-Projekte verwenden. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche
+technischen BuildingBlocks- und Persistence-Projekte verwenden. Progression darf ausschließlich
+den eigenen Contract, `Identity.Contracts` und `FlurNetz.Persistence` verwenden. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche
 Contracts und Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine vorsorglichen
 Shared-Entities.
 
 Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
 und Engagement-Unit- sowie PostgreSQL-Integrationstests prüfen jeweils die vorhandenen Domain-
-und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Die Architecture
-Tests prüfen die Assembly-, Referenz- und Namespace-Grenzen automatisiert; Progression wird in
-diesem Foundation-Schritt durch fokussierte Domain- und Architecture-Tests abgesichert.
+und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Progression wird
+zusätzlich mit Domain-, Use-Case-, Migration-, Rollback-, Load- und echten PostgreSQL-
+Concurrency-Tests abgesichert. Die Architecture Tests prüfen die Assembly-, Referenz- und
+Namespace-Grenzen automatisiert.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 

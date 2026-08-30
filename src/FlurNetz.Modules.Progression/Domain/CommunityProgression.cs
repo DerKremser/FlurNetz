@@ -13,10 +13,12 @@ namespace FlurNetz.Modules.Progression.Domain;
 /// </remarks>
 public sealed class CommunityProgression
 {
-    private CommunityProgression(CommunityIdentityId communityIdentityId)
+    private CommunityProgression(
+        CommunityIdentityId communityIdentityId,
+        ExperiencePoints experiencePoints)
     {
         CommunityIdentityId = communityIdentityId;
-        ExperiencePoints = ExperiencePoints.Zero;
+        ExperiencePoints = experiencePoints;
     }
 
     /// <summary>
@@ -37,14 +39,33 @@ public sealed class CommunityProgression
     /// <exception cref="ArgumentException">Wenn <paramref name="communityIdentityId"/> leer ist.</exception>
     public static CommunityProgression Create(CommunityIdentityId communityIdentityId)
     {
-        if (communityIdentityId.Value == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Eine Community-Progression benötigt eine nicht leere Community-Identity-ID.",
-                nameof(communityIdentityId));
-        }
+        EnsureValidCommunityIdentityId(communityIdentityId);
 
-        return new CommunityProgression(communityIdentityId);
+        return new CommunityProgression(communityIdentityId, ExperiencePoints.Zero);
+    }
+
+    /// <summary>
+    /// Rekonstruiert einen bereits gespeicherten Progressionszustand.
+    /// </summary>
+    /// <param name="communityIdentityId">Die gültige interne Community-Identity-ID.</param>
+    /// <param name="experiencePoints">Der bereits gespeicherte, nicht-negative XP-Wert.</param>
+    /// <returns>Der rekonstruierte Progressionszustand.</returns>
+    /// <remarks>
+    /// <see cref="Create(CommunityIdentityId)"/> bedeutet fachlich einen neuen Zustand bei
+    /// null XP. Diese Methode bedeutet dagegen ausschließlich die Rekonstruktion eines
+    /// bereits vorhandenen Zustands für die Persistence-Schicht.
+    /// </remarks>
+    /// <exception cref="ArgumentException">Wenn <paramref name="communityIdentityId"/> leer ist.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Wenn <paramref name="experiencePoints"/> ungültig ist.</exception>
+    public static CommunityProgression Rehydrate(
+        CommunityIdentityId communityIdentityId,
+        ExperiencePoints experiencePoints)
+    {
+        EnsureValidCommunityIdentityId(communityIdentityId);
+
+        return new CommunityProgression(
+            communityIdentityId,
+            ExperiencePoints.Create(experiencePoints.Value));
     }
 
     /// <summary>
@@ -64,5 +85,15 @@ public sealed class CommunityProgression
         }
 
         ExperiencePoints = ExperiencePoints.Add(amount);
+    }
+
+    private static void EnsureValidCommunityIdentityId(CommunityIdentityId communityIdentityId)
+    {
+        if (communityIdentityId.Value == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Eine Community-Progression benötigt eine nicht leere Community-Identity-ID.",
+                nameof(communityIdentityId));
+        }
     }
 }

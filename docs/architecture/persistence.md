@@ -39,8 +39,14 @@ weiteres Modul die Migration `Engagement:1:CreateEngagementActivities` für sein
 `engagement_activities`. Beide SQL-Quellen liegen in ihren Modulen; `FlurNetz.Persistence`
 bleibt frei von fachlichen Tabellen und Migrationen. Die fachliche `community_identity_id` in
 Engagement ist ein Cross-Module-Identifier und erzeugt bewusst keinen Foreign Key auf die
-Identity-Tabelle.
+Identity-Tabelle. Progression besitzt zusätzlich die Migration
+`Progression:1:CreateCommunityProgressions` für `community_progressions`. Die Tabelle enthält
+nur `community_identity_id uuid primary key` und `experience_points bigint not null` mit einem
+Nichtnegativ-Check. Die fachliche ID bleibt ebenfalls ein Cross-Module-Identifier ohne Foreign
+Key. Die atomare Progression-Mutation initialisiert eine fehlende Zeile gezielt, sperrt sie mit
+`SELECT FOR UPDATE`, führt die Domain-Mutation aus und aktualisiert sie innerhalb derselben
+`PostgreSqlTransaction`; dadurch werden Lost Updates bei parallelen Writes verhindert.
 
 ## Tests
 
-`FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
+`FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Der Progression-Slice besitzt eigene PostgreSQL-Tests für Migration, lazy Initialisierung, Domain-Rehydration, Rollback, Not-Found und parallele Grants gegen echte Zeilensperren. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
