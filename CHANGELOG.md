@@ -4,6 +4,8 @@
 
 ### Hinzugefügt
 
+- Erster dauerhaft laufender FlurNetz-Worker zur kontinuierlichen Verarbeitung der PostgreSQL-Outbox.
+- Explizite Runtime-Komposition des Engagement-Message-Events mit dem Progression-Consumer.
 - Erster zuverlässiger Cross-Module-Workflow von Engagement zu Progression über Outbox und Inbox.
 - Normalisierte Message-Aktivitäten können über den Progression-Consumer einmalig 1 XP vergeben.
 - Atomare Producer- und Consumer-Transaktionen verhindern verlorene beziehungsweise doppelte fachliche Effekte.
@@ -34,3 +36,7 @@
 - Erster ausführbarer ASP.NET-Core-API-Host als Composition Root.
 - HTTP-Endpunkt `POST /api/identities` zur Erzeugung interner Community-Identitäten.
 - Echte API-Integrationstests vom HTTP-Request bis zur PostgreSQL-Persistierung.
+
+### Geändert
+
+- Der bestehende Engagement-zu-Progression-Workflow kann nun außerhalb von Tests kontinuierlich durch einen eigenen Worker-Host verarbeitet werden.

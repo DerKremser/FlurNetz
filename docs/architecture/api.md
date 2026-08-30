@@ -2,10 +2,12 @@
 
 ## Rolle des Hosts
 
-`FlurNetz.Api` ist der erste ausführbare FlurNetz-Host und ausschließlich Composition Root
-und HTTP-Adapter. Er konfiguriert den ASP.NET-Core-Host, liest die PostgreSQL-Konfiguration,
-registriert die technische Persistence Foundation, bindet das Identity-Modul ein, führt die
-Startmigrationen aus und ordnet HTTP-Endpunkte zu.
+`FlurNetz.Api` ist ein eigenständiger ausführbarer FlurNetz-Host und ausschließlich Composition
+Root und HTTP-Adapter. Er konfiguriert den ASP.NET-Core-Host, liest die PostgreSQL-
+Konfiguration, registriert die technische Persistence Foundation, bindet das Identity-Modul
+ein, führt die Startmigrationen aus und ordnet HTTP-Endpunkte zu. Der unabhängige
+`FlurNetz.Worker` ist der separate Runtime-Host für Messaging und wird vom API-Host weder
+referenziert noch gestartet.
 
 Domain-Regeln, Use-Case-Ablauf, SQL, Repositories und fachliche Transaktionen verbleiben in
 den jeweils zuständigen Schichten. Der Host erzeugt keine `CommunityIdentity`, vergibt keine
@@ -26,7 +28,7 @@ Die erlaubte Richtung lautet:
 `FlurNetz.Persistence`, `FlurNetz.Messaging`, `FlurNetz.BuildingBlocks`, Contracts und
 Fachmodule referenzieren die API nicht. Weitere Fachmodule werden zur Laufzeit nicht
 registriert. Messaging ist deshalb weder Project Reference noch Runtime-Bestandteil dieses
-Hosts; es gibt keine Outbox-Verarbeitung und keinen `BackgroundService`.
+Hosts; die Outbox-Verarbeitung läuft ausschließlich im unabhängigen `FlurNetz.Worker`.
 
 ## PostgreSQL und Startup
 
@@ -76,7 +78,7 @@ Aktuell gibt es bewusst:
 
 - keine Authentifizierung oder Autorisierung
 - kein JWT, Cookie, OAuth oder Identity Framework
-- kein Messaging Runtime Processing, keine Outbox-Loop und keinen Worker
+- kein Messaging Runtime Processing, keine Outbox-Loop und keinen Worker im API-Prozess
 - keine Twitch-, Streamer.bot-, Discord-, YouTube- oder Kick-Integration
 - keine weiteren fachlichen Module im API-Host
 

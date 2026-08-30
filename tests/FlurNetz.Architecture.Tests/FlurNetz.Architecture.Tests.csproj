@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\src\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Worker\FlurNetz.Worker.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity\FlurNetz.Modules.Identity.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Engagement\FlurNetz.Modules.Engagement.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Progression\FlurNetz.Modules.Progression.csproj" />
