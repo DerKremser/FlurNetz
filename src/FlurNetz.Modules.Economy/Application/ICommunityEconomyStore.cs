@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Economy.Domain;
 using FlurNetz.Modules.Identity.Contracts;
 
@@ -23,6 +24,26 @@ public interface ICommunityEconomyStore
     Task<EconomyBalance> CreditAsync(
         CommunityIdentityId communityIdentityId,
         long amount,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Schreibt einen positiven Betrag innerhalb einer bereits bestehenden Transaktion gut.
+    /// </summary>
+    /// <param name="communityIdentityId">Die bereits aufgelöste interne Identität.</param>
+    /// <param name="amount">Der positive gutzuschreibende Betrag.</param>
+    /// <param name="connection">Die geöffnete gemeinsame Datenbankverbindung.</param>
+    /// <param name="transaction">Die zu <paramref name="connection"/> gehörende Transaktion.</param>
+    /// <param name="cancellationToken">Token zum Abbrechen des Datenbankvorgangs.</param>
+    /// <returns>Der neue Economy-Saldo vor dem Commit der äußeren Transaktion.</returns>
+    /// <remarks>
+    /// Dieser Overload führt keinen Commit aus. Dadurch kann eine übergeordnete fachliche
+    /// Operation Economy gemeinsam mit eigenen Writes atomar bestätigen oder zurückrollen.
+    /// </remarks>
+    Task<EconomyBalance> CreditAsync(
+        CommunityIdentityId communityIdentityId,
+        long amount,
+        DbConnection connection,
+        DbTransaction transaction,
         CancellationToken cancellationToken = default);
 
     /// <summary>

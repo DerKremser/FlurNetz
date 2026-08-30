@@ -1,4 +1,5 @@
 using System.Reflection;
+using FlurNetz.Modules.Rewards.Migrations;
 
 namespace FlurNetz.Architecture.Tests;
 
@@ -14,16 +15,20 @@ public sealed class RewardsArchitectureTests
         ModuleArchitectureCatalog.LoadAssembly("FlurNetz.Modules.Rewards.Contracts");
 
     [Fact]
-    public void RewardsImplementationReferencesOnlyItsContractsAndIdentityContracts()
+    public void RewardsImplementationReferencesOnlyItsApprovedProjects()
     {
         var references = GetReferencedAssemblyNames(RewardsImplementationAssembly);
         var allowedReferences = new HashSet<string>(StringComparer.Ordinal)
         {
             "FlurNetz.Modules.Rewards.Contracts",
-            "FlurNetz.Modules.Identity.Contracts"
+            "FlurNetz.Modules.Identity.Contracts",
+            "FlurNetz.Modules.Economy.Contracts",
+            "FlurNetz.Persistence"
         };
 
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
+        Assert.Contains("FlurNetz.Modules.Economy.Contracts", references);
+        Assert.Contains("FlurNetz.Persistence", references);
         Assert.All(references, reference => Assert.Contains(reference, allowedReferences));
     }
 
@@ -35,7 +40,6 @@ public sealed class RewardsArchitectureTests
         {
             "FlurNetz.Modules.Identity",
             "FlurNetz.Modules.Economy",
-            "FlurNetz.Modules.Economy.Contracts",
             "FlurNetz.Modules.Progression",
             "FlurNetz.Modules.Progression.Contracts",
             "FlurNetz.Modules.Engagement",
@@ -45,7 +49,6 @@ public sealed class RewardsArchitectureTests
             "FlurNetz.Modules.Achievements",
             "FlurNetz.Modules.Shop",
             "FlurNetz.Messaging",
-            "FlurNetz.Persistence",
             "FlurNetz.Worker",
             "FlurNetz.Api"
         };
@@ -94,11 +97,15 @@ public sealed class RewardsArchitectureTests
             "ItemReward",
             "TitleReward",
             "AchievementReward",
-            "Executor",
-            "Engine",
-            "Repository",
-            "Store",
-            "Migration",
+            "RewardEngine",
+            "RewardPipeline",
+            "RewardExecutorFactory",
+            "RewardProvider",
+            "RewardStrategy",
+            "IRewardComponent",
+            "IRewardEffect",
+            "RewardComponent",
+            "RewardTarget",
             "Event",
             "Inbox",
             "Outbox",
@@ -113,6 +120,22 @@ public sealed class RewardsArchitectureTests
             .ToArray();
 
         Assert.Empty(forbiddenTypes);
+    }
+
+    [Fact]
+    public void RewardsMigrationIsOwnedAndHasNoCrossModuleForeignKey()
+    {
+        var migration = Assert.Single(new RewardsMigrationSource().GetMigrations());
+
+        Assert.Equal("Rewards", migration.Owner);
+        Assert.Equal(1L, migration.Version);
+        Assert.Equal("CreateRewardConfigurationAndGrants", migration.Name);
+        Assert.Contains("reward_definitions", migration.Sql, StringComparison.Ordinal);
+        Assert.Contains("reward_packages", migration.Sql, StringComparison.Ordinal);
+        Assert.Contains("reward_grants", migration.Sql, StringComparison.Ordinal);
+        Assert.Contains("UNIQUE (source_type, source_id, reward_definition_id)", migration.Sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("community_identities", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("community_economies", migration.Sql, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string[] GetReferencedAssemblyNames(Assembly assembly) => assembly

@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, eine minimale Rewards-Domain-Foundation sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, eine Rewards-Ausführung und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -27,7 +27,7 @@ Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](
 
 `FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards, die minimale `IClock`-Abstraktion und deren neutrale `SystemClock`-Implementierung.
 
-Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Modules.Progression.IntegrationTests`, `FlurNetz.Modules.Economy.Tests`, `FlurNetz.Modules.Economy.IntegrationTests`, `FlurNetz.Modules.Rewards.Tests`, `FlurNetz.Workflows.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, die Rewards-Domain-Foundation, den persistierten Progression- und Economy-Vertical-Slice einschließlich Nebenläufigkeit, den Ende-zu-Ende-Workflow gegen PostgreSQL, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
+Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Modules.Progression.IntegrationTests`, `FlurNetz.Modules.Economy.Tests`, `FlurNetz.Modules.Economy.IntegrationTests`, `FlurNetz.Modules.Rewards.Tests`, `FlurNetz.Modules.Rewards.IntegrationTests`, `FlurNetz.Workflows.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den Rewards-Katalog und die atomare Rewards-Ausführung, den persistierten Progression- und Economy-Vertical-Slice einschließlich Nebenläufigkeit, den Ende-zu-Ende-Workflow gegen PostgreSQL, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
 
 ## Identity Foundation und erster Vertical Slice
 
@@ -72,26 +72,28 @@ nicht-negativen Economy-Saldo je interner `CommunityIdentityId`. `EconomyBalance
 `long`, schützt Gutschriften vor Overflow und verhindert bei Abbuchungen eine Überziehung.
 `CommunityEconomy` startet bei null; nur positive Beträge können gutgeschrieben oder abgebucht
 werden. Der interne Store führt Credits und Debits atomar mit PostgreSQL-Transaktionen und
-`SELECT FOR UPDATE` aus; ein Credit erzeugt den Zustand lazy erst bei Erfolg. Das Contracts-Projekt
-bleibt bewusst leer.
+`SELECT FOR UPDATE` aus; ein Credit erzeugt den Zustand lazy erst bei Erfolg. `Economy.Contracts`
+enthält nun die neutrale, transaction-aware Fähigkeit `IEconomyBalanceCredit`; Economy kennt
+Rewards dabei nicht.
 
 Eine konkrete Währungsbezeichnung, Multi-Currency, Messaging, Events, Transfers, Rewards-
-Ausführung, Shop-Funktionalität und Economy-API sind noch nicht enthalten. Details stehen in
+Trigger, Shop-Funktionalität und Economy-API sind noch nicht enthalten. Details stehen in
 [docs/architecture/economy.md](docs/architecture/economy.md).
 
-## Rewards Foundation
+## Rewards Vertical Slice
 
-`FlurNetz.Modules.Rewards` enthält ein minimales Domainmodell für Reward Definitions,
-verpflichtende Reward Packages, fachliche Reward Sources und Grant-Records. Der erste konkrete
-Typ `EconomyBalanceRewardDefinition` beschreibt eine positive spätere Economy-Balance-
-Gutschrift mit einem neutralen `long Amount`; Rewards besitzt keinen Economy-Zustand und führt
-keine Gutschrift aus. `RewardGrant` verwendet die zentrale `CommunityIdentityId` und gehört genau
-zu einer Reward Definition. Die spätere Eindeutigkeit aus `SourceType`, `SourceId` und
-`RewardDefinitionId` ist fachlich dokumentiert, aber noch nicht persistiert.
+`FlurNetz.Modules.Rewards` enthält den ersten persistierten und ausführbaren Vertical Slice für
+Reward Definitions, verpflichtende Reward Packages, fachliche Reward Sources und Grant-Records.
+Der erste und einzige ausführbare Typ `EconomyBalanceRewardDefinition` beschreibt eine
+Economy-Balance-Gutschrift mit einem neutralen `long Amount`; Rewards besitzt den Economy-
+Zustand nicht. `RewardGrant` gehört genau zu einer Reward Definition. Die eindeutige Grenze
+`SourceType + SourceId + RewardDefinitionId` verhindert doppelte fachliche Effects auch bei
+parallelen Wiederholungen; ein Partial-State wird als Fehler abgelehnt. Package-Grants und
+Economy-Writes committen oder rollbacken gemeinsam in einer PostgreSQL-Transaktion.
 
 `FlurNetz.Modules.Rewards.Contracts` bleibt bewusst leer. XP bleiben im Progression-Modul;
-Persistence, Messaging, tatsächliche Reward-Ausführung, Inventory-/Title-Rewards, API und Worker-
-Anbindung sind nicht Bestandteil dieses Schritts. Details stehen in
+Messaging, Events, Inventory-/Title-Rewards, API, Admin UI und Worker-Anbindung sind nicht
+Bestandteil dieses Slices. Es gibt noch keinen Runtime-Trigger. Details stehen in
 [docs/architecture/rewards.md](docs/architecture/rewards.md).
 
 ## Persistence Foundation
@@ -100,11 +102,11 @@ Anbindung sind nicht Bestandteil dieses Schritts. Details stehen in
 
 `FlurNetz.Persistence.IntegrationTests` testet Verbindungen, Commit/Rollback und den Migration Runner gegen PostgreSQL. Für den automatischen Testlauf wird Docker für Testcontainers benötigt. Alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` auf eine isolierte PostgreSQL-Testdatenbank zeigen.
 
-Identity, Engagement, Progression und Economy besitzen jeweils eine eigene fachliche Tabelle und einen gezielten Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression und Economy verwenden für konkurrierende Mutationen atomare Transaktionen mit Zeilensperren und erzeugen keinen Cross-Module-Foreign-Key auf Identity. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; Economy ist noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Identity, Engagement, Progression, Economy und Rewards besitzen jeweils eigene fachliche Tabellen und gezielte Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression, Economy und Rewards verwenden für konkurrierende beziehungsweise verpflichtende Mutationen atomare Transaktionen mit Zeilensperren; Rewards und Economy koordinieren ihre Writes über eine gemeinsame Connection/Transaction und erzeugen keine Cross-Module-Foreign-Keys. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; Rewards ist noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert, Rewards besitzt weder API noch Worker-Trigger. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards ergänzt nun ausschließlich eine Domain-Foundation mit Unit- und Architekturtests; Persistence und Ausführung folgen nicht in diesem Schritt. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 

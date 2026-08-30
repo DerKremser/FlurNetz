@@ -1,93 +1,120 @@
-# Rewards Foundation
+# Rewards-Vertical-Slice
 
 ## Verantwortung
 
-Das Rewards-Modul beschreibt, was eine konfigurierte Belohnung fachlich bedeutet. Es
-definiert Reward Definitions, fasst sie in verpflichtenden Reward Packages zusammen und
-führt die fachliche Herkunft sowie spätere Grant-Records. Rewards besitzt dabei niemals den
-resultierenden Zustand eines anderen Moduls und verändert ihn nicht selbst.
+Das Rewards-Modul besitzt die fachliche Bedeutung konfigurierter Belohnungen. Es
+persistiert Reward Definitions und Reward Packages, beschreibt die fachliche Herkunft eines
+Grants und führt pro ausgeführter Definition einen `RewardGrant`-Record. Rewards besitzt
+dabei nicht den resultierenden Zustand anderer Module. Eine Economy-Balance wird deshalb
+nicht von Rewards modelliert oder direkt verändert; Rewards beschreibt nur die gewünschte
+Wirkung und delegiert den tatsächlichen Write an die öffentliche Economy-Fähigkeit.
 
-Die Foundation ist bewusst domain-only. Es gibt noch keinen Application Use Case, keine
-Persistence und keine Ausführung.
+Der erste und derzeit einzige ausführbare Zieltyp ist
+`EconomyBalanceRewardDefinition`. Inventory- und Title-Rewards werden erst ergänzt, wenn
+die jeweiligen Zielmodule fachlich existieren. XP bleiben vollständig Progression-owned und
+sind kein Reward-Komponententyp.
 
 ## Reward Definitions
 
-`RewardDefinition` ist die minimale abstrakte Basis einer Definition und besitzt ausschließlich
-die interne `RewardDefinitionId`. `RewardDefinitionId`, `RewardPackageId` und `RewardGrantId`
-sind getrennte, unveränderliche, Guid-basierte Fachtypen. Leere GUIDs werden abgelehnt; es gibt
-keine gemeinsame generische ID-Infrastruktur.
+`RewardDefinition` ist die minimale abstrakte Basis und besitzt ausschließlich ihre
+`RewardDefinitionId`. `RewardDefinitionId`, `RewardPackageId` und `RewardGrantId` sind
+getrennte, unveränderliche, Guid-basierte Fachtypen; leere GUIDs werden abgelehnt. Es gibt
+keine gemeinsame generische ID-Infrastruktur und keine UI-Metadaten wie Name, Beschreibung,
+Icon, Kategorie oder Status.
 
-Der erste und einzige konkrete Zieltyp dieser Foundation ist
-`EconomyBalanceRewardDefinition`. Er beschreibt eine spätere Gutschrift eines positiven
-`long Amount` auf einen Economy-Saldo. Der Typ benennt keine konkrete Währung und referenziert
-weder Economy noch `Economy.Contracts`. Rewards beschreibt nur die gewünschte Wirkung; ob der
-Zielsaldo die Gutschrift einschließlich seiner eigenen Overflow-Regel anwenden kann, entscheidet
-später Economy.
+`EconomyBalanceRewardDefinition` beschreibt eine positive Economy-Balance-Gutschrift über
+einen neutralen `long Amount`. Die Definition trägt keine Währungsbezeichnung, keinen
+Economy-Zustand und keine Overflow-Prüfung des Zielbestands. Die Ziel-Domain Economy bleibt
+Autorität für die tatsächliche Gutschrift und ihre bestehenden Invarianten.
 
-XP ist ausdrücklich kein Reward-Komponententyp. Die bestehende Regel „Message → 1 XP“ bleibt
-vollständig im Progression-Modul.
+## Persistierter Katalog
 
-## Reward Packages
+`CreateEconomyBalanceRewardDefinition` erzeugt eine neue Definitions-ID, validiert die
+fachliche Definition und persistiert sie. `CreateRewardPackage` verwendet
+`RewardPackage.Create`, prüft alle Definitionen auf Existenz und schreibt Package sowie
+Membership atomar. Unbekannte Definitionen führen zu
+`RewardDefinitionNotFoundException`; es bleibt dabei keine Package-Zeile zurück.
 
-`RewardPackage` ist eine fachliche Zusammenfassung von mindestens einer gültigen
-`RewardDefinitionId`. Die Sicht auf die Definitionen ist unveränderlich. Leere IDs und doppelte
-Definitionen sind nicht erlaubt. Die Collection kann technisch eine stabile Reihenfolge
-beibehalten, verspricht aber keine fachliche Ausführungsreihenfolge.
+`RewardPackage` fasst mindestens eine gültige, doppelfreie `RewardDefinitionId` zusammen.
+Die technische Collection bleibt deterministisch, aber ihre Reihenfolge ist keine fachliche
+Ausführungszusage. Ein Package beschreibt eine verpflichtende Menge: Bei der V1-Ausführung
+müssen alle Komponenten erfolgreich sein oder keine. Optional-, Choice-, Random- und
+Weighted-Semantik existieren nicht.
 
-Ein Package beschreibt eine verpflichtende Menge von Reward Definitions. Bei der späteren V1-
-Ausführung gilt daher: Entweder sind alle Komponenten erfolgreich oder keine. Eine optionale,
-auswählbare, zufällige oder gewichtete Package-Komponente ist nicht Teil dieser Foundation.
+Die eigene Migration `Rewards:1:CreateRewardConfigurationAndGrants` gehört dem Rewards-Modul.
+Sie legt `reward_definitions`, `reward_packages`, `reward_package_definitions` und
+`reward_grants` mit den erforderlichen Primärschlüsseln und internen Foreign Keys an.
+`reward_definitions` verwendet für den ersten Typ den stabilen Code `economy_balance` und
+`amount bigint` mit `CHECK (amount > 0)`. Es gibt keinen JSON-Konfigurationsblob.
 
-## RewardSource
+## RewardSource und Grant-Eindeutigkeit
 
-`RewardSource` beschreibt die fachliche Ursache eines Grants mit `SourceType` und `SourceId`.
-Beide Werte müssen vorhanden, nicht leer und nicht aus Whitespace bestehen. `SourceType` bleibt
-bewusst ein String und wird nicht als Rewards-eigenes Enum fest verdrahtet. So können spätere
-Quell-Domänen wie Achievements, Progression, Daily oder Administration neue stabile Source Types
-liefern, ohne das Rewards-Domainmodell zu ändern.
+`RewardSource` beschreibt die fachliche Ursache eines Grants mit nicht leeren,
+nicht aus Whitespace bestehenden Strings `SourceType` und `SourceId`. `SourceType` ist
+bewusst kein Enum: Neue stabile Quelltypen aus anderen Domänen können so hinzukommen, ohne
+das Rewards-Domainmodell zu ändern. Event-, Message- und Inbox-IDs gehören nicht in diese
+fachliche Quelle.
 
-Event-, Message- und Inbox-IDs gehören nicht in `RewardSource`; technische Deduplizierung kommt
-erst mit der späteren Messaging-Ausführung.
+`RewardGrant` ist der Record genau einer ausgeführten `RewardDefinitionId`. Er verwendet die
+zentrale `CommunityIdentityId` als Empfängeridentität, enthält aber weder eine zweite
+Benutzer-ID noch eine `RewardPackageId`, einen Status oder Zeitstempel.
 
-## RewardGrant
-
-`RewardGrant` ist der fachliche Record einer einzelnen Reward-Definition-Ausführung. Er enthält
-genau eine `RewardDefinitionId`, die zentrale Empfängeridentität `CommunityIdentityId` und die
-gültige `RewardSource` neben seiner `RewardGrantId`. Eine zusätzliche `RewardPackageId` ist in
-diesem Schritt nicht erforderlich.
-
-Die spätere verbindliche Grant-Eindeutigkeit lautet:
+Die technische und fachliche Idempotency-Grenze lautet exakt:
 
 ```text
 SourceType + SourceId + RewardDefinitionId
 ```
 
-Diese Regel ist hier nur fachlich dokumentiert. Es gibt noch keine Datenbank-Constraint, keinen
-Repository-Lookup und keinen globalen `HashSet`.
+`CommunityIdentityId` ist ausdrücklich nicht Teil dieses Schlüssels. Eine fachliche Quelle
+bezeichnet einen konkreten Vorgang und muss deshalb so gewählt werden, dass ihre `SourceId`
+diesen Vorgang eindeutig identifiziert. Die Datenbank-Unique-Constraint ist die
+authoritative Concurrency-Grenze.
 
-Ein Grant enthält noch keinen Status und keinen Zeitstempel. Ein erfolgreicher Grant-Record wird
-erst im späteren Ausführungs-Slice relevant; eine fehlgeschlagene Ausführung erzeugt keinen
-erfolgreichen Grant.
+## Atomare Ausführung
+
+`GrantRewardPackage` enthält keine SQL- oder Transaktionslogik. Der gezielte Port
+`IRewardPackageGrantExecutor` delegiert an den PostgreSQL-Executor. Dieser lädt Package und
+Definitionen, sortiert sie technisch stabil nach `RewardDefinitionId`, reserviert die
+`RewardGrant`-Zeilen mit `INSERT ... ON CONFLICT DO NOTHING` und bewertet anschließend den
+Zustand.
+
+Werden alle Definitionen neu reserviert, ruft der Executor für jede aktuell unterstützte
+`EconomyBalanceRewardDefinition` `IEconomyBalanceCredit` auf. Package-Grants und Economy-
+Writes teilen exakt dieselbe `DbConnection` und `DbTransaction`. Die Grant-Zeilen dürfen vor
+den Effects innerhalb dieser noch nicht bestätigten Transaktion bestehen; erst der
+gemeinsame Commit macht den vollständigen Grant sichtbar. Jeder Fehler rollt alle Grant-
+Reservierungen und alle Economy-Writes gemeinsam zurück.
+
+Sind alle Definitionen bereits vorhanden, ist der erneute Grant ein idempotenter No-op und
+liefert `AlreadyGranted`. Es entsteht weder ein zweiter Grant-Record noch ein zweiter
+Economy-Effekt. Wenn nur ein Teil der Package-Definitionen bereits vorhanden ist, wird der
+inkonsistente Partial-Grant-Zustand als Fehler abgelehnt; der fehlende Rest wird nicht still
+ausgeführt. Die deterministische technische Reihenfolge verspricht keine fachliche
+Reihenfolge, reduziert aber unnötige Deadlock-Risiken bei parallelen Aufrufen.
+
+Persistierte unbekannte Definitionstypen werden klar abgelehnt und nicht ignoriert. Ein
+Package mit mehreren Economy-Definitionen ist daher vollständig All-or-Nothing.
 
 ## Modulgrenzen und bewusste Ausschlüsse
 
-`CommunityIdentityId` aus `FlurNetz.Modules.Identity.Contracts` ist die einzige verwendete
-Empfängeridentität. Rewards führt keine zweite Benutzer-ID ein.
+Rewards referenziert nur `FlurNetz.Modules.Rewards.Contracts`,
+`FlurNetz.Modules.Identity.Contracts`, `FlurNetz.Modules.Economy.Contracts` und
+`FlurNetz.Persistence`. Die konkrete Economy-Implementierung wird nicht referenziert;
+Economy kennt Rewards ebenfalls nicht. Rewards-Tabellen besitzen keinen Foreign Key auf
+`community_identities` oder `community_economies`. Die atomare Zusammenarbeit erfolgt über
+den öffentlichen Economy-Contract und die gemeinsame PostgreSQL-Transaktion.
 
-`FlurNetz.Modules.Rewards.Contracts` bleibt bewusst leer, weil noch kein echter öffentlicher
-Cross-Module-Contract begründet ist. Die Domain-Typen bleiben im Implementierungsprojekt.
-Inventory- und Title-Rewards werden erst modelliert, wenn die jeweiligen Zielmodule fachlich
-existieren.
+`FlurNetz.Modules.Rewards.Contracts` bleibt bewusst leer, weil noch kein anderer Modul-Caller
+einen Rewards-Contract benötigt. Die Domain- und Application-Typen bleiben im
+Implementierungsprojekt.
 
-Nicht Bestandteil dieses Schritts sind:
+Noch nicht enthalten sind:
 
-- tatsächliche Economy-Ausführung oder eine Economy-Abhängigkeit
 - XP-Reward-Typen oder eine Progression-Abhängigkeit
 - Inventory- oder Title-Definitionen
-- Persistence, Repository, Store, SQL, Migration oder Tabelle
-- Messaging, Events, Inbox oder Outbox
-- Application Use Cases, Modulregistrierung, API oder Worker-Anbindung
-
-Die erlaubte Projektabhängigkeit der Implementierung ist neben dem leeren eigenen Contracts-
-Projekt ausschließlich `FlurNetz.Modules.Identity.Contracts`. Es werden keine neuen NuGet-
-Pakete eingeführt.
+- Achievements, Daily- oder andere Runtime-Trigger
+- weitere Währungsbezeichnungen, Multi-Currency, Ledger oder Transfers
+- generische Reward-Engine-, Pipeline-, Executor- oder Repository-Infrastruktur
+- Messaging, Integration Events, Domain Events, Inbox oder Outbox
+- zusätzliche Application Use Cases für Lesen, Ändern oder Löschen
+- API, Admin UI oder Worker-Anbindung

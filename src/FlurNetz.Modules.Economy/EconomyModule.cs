@@ -1,4 +1,5 @@
 using FlurNetz.Modules.Economy.Application;
+using FlurNetz.Modules.Economy.Contracts;
 using FlurNetz.Modules.Economy.Migrations;
 using FlurNetz.Modules.Economy.Persistence;
 using FlurNetz.Persistence.Migrations;
@@ -27,6 +28,7 @@ public static class EconomyModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddScoped<ICommunityEconomyStore, CommunityEconomyStore>();
+        services.AddScoped<IEconomyBalanceCredit, EconomyBalanceCredit>();
         services.AddScoped<CreditEconomyBalance>();
         services.AddScoped<DebitEconomyBalance>();
         services.AddSingleton<IMigrationSource, EconomyMigrationSource>();

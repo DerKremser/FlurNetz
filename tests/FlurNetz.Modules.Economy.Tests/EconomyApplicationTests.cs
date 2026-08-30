@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Economy.Application;
 using FlurNetz.Modules.Economy.Domain;
 using FlurNetz.Modules.Identity.Contracts;
@@ -88,6 +89,17 @@ internal sealed class RecordingEconomyStore(EconomyBalance result) : ICommunityE
     public Task<EconomyBalance> CreditAsync(
         CommunityIdentityId communityIdentityId,
         long amount,
+        CancellationToken cancellationToken = default)
+    {
+        Record(StoreOperation.Credit, communityIdentityId, amount, cancellationToken);
+        return Task.FromResult(result);
+    }
+
+    public Task<EconomyBalance> CreditAsync(
+        CommunityIdentityId communityIdentityId,
+        long amount,
+        DbConnection connection,
+        DbTransaction transaction,
         CancellationToken cancellationToken = default)
     {
         Record(StoreOperation.Credit, communityIdentityId, amount, cancellationToken);

@@ -12,6 +12,13 @@ Dapper ist die schlanke SQL-Ausführungsbasis. Es gibt bewusst keinen ORM und ke
 
 `PostgreSqlTransaction` besitzt genau eine geöffnete Connection und deren PostgreSQL-Transaction. `BeginAsync`, `CommitAsync`, `RollbackAsync` und `DisposeAsync` arbeiten asynchron und unterstützen `CancellationToken`. Wird eine aktive Transaction disposed, wird sie zurückgerollt. Dadurch können spätere technische oder fachliche SQL-Operationen dieselbe Connection und Transaction verwenden.
 
+Diese technische Grenze ermöglicht auch eine bewusst konkrete atomare Komposition zwischen
+fachlichen Modulen. Der Rewards-Executor führt seine Grant-Records und die Economy-
+Gutschrift über den öffentlichen `IEconomyBalanceCredit`-Contract mit derselben Connection
+und Transaction aus. Das ist kein globales Unit-of-Work-Framework und kein generischer
+Cross-Module-Repository-Vertrag; die jeweilige fachliche Transaktionsgrenze bleibt beim
+aufrufenden Slice.
+
 ## SQL-first Migrationen
 
 Migrationen sind explizite SQL-Texte und werden über `IMigrationSource` bereitgestellt. Die neutrale `MigrationSource` kann Migrationen verschiedener Besitzer aufnehmen; es gibt keine Reflection- oder Plugin-Infrastruktur.
@@ -23,6 +30,11 @@ Jede Migration besitzt eine eindeutige Identität aus:
 - `Name`: lesbarer stabiler Name
 
 Der `MigrationRunner` sortiert Migrationen deterministisch nach Owner, Version und Name. Doppelte Kombinationen aus Owner und Version werden vor jeder Datenbankänderung abgelehnt.
+
+Rewards besitzt die Migration `Rewards:1:CreateRewardConfigurationAndGrants` selbst. Sie
+legt die Rewards-eigenen Tabellen und ausschließlich deren interne Foreign Keys an. Die
+fachliche `community_identity_id` sowie die Zusammenarbeit mit `community_economies` bleiben
+Cross-Module-Beziehungen ohne Datenbank-Foreign-Key.
 
 ## Migration-History
 
@@ -53,7 +65,10 @@ Nichtnegativ-Check; auch hier gibt es keinen Foreign Key auf Identity. Credits u
 ihre Read/Modify/Write-Sequenz in einer eigenen `PostgreSqlTransaction` mit
 `SELECT FOR UPDATE` aus. Ein Credit legt die Zeile erst bei einer erfolgreichen fachlichen
 Gutschrift lazy an; ein fehlgeschlagener Debit auf eine fehlende Zeile erzeugt keine Zeile.
+Rewards besitzt zusätzlich eigene Tabellen für Definitionen, Packages, Package-Memberships
+und eindeutige Grant-Records; diese Tabellen werden zusammen mit Economy nur über eine
+gemeinsame PostgreSQL-Transaktion koordiniert.
 
 ## Tests
 
-`FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Der Progression-Slice besitzt eigene PostgreSQL-Tests für Migration, lazy Initialisierung, Domain-Rehydration, Rollback, Not-Found und parallele Grants gegen echte Zeilensperren. Der Economy-Slice prüft Migration, Lazy-Lifecycle, Laden, Debit-Fehler, Overflow-Rollback, Datenbank-Check und konkurrierende Credits sowie Debits gegen echte Zeilensperren. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
+`FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Der Progression-Slice besitzt eigene PostgreSQL-Tests für Migration, lazy Initialisierung, Domain-Rehydration, Rollback, Not-Found und parallele Grants gegen echte Zeilensperren. Der Economy-Slice prüft Migration, Lazy-Lifecycle, Laden, Debit-Fehler, Overflow-Rollback, Datenbank-Check und konkurrierende Credits sowie Debits gegen echte Zeilensperren. Der Rewards-Slice prüft in einem eigenen Testcontainers-Projekt Migration und Idempotenz, Katalogpersistenz, Package-Atomicity, Overflow-Rollback, Partial-State, parallele Duplicate-Grants und die gemeinsame Economy-Transaktion. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
