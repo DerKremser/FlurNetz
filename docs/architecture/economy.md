@@ -1,4 +1,4 @@
-# Economy-Foundation
+# Economy-Vertical-Slice
 
 ## Verantwortung
 
@@ -45,6 +45,53 @@ Die Methoden delegieren die Wertlogik an `EconomyBalance`. Da ein
 ursprünglichen Wert nicht. Die Entity enthält neben den fachlichen Methoden
 ausschließlich `CommunityIdentityId` und `Balance`.
 
+## Persistenz und Lebenszyklus
+
+Der erste persistierte Economy-Zustand entsteht lazy mit der ersten erfolgreichen
+Gutschrift. Dafür legt `CreditEconomyBalance` keine eigene Create-Operation an,
+sondern delegiert an `ICommunityEconomyStore`. Der Store initialisiert eine
+fehlende Zeile innerhalb derselben Transaktion mit einem temporären Saldo von
+0, sperrt sie und führt anschließend `CommunityEconomy.Credit` aus. Erst der
+fachlich berechnete neue Saldo wird gespeichert und committed.
+
+`CommunityEconomy.Create` bedeutet weiterhin ausschließlich einen neuen
+fachlichen Zustand mit Saldo null. `CommunityEconomy.Rehydrate` rekonstruiert
+dagegen einen bereits gespeicherten, zuvor validierten Saldo. Beide Wege bleiben
+getrennt; die Domain kennt weder Dapper noch PostgreSQL.
+
+`DebitEconomyBalance` liest den Zustand innerhalb derselben Transaktion mit
+`SELECT FOR UPDATE`. Fehlt die Zeile, wird fachlich ein verfügbarer Saldo von
+null behandelt. `CommunityEconomy.Debit` wirft dann
+`InsufficientEconomyBalanceException`; die Transaktion rollt zurück und es wird
+keine Economy-Zeile angelegt. Bei einer vorhandenen Zeile wird sie rehydriert,
+mutiert und aktualisiert. Eine erfolgreiche Abbuchung bis exakt null lässt die
+Zeile bestehen.
+
+`Credit` und `Debit` sind damit jeweils vollständige atomare
+Read/Modify/Write-Operationen. PostgreSQL ist die Concurrency-Grenze; es gibt
+keine In-Memory-Sperre. Parallele Credits sperren dieselbe Zeile nach der lazy
+Initialisierung nacheinander, parallele Debits werden durch dieselbe
+Zeilensperre und die Domain-Invariante korrekt begrenzt.
+
+Die interne Persistenzgrenze ist `ICommunityEconomyStore` mit ausschließlich
+`CreditAsync`, `DebitAsync` und `GetByCommunityIdentityIdAsync`. Die beiden
+internen Application Use Cases `CreditEconomyBalance` und
+`DebitEconomyBalance` enthalten weder SQL noch Transaktionssteuerung. Es gibt
+keine öffentliche transaktionsbewusste Store-Überladung, weil noch kein
+Messaging-Consumer eine gemeinsame Transaktion benötigt.
+
+Die Migration `Economy:1:CreateCommunityEconomies` gehört dem Economy-Modul und
+legt `community_economies` mit exakt den Spalten
+`community_identity_id uuid PRIMARY KEY` und `balance bigint NOT NULL` an.
+Ein `CHECK (balance >= 0)` schützt zusätzlich zur Domain vor korrupten negativen
+Zuständen. `CommunityIdentityId` ist zugleich Primärschlüssel, weil aktuell genau
+ein Economy-Zustand je Community existiert. Es gibt bewusst keinen Foreign Key
+auf `community_identities`; die ID bleibt ein fachlicher Cross-Module-Identifier.
+
+Der PostgreSQL-Adapter verwendet ausschließlich parametrisiertes Dapper-SQL.
+Es gibt keine Identity-Abfrage, keine Zeitspalten, keine Economy-ID und kein
+Ledger oder History-Modell.
+
 ## Bewusst nicht vorweggenommen
 
 Der technische und fachliche Saldo wird zunächst neutral modelliert. Eine
@@ -59,14 +106,14 @@ Multi-Currency-Struktur. Das Modell besitzt genau einen Saldo pro
 `CommunityIdentityId`; mehrere Währungen werden erst bei nachgewiesenem
 fachlichem Bedarf bewusst ergänzt.
 
-`FlurNetz.Modules.Economy.Contracts` bleibt leer, weil dieser Foundation-Schritt
-noch keinen echten Cross-Module-Vertrag benötigt. Es gibt noch keine
-Persistence, SQL-Migration, Repository oder Store, keinen Application Use Case,
-kein Messaging, keine Inbox/Outbox und keine Domain- oder Integration Events.
-Ebenso sind noch keine Transfers, Rewards, kein Shop und keine API-Anbindung
-Bestandteil des Moduls. Der Worker bleibt unverändert.
+`FlurNetz.Modules.Economy.Contracts` bleibt leer, weil auch dieser interne
+Vertical Slice noch keinen echten Cross-Module-Vertrag benötigt. Persistence,
+Store, Application Use Cases und die Economy-eigene Migration sind vorhanden;
+es gibt aber weiterhin kein Messaging, keine Inbox/Outbox und keine Domain- oder
+Integration Events. Ebenso sind noch keine Transfers, Rewards, kein Shop und
+keine API-Anbindung Bestandteil des Moduls. Der Worker bleibt unverändert.
 
-Die einzige fachfremde Referenz der Economy-Implementierung ist aktuell
-`FlurNetz.Modules.Identity.Contracts`. Eine Referenz auf Identity-Implementierung,
-Engagement, Progression, Rewards, Shop, Inventory, Messaging oder Persistence
-existiert nicht.
+Die fachfremden Referenzen der Economy-Implementierung sind
+`FlurNetz.Modules.Identity.Contracts` und `FlurNetz.Persistence`. Eine Referenz
+auf die Identity-Implementierung, Engagement, Progression, Rewards, Shop,
+Inventory oder Messaging existiert nicht.

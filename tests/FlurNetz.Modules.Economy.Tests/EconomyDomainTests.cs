@@ -239,6 +239,36 @@ public sealed class CommunityEconomyTests
     }
 
     [Fact]
+    public void Rehydrate_ReconstructsAZeroBalance()
+    {
+        var communityIdentityId = CommunityIdentityId.New();
+
+        var economy = CommunityEconomy.Rehydrate(communityIdentityId, EconomyBalance.Zero);
+
+        Assert.Equal(communityIdentityId, economy.CommunityIdentityId);
+        Assert.Equal(EconomyBalance.Zero, economy.Balance);
+    }
+
+    [Fact]
+    public void Rehydrate_ReconstructsTheProvidedPositiveBalance()
+    {
+        var communityIdentityId = CommunityIdentityId.New();
+        var balance = EconomyBalance.Create(42);
+
+        var economy = CommunityEconomy.Rehydrate(communityIdentityId, balance);
+
+        Assert.Equal(communityIdentityId, economy.CommunityIdentityId);
+        Assert.Equal(balance, economy.Balance);
+    }
+
+    [Fact]
+    public void Rehydrate_RejectsAnInvalidCommunityIdentityId()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            CommunityEconomy.Rehydrate(default, EconomyBalance.Zero));
+    }
+
+    [Fact]
     public void Create_HasNoPublicParameterlessConstructor()
     {
         Assert.Empty(typeof(CommunityEconomy).GetConstructors(BindingFlags.Instance | BindingFlags.Public));

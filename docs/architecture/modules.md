@@ -74,20 +74,23 @@ enthalten sind Level-Logik, Rewards und eine API-Erweiterung.
 
 ## Aktueller Stand des Economy-Moduls
 
-Economy besitzt jetzt seine minimale Domain-Foundation für den community-bezogenen
-Economy-Zustand einer internen `CommunityIdentityId`. `EconomyBalance` ist ein
-unveränderlicher, auf `long` basierender und nicht-negativer Wert. Positive
-Gutschriften akkumulieren sicher bis `long.MaxValue`; ein Overflow wird sichtbar
-abgelehnt. Positive Abbuchungen dürfen den Saldo nicht überziehen und können ihn
-exakt auf null reduzieren.
+Economy besitzt jetzt einen kleinen persistierten Vertical Slice für den community-bezogenen
+Economy-Zustand einer internen `CommunityIdentityId`. `EconomyBalance` ist ein unveränderlicher,
+auf `long` basierender und nicht-negativer Wert. Positive Gutschriften akkumulieren sicher bis
+`long.MaxValue`; ein Overflow wird sichtbar abgelehnt. Positive Abbuchungen dürfen den Saldo
+nicht überziehen und können ihn exakt auf null reduzieren.
 
 `CommunityEconomy` enthält ausschließlich `CommunityIdentityId` und `Balance`, startet
-bei null und verändert den Saldo nur über `Credit` und `Debit`. Die Implementierung
-referenziert neben dem eigenen Contract ausschließlich `Identity.Contracts`.
-`FlurNetz.Modules.Economy.Contracts` bleibt leer; es gibt noch keine Persistence,
-Use Cases, Events, Messaging, Transfers, Rewards, Shop-Funktionalität oder API.
-Eine konkrete Währungsbezeichnung und eine Multi-Currency-Struktur werden bewusst
-nicht vorweggenommen.
+bei null und verändert den Saldo nur über `Credit` und `Debit`. `Create` und `Rehydrate` sind
+getrennte Domain-Wege. Der interne `ICommunityEconomyStore` bietet nur Credit, Debit und Load;
+die Use Cases `CreditEconomyBalance` und `DebitEconomyBalance` enthalten keine SQL- oder
+Transaktionslogik. Der PostgreSQL-Adapter rehydriert den Zustand und führt jede Mutation als
+atomare Read/Modify/Write-Transaktion mit `SELECT FOR UPDATE` aus. Credits legen einen fehlenden
+Zustand erst bei Erfolg lazy an; ein Debit auf einen fehlenden Zustand behandelt den Saldo als
+null, wirft bei positivem Betrag `InsufficientEconomyBalanceException` und legt keine Zeile an.
+`FlurNetz.Modules.Economy.Contracts` bleibt leer. Eine konkrete Währungsbezeichnung und eine
+Multi-Currency-Struktur werden bewusst nicht vorweggenommen; Events, Messaging, Transfers,
+Rewards, Shop-Funktionalität und API gehören weiterhin nicht zum Slice.
 
 ## Contracts und Implementierung
 
@@ -98,8 +101,8 @@ mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme; Engagement b
 seine Domain-Foundation und mit dem Message-Event den ersten öffentlichen Contract. Progression
 besitzt mit Domain, Application, Persistence-Adapter, Migration, Consumer und Registrierung
 einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Contract. Economy besitzt
-mit `EconomyBalance` und `CommunityEconomy` eine Domain-Foundation, benötigt aber ebenfalls noch
-keinen öffentlichen Contract.
+mit Domain, Application, Persistence-Adapter, Migration und Registrierung ebenfalls einen internen
+Vertical Slice, benötigt aber keinen öffentlichen Contract.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -107,7 +110,9 @@ aktuell nur Domain, Application, den Persistenzadapter, die fachliche Migration 
 Registrierung der tatsächlich vorhandenen Komponenten. Engagement nutzt dieselben Schichten
 für seinen Message-Recording-Slice und registriert Use Case, Repository, Migration und Uhr.
 Progression nutzt Domain, Application, einen atomaren Store, Migration, Consumer und Registrierung;
-der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Die übrigen
+der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy nutzt Domain,
+Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
+und es gibt keine öffentliche API. Die übrigen
 Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
@@ -122,7 +127,8 @@ Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minim
 und Engagement-Unit- sowie PostgreSQL-Integrationstests prüfen jeweils die vorhandenen Domain-
 und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Progression wird
 zusätzlich mit Domain-, Use-Case-, Migration-, Rollback-, Load- und echten PostgreSQL-
-Concurrency-Tests abgesichert. Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
+Concurrency-Tests abgesichert. Economy besitzt eigene Domain-, Use-Case-, Migration-, Lifecycle-,
+Rollback-, Load- und echte PostgreSQL-Concurrency-Tests. Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
 den vollständigen Outbox-/Inbox-Weg sowie Producer- und Consumer-Atomicity gegen PostgreSQL.
 Die Architecture Tests prüfen zusätzlich Event Ownership, Contract-Minimalität, erlaubte
 Messaging-Kanten und die Consumer-Grenzen automatisiert.

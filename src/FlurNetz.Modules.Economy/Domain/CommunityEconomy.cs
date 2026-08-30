@@ -37,14 +37,25 @@ public sealed class CommunityEconomy
     /// <exception cref="ArgumentException">Wenn <paramref name="communityIdentityId"/> leer ist.</exception>
     public static CommunityEconomy Create(CommunityIdentityId communityIdentityId)
     {
-        if (communityIdentityId.Value == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "Eine Community-Economy benötigt eine nicht leere Community-Identity-ID.",
-                nameof(communityIdentityId));
-        }
+        EnsureValidCommunityIdentityId(communityIdentityId);
 
         return new CommunityEconomy(communityIdentityId);
+    }
+
+    /// <summary>
+    /// Rekonstruiert einen bereits persistierten Economy-Zustand ohne fachliche Neuanlage.
+    /// </summary>
+    /// <param name="communityIdentityId">Die gültige interne Community-Identity-ID.</param>
+    /// <param name="balance">Der bereits validierte, gespeicherte Economy-Saldo.</param>
+    /// <returns>Der exakt rekonstruierte Economy-Zustand.</returns>
+    /// <exception cref="ArgumentException">Wenn <paramref name="communityIdentityId"/> leer ist.</exception>
+    public static CommunityEconomy Rehydrate(
+        CommunityIdentityId communityIdentityId,
+        EconomyBalance balance)
+    {
+        EnsureValidCommunityIdentityId(communityIdentityId);
+
+        return new CommunityEconomy(communityIdentityId, balance);
     }
 
     /// <summary>
@@ -67,5 +78,23 @@ public sealed class CommunityEconomy
     public void Debit(long amount)
     {
         Balance = Balance.Debit(amount);
+    }
+
+    private CommunityEconomy(
+        CommunityIdentityId communityIdentityId,
+        EconomyBalance balance)
+    {
+        CommunityIdentityId = communityIdentityId;
+        Balance = balance;
+    }
+
+    private static void EnsureValidCommunityIdentityId(CommunityIdentityId communityIdentityId)
+    {
+        if (communityIdentityId.Value == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Eine Community-Economy benötigt eine nicht leere Community-Identity-ID.",
+                nameof(communityIdentityId));
+        }
     }
 }
