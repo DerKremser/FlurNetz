@@ -7,8 +7,8 @@ namespace FlurNetz.Modules.Inventory.Domain;
 /// </summary>
 /// <remarks>
 /// Die Kombination aus <see cref="CommunityIdentityId"/> und <see cref="ItemDefinitionId"/>
-/// bezeichnet die fachliche Bestandsposition. Der Zustand startet bei null. Herkunft, Preise,
-/// Rewards, Käufe und Plattformidentitäten sind keine Verantwortung dieser Foundation.
+/// bezeichnet die fachliche Bestandsposition. Neue Positionen starten bei null. Herkunft,
+/// Preise, Rewards, Käufe und Plattformidentitäten sind keine Verantwortung von Inventory.
 /// </remarks>
 public sealed class CommunityInventoryEntry
 {
@@ -19,6 +19,16 @@ public sealed class CommunityInventoryEntry
         CommunityIdentityId = communityIdentityId;
         ItemDefinitionId = itemDefinitionId;
         Quantity = InventoryQuantity.Zero;
+    }
+
+    private CommunityInventoryEntry(
+        CommunityIdentityId communityIdentityId,
+        ItemDefinitionId itemDefinitionId,
+        InventoryQuantity quantity)
+    {
+        CommunityIdentityId = communityIdentityId;
+        ItemDefinitionId = itemDefinitionId;
+        Quantity = quantity;
     }
 
     /// <summary>
@@ -53,6 +63,27 @@ public sealed class CommunityInventoryEntry
         EnsureValidItemDefinitionId(itemDefinitionId);
 
         return new CommunityInventoryEntry(communityIdentityId, itemDefinitionId);
+    }
+
+    /// <summary>
+    /// Rekonstruiert eine bereits persistierte Bestandsposition ohne fachliche Neuanlage.
+    /// </summary>
+    /// <param name="communityIdentityId">Die gültige interne Community-Identity-ID.</param>
+    /// <param name="itemDefinitionId">Die gültige Item-Definition-ID.</param>
+    /// <param name="quantity">Die bereits validierte gespeicherte Menge.</param>
+    /// <returns>Die exakt rekonstruierte Inventory-Bestandsposition.</returns>
+    /// <exception cref="ArgumentException">
+    /// Wenn <paramref name="communityIdentityId"/> oder <paramref name="itemDefinitionId"/> leer ist.
+    /// </exception>
+    public static CommunityInventoryEntry Rehydrate(
+        CommunityIdentityId communityIdentityId,
+        ItemDefinitionId itemDefinitionId,
+        InventoryQuantity quantity)
+    {
+        EnsureValidCommunityIdentityId(communityIdentityId);
+        EnsureValidItemDefinitionId(itemDefinitionId);
+
+        return new CommunityInventoryEntry(communityIdentityId, itemDefinitionId, quantity);
     }
 
     /// <summary>

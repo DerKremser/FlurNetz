@@ -34,7 +34,10 @@ Der `MigrationRunner` sortiert Migrationen deterministisch nach Owner, Version u
 Rewards besitzt die Migration `Rewards:1:CreateRewardConfigurationAndGrants` selbst. Sie
 legt die Rewards-eigenen Tabellen und ausschließlich deren interne Foreign Keys an. Die
 fachliche `community_identity_id` sowie die Zusammenarbeit mit `community_economies` bleiben
-Cross-Module-Beziehungen ohne Datenbank-Foreign-Key.
+Cross-Module-Beziehungen ohne Datenbank-Foreign-Key. Inventory besitzt
+`Inventory:1:CreateCommunityInventoryEntries` mit Composite Primary Key aus
+`community_identity_id + item_definition_id` und einem Nichtnegativ-Check für `quantity`.
+Die Tabelle enthält ebenfalls keine Cross-Module-Foreign-Keys.
 
 ## Migration-History
 
@@ -67,8 +70,11 @@ ihre Read/Modify/Write-Sequenz in einer eigenen `PostgreSqlTransaction` mit
 Gutschrift lazy an; ein fehlgeschlagener Debit auf eine fehlende Zeile erzeugt keine Zeile.
 Rewards besitzt zusätzlich eigene Tabellen für Definitionen, Packages, Package-Memberships
 und eindeutige Grant-Records; diese Tabellen werden zusammen mit Economy nur über eine
-gemeinsame PostgreSQL-Transaktion koordiniert.
+gemeinsame PostgreSQL-Transaktion koordiniert. Inventory besitzt zusätzlich
+`community_inventory_entries`. Der Store initialisiert eine fehlende Position nur im Add-Pfad,
+sperrt die Composite-Key-Zeile mit `SELECT FOR UPDATE` und löscht sie wieder, sobald Remove den
+Bestand exakt auf null reduziert. Ein fehlender Remove erzeugt keine Zeile.
 
 ## Tests
 
-`FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Der Progression-Slice besitzt eigene PostgreSQL-Tests für Migration, lazy Initialisierung, Domain-Rehydration, Rollback, Not-Found und parallele Grants gegen echte Zeilensperren. Der Economy-Slice prüft Migration, Lazy-Lifecycle, Laden, Debit-Fehler, Overflow-Rollback, Datenbank-Check und konkurrierende Credits sowie Debits gegen echte Zeilensperren. Der Rewards-Slice prüft in einem eigenen Testcontainers-Projekt Migration und Idempotenz, Katalogpersistenz, Package-Atomicity, Overflow-Rollback, Partial-State, parallele Duplicate-Grants und die gemeinsame Economy-Transaktion. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
+`FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Der Progression-Slice besitzt eigene PostgreSQL-Tests für Migration, lazy Initialisierung, Domain-Rehydration, Rollback, Not-Found und parallele Grants gegen echte Zeilensperren. Der Economy-Slice prüft Migration, Lazy-Lifecycle, Laden, Debit-Fehler, Overflow-Rollback, Datenbank-Check und konkurrierende Credits sowie Debits gegen echte Zeilensperren. Der Rewards-Slice prüft in einem eigenen Testcontainers-Projekt Migration und Idempotenz, Katalogpersistenz, Package-Atomicity, Overflow-Rollback, Partial-State, parallele Duplicate-Grants und die gemeinsame Economy-Transaktion. Der Inventory-Slice besitzt eigene echte PostgreSQL-Tests für Composite Key, Sparse-Lifecycle, Rollback, Isolation mehrerer Bestandspositionen und konkurrierende Adds sowie Removes. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.

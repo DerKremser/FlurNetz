@@ -4,6 +4,10 @@
 
 ### Hinzugefügt
 
+- Erster persistierter Inventory-Vertical-Slice mit atomaren Add-/Remove-Operationen.
+- Inventory-eigene PostgreSQL-Migration mit Composite Primary Key und Nichtnegativ-Check.
+- Sparse Inventory-Persistenz: Bestände bei null werden gelöscht und fehlende Removes legen keine Zeile an.
+- Echte PostgreSQL-Integrationstests für Lifecycle, Rollback, Isolation und konkurrierende Bestandsänderungen.
 - Minimale Inventory-Domain für community-bezogene Item-Bestände.
 - Stabile `ItemDefinitionId` sowie nicht-negative, overflow-sichere Inventory-Mengen.
 - Fachliche Bestandsänderungen mit Schutz vor Unterbestand und ohne Rewards-/Shop-Kopplung.

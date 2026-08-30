@@ -1,9 +1,13 @@
 using System.Reflection;
+using FlurNetz.Modules.Inventory.Application;
+using FlurNetz.Modules.Inventory.Domain;
+using FlurNetz.Modules.Inventory.Migrations;
+using FlurNetz.Modules.Inventory.Persistence;
 
 namespace FlurNetz.Architecture.Tests;
 
 /// <summary>
-/// Sichert den bewusst kleinen Umfang und die Abhängigkeitsgrenze der Inventory-Foundation.
+/// Sichert Scope, Typ-Ownership und Abhängigkeitsgrenzen des persistierten Inventory-Slices.
 /// </summary>
 public sealed class InventoryArchitectureTests
 {
@@ -14,16 +18,21 @@ public sealed class InventoryArchitectureTests
         ModuleArchitectureCatalog.LoadAssembly("FlurNetz.Modules.Inventory.Contracts");
 
     [Fact]
-    public void InventoryImplementationReferencesOnlyItsContractsAndIdentityContracts()
+    public void InventoryImplementationReferencesOnlyApprovedProjects()
     {
         var references = GetReferencedAssemblyNames(InventoryImplementationAssembly);
         var allowedReferences = new HashSet<string>(StringComparer.Ordinal)
         {
             "FlurNetz.Modules.Inventory.Contracts",
-            "FlurNetz.Modules.Identity.Contracts"
+            "FlurNetz.Modules.Identity.Contracts",
+            "FlurNetz.Persistence"
         };
 
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
+        Assert.Contains("FlurNetz.Persistence", references);
+        Assert.DoesNotContain("FlurNetz.Messaging", references);
+        Assert.DoesNotContain("FlurNetz.Modules.Rewards", references);
+        Assert.DoesNotContain("FlurNetz.Modules.Shop", references);
         Assert.All(references, reference => Assert.Contains(reference, allowedReferences));
     }
 
@@ -52,13 +61,40 @@ public sealed class InventoryArchitectureTests
     }
 
     [Fact]
-    public void InventoryFoundationContainsNoOutOfScopeProductiveTypes()
+    public void InventoryPersistenceAndApplicationTypesRemainInImplementationAssembly()
+    {
+        Assert.Equal(InventoryImplementationAssembly, typeof(ICommunityInventoryStore).Assembly);
+        Assert.Equal(InventoryImplementationAssembly, typeof(CommunityInventoryStore).Assembly);
+        Assert.Equal(InventoryImplementationAssembly, typeof(InventoryMigrationSource).Assembly);
+        Assert.Equal(InventoryImplementationAssembly, typeof(AddInventoryQuantity).Assembly);
+        Assert.Equal(InventoryImplementationAssembly, typeof(RemoveInventoryQuantity).Assembly);
+
+        Assert.DoesNotContain(typeof(ICommunityInventoryStore), InventoryContractsAssembly.GetTypes());
+        Assert.DoesNotContain(typeof(CommunityInventoryStore), InventoryContractsAssembly.GetTypes());
+        Assert.DoesNotContain(typeof(AddInventoryQuantity), InventoryContractsAssembly.GetTypes());
+        Assert.DoesNotContain(typeof(RemoveInventoryQuantity), InventoryContractsAssembly.GetTypes());
+    }
+
+    [Fact]
+    public void InventoryMigrationOwnsOnlyItsTableAndHasNoCrossModuleSqlDependency()
+    {
+        var migration = Assert.Single(new InventoryMigrationSource().GetMigrations());
+
+        Assert.Equal("Inventory", migration.Owner);
+        Assert.Equal(1L, migration.Version);
+        Assert.Equal("CreateCommunityInventoryEntries", migration.Name);
+        Assert.Contains("community_inventory_entries", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("community_identities", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("reward_", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("shop", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REFERENCES", migration.Sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void InventoryContainsNoMessagingRewardsOrShopProductTypes()
     {
         var forbiddenNameParts = new[]
         {
-            "Repository",
-            "Store",
-            "Migration",
             "Event",
             "Message",
             "Inbox",
@@ -69,9 +105,6 @@ public sealed class InventoryArchitectureTests
             "Purchase",
             "Price",
             "Cost",
-            "Service",
-            "Handler",
-            "UseCase",
             "Grant"
         };
 
@@ -79,6 +112,32 @@ public sealed class InventoryArchitectureTests
             .GetTypes()
             .Where(type => forbiddenNameParts.Any(namePart =>
                 type.Name.Contains(namePart, StringComparison.Ordinal)))
+            .Select(type => type.FullName)
+            .ToArray();
+
+        Assert.Empty(forbiddenTypes);
+    }
+
+    [Fact]
+    public void InventoryContainsNoGenericRepositoryTypes()
+    {
+        var forbiddenTypes = InventoryImplementationAssembly
+            .GetExportedTypes()
+            .Where(type => type.IsGenericType
+                && type.Name.Split('`')[0] is "IRepository" or "Repository" or "GenericRepository")
+            .Select(type => type.FullName)
+            .ToArray();
+
+        Assert.Empty(forbiddenTypes);
+    }
+
+    [Fact]
+    public void InventoryContainsNoExternalPlatformIdentityTypes()
+    {
+        var forbiddenTypes = InventoryImplementationAssembly
+            .GetTypes()
+            .Where(type => ModuleArchitectureCatalog.ExternalPlatformNames.Any(platformName =>
+                type.Name.StartsWith(platformName, StringComparison.Ordinal)))
             .Select(type => type.FullName)
             .ToArray();
 
