@@ -21,14 +21,18 @@ FlurNetz bildet die vorgesehenen Fachmodule zunächst als physische Assembly-Gre
 
 ## Aktueller Stand des Identity-Moduls
 
-Identity ist das erste Modul mit einer fachlichen Foundation. `FlurNetz.Modules.Identity.Contracts`
-enthält ausschließlich den stabilen internen Identifier `CommunityIdentityId`. Die
-Implementierungs-Assembly enthält unter `Domain/` die minimale `CommunityIdentity`, die nur
-diese unveränderliche ID trägt.
+Identity ist das erste Modul mit einem vollständigen, bewusst kleinen fachlichen Vertical Slice.
+`FlurNetz.Modules.Identity.Contracts` enthält ausschließlich den stabilen internen Identifier
+`CommunityIdentityId`. Die Implementierungs-Assembly enthält die minimale `CommunityIdentity`,
+den `CreateCommunityIdentity`-Use-Case, einen moduleigenen Persistenz-Port, den Dapper-/Npgsql-
+Adapter und die Identity-eigene Migration `Identity:1:CreateCommunityIdentities`.
 
-Damit ist noch kein vollständiger Identity-Use-Case implementiert. Insbesondere gibt es keine
-fachliche Persistenz, Migration, Repositories, API, Plattformkonten, Authentifizierung oder
-fachlichen Events.
+Der Slice kann eine neue interne Identität erzeugen, in PostgreSQL speichern und über ihre ID
+wieder laden. Die fachliche Tabelle enthält ausschließlich den UUID-Primärschlüssel `id`.
+Migration und Persistenz werden durch echte PostgreSQL-Integrationstests geprüft.
+
+Weiterhin nicht enthalten sind eine API, HTTP-Schicht, weitere Identity-Use-Cases,
+Plattformkonten, Authentifizierung, Profile sowie fachliche Domain- oder Integration Events.
 
 ## Contracts und Implementierung
 
@@ -38,17 +42,18 @@ Commands, Queries, Services, Repositories, Entities, Value Objects oder Events. 
 mit `CommunityIdentityId` die bewusst minimale Foundation-Ausnahme und enthält darüber hinaus
 keine vorsorglichen Verträge.
 
-Die Implementierungs-Assembly ist der spätere Ort für Domain, Application, interne
-Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity enthält bereits
-die minimale Domain-Identität `CommunityIdentity` und referenziert nur das eigene
-Contracts-Projekt. Die übrigen Implementierungs-Assemblies bleiben in diesem Schritt fachlich
-leer.
+Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
+Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
+aktuell nur Domain, Application, den Persistenzadapter, die fachliche Migration und die
+Registrierung der tatsächlich vorhandenen Komponenten. Die übrigen Implementierungs-Assemblies
+bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Cross-Module-Kommunikation erfolgt später ausschließlich über freigegebene öffentliche Contracts und Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine vorsorglichen Shared-Entities.
 
-Die modulbezogenen Testprojekte sind zunächst technisch minimal. Das Identity-Testprojekt prüft
-die Invarianten der Foundation; weitere fachliche Tests kommen mit den jeweiligen Vertical Slices
-hinzu. Die Architecture Tests prüfen die Assembly-, Referenz- und Namespace-Grenzen automatisiert.
+Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
+Unit- und PostgreSQL-Integrationstests prüfen Domain, Use Case, Migration, Commit/Rollback,
+Primärschlüssel und Laden. Die Architecture Tests prüfen die Assembly-, Referenz- und
+Namespace-Grenzen automatisiert.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 
@@ -67,9 +72,9 @@ hinzu. Die Architecture Tests prüfen die Assembly-, Referenz- und Namespace-Gre
 13. Integrations
 14. Administration
 
-Diese Reihenfolge dokumentiert die Umsetzung. Identity besitzt als erstes Referenzmodul bereits
-eine minimale interne Community Identity; der vollständige Identity-Use-Case folgt in einem
-separaten Vertical Slice.
+Diese Reihenfolge dokumentiert die Umsetzung. Identity ist als erstes Referenzmodul mit einem
+minimalen Vertical Slice umgesetzt; weitere fachliche Identity-Funktionalität folgt erst mit
+konkretem Bedarf.
 
 ## Cross-Cutting-Fähigkeiten
 
