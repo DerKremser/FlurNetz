@@ -59,7 +59,11 @@ internal static class ModuleArchitectureCatalog
                 "Economy" =>
                     [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
                 "Rewards" =>
-                    [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
+                    [
+                        ContractsAssemblyName,
+                        "FlurNetz.Modules.Identity.Contracts",
+                        "FlurNetz.Modules.Economy.Contracts"
+                    ],
                 _ => [ContractsAssemblyName]
             };
     }

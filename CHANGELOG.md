@@ -4,6 +4,9 @@
 
 ### Hinzugefügt
 
+- Erster persistierter Rewards-Vertical-Slice mit Reward Definitions, Packages und eindeutigen Grant-Records.
+- Atomare Economy-Balance-Rewards über eine schmale öffentliche Economy-Contract-Grenze.
+- Idempotente Grant-Ausführung über `SourceType`, `SourceId` und `RewardDefinitionId` einschließlich Nebenläufigkeits- und Rollback-Tests.
 - Minimale Rewards-Domain mit Reward Definitions, Packages, Sources und Grant-Records.
 - Erste konkrete Reward Definition für eine spätere Economy-Balance-Gutschrift.
 - Minimale Economy-Domain für nicht-negative Community-Salden.

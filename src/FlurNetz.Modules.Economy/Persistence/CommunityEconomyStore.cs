@@ -16,7 +16,9 @@ namespace FlurNetz.Modules.Economy.Persistence;
 /// <c>ON CONFLICT DO NOTHING</c>. Beide Mutationen sperren anschließend die Zeile mit
 /// <c>FOR UPDATE</c>, rehydrieren die Domain, führen deren fachliche Methode aus und
 /// schreiben das Ergebnis innerhalb derselben Transaktion zurück. Debit legt bei einer
-/// fehlenden Zeile bewusst keinen Nullzustand an.
+/// fehlenden Zeile bewusst keinen Nullzustand an. Der transaction-aware Credit-Overload
+/// führt keinen Commit aus, damit ein aufrufendes Modul die gemeinsame Transaktionsgrenze
+/// besitzt.
 /// </remarks>
 public sealed class CommunityEconomyStore : ICommunityEconomyStore
 {
@@ -76,7 +78,7 @@ public sealed class CommunityEconomyStore : ICommunityEconomyStore
 
         try
         {
-            var result = await CreditInTransactionAsync(
+            var result = await CreditAsync(
                 communityIdentityId,
                 amount,
                 transaction.Connection,
@@ -92,6 +94,40 @@ public sealed class CommunityEconomyStore : ICommunityEconomyStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<EconomyBalance> CreditAsync(
+        CommunityIdentityId communityIdentityId,
+        long amount,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
+
+        await connection.ExecuteAsync(
+                new CommandDefinition(
+                    InitializeSql,
+                    new { CommunityIdentityId = validCommunityIdentityId.Value },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        var row = await connection.QuerySingleAsync<EconomyRow>(
+                new CommandDefinition(
+                    SelectForUpdateSql,
+                    new { CommunityIdentityId = validCommunityIdentityId.Value },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        var economy = ToDomain(row);
+        economy.Credit(amount);
+        return await UpdateAsync(economy, connection, transaction, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -143,36 +179,6 @@ public sealed class CommunityEconomyStore : ICommunityEconomyStore
             .ConfigureAwait(false);
 
         return row is null ? null : ToDomain(row);
-    }
-
-    private static async Task<EconomyBalance> CreditInTransactionAsync(
-        CommunityIdentityId communityIdentityId,
-        long amount,
-        DbConnection connection,
-        DbTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
-
-        await connection.ExecuteAsync(
-                new CommandDefinition(
-                    InitializeSql,
-                    new { CommunityIdentityId = validCommunityIdentityId.Value },
-                    transaction: transaction,
-                    cancellationToken: cancellationToken))
-            .ConfigureAwait(false);
-
-        var row = await connection.QuerySingleAsync<EconomyRow>(
-                new CommandDefinition(
-                    SelectForUpdateSql,
-                    new { CommunityIdentityId = validCommunityIdentityId.Value },
-                    transaction: transaction,
-                    cancellationToken: cancellationToken))
-            .ConfigureAwait(false);
-
-        var economy = ToDomain(row);
-        economy.Credit(amount);
-        return await UpdateAsync(economy, connection, transaction, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<EconomyBalance> DebitInTransactionAsync(
