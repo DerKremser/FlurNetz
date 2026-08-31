@@ -1,4 +1,6 @@
 using FlurNetz.BuildingBlocks.Time;
+using FlurNetz.Messaging.Integration;
+using FlurNetz.Messaging.Serialization;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Shop.Application;
@@ -52,6 +54,42 @@ public sealed class ShopPurchaseTests
 
         Assert.Equal(42, purchase.PricePaid.Value);
         Assert.All(typeof(ShopPurchase).GetProperties(), property => Assert.Null(property.GetSetMethod()));
+    }
+
+    [Fact]
+    public void PurchaseCompletedEventRoundTripsThroughRegisteredJsonSerializer()
+    {
+        var timestamp = new DateTimeOffset(2026, 8, 31, 16, 15, 0, TimeSpan.Zero);
+        var integrationEvent = new ShopPurchaseCompletedIntegrationEvent(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            25,
+            timestamp);
+        var registry = new IntegrationEventTypeRegistry();
+        registry.Register<ShopPurchaseCompletedIntegrationEvent>(
+            ShopPurchaseCompletedIntegrationEvent.MessageType,
+            ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
+        var serializer = new IntegrationEventJsonSerializer(registry);
+        var envelope = new IntegrationEventEnvelope(
+            Guid.NewGuid(),
+            ShopPurchaseCompletedIntegrationEvent.MessageType,
+            ShopPurchaseCompletedIntegrationEvent.SchemaVersion,
+            timestamp,
+            integrationEvent,
+            "purchase-request");
+
+        var serialized = serializer.Serialize(envelope);
+        var deserialized = Assert.IsType<ShopPurchaseCompletedIntegrationEvent>(
+            serializer.Deserialize(serialized));
+
+        Assert.Equal(integrationEvent.ShopPurchaseId, deserialized.ShopPurchaseId);
+        Assert.Equal(integrationEvent.ShopOfferId, deserialized.ShopOfferId);
+        Assert.Equal(integrationEvent.CommunityIdentityId, deserialized.CommunityIdentityId);
+        Assert.Equal(integrationEvent.ItemDefinitionId, deserialized.ItemDefinitionId);
+        Assert.Equal(integrationEvent.PricePaid, deserialized.PricePaid);
+        Assert.Equal(integrationEvent.PurchasedAtUtc, deserialized.PurchasedAtUtc);
     }
 
     [Fact]
