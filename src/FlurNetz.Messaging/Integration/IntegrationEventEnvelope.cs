@@ -46,8 +46,8 @@ public sealed record IntegrationEventEnvelope
         this.SchemaVersion = SchemaVersion;
         this.OccurredAtUtc = OccurredAtUtc;
         this.Payload = Guard.NotNull(Payload, nameof(Payload));
-        CorrelationId = string.IsNullOrWhiteSpace(CorrelationId) ? null : CorrelationId;
-        CausationId = string.IsNullOrWhiteSpace(CausationId) ? null : CausationId;
+        this.CorrelationId = string.IsNullOrWhiteSpace(CorrelationId) ? null : CorrelationId;
+        this.CausationId = string.IsNullOrWhiteSpace(CausationId) ? null : CausationId;
     }
 
     /// <summary>
