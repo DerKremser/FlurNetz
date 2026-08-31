@@ -21,19 +21,20 @@ FlurNetz bildet die vorgesehenen Fachmodule zunächst als physische Assembly-Gre
 
 ## Aktueller Stand des Identity-Moduls
 
-Identity ist das erste Modul mit einem vollständigen, bewusst kleinen fachlichen Vertical Slice.
-`FlurNetz.Modules.Identity.Contracts` enthält ausschließlich den stabilen internen Identifier
-`CommunityIdentityId`. Die Implementierungs-Assembly enthält die minimale `CommunityIdentity`,
-den `CreateCommunityIdentity`-Use-Case, einen moduleigenen Persistenz-Port, den Dapper-/Npgsql-
-Adapter und die Identity-eigene Migration `Identity:1:CreateCommunityIdentities`.
+Identity besitzt weiterhin den minimalen persistierten Vertical Slice für die zentrale
+interne `CommunityIdentityId`. `CommunityIdentity`, `CreateCommunityIdentity`, der
+moduleigene Repository-Port und `Identity:1:CreateCommunityIdentities` bleiben unverändert.
 
-Der Slice kann eine neue interne Identität erzeugen, in PostgreSQL speichern und über ihre ID
-wieder laden. Die fachliche Tabelle enthält ausschließlich den UUID-Primärschlüssel `id`.
-Migration und Persistenz werden durch echte PostgreSQL-Integrationstests geprüft.
+`Identity.Contracts` enthält jetzt genau zwei öffentliche Typen:
+`CommunityIdentityId` und die caller-neutrale `ICommunityIdentityExistence`-Capability.
+Die Capability prüft die Existenz einer internen Identität innerhalb einer vom aufrufenden
+Slice bereitgestellten `DbConnection`/`DbTransaction` und führt keinen Commit aus.
+Der Shop-Purchase ist der erste Aufrufer. Identity kennt Shop nicht und veröffentlicht weder
+Repository noch Domainobjekt oder SQL-Persistenz.
 
-Der vorhandene Use Case ist jetzt über `FlurNetz.Api` als HTTP-Adapter erreichbar. Weiterhin
-nicht enthalten sind weitere Identity-Use-Cases, Plattformkonten, Authentifizierung, Profile
-sowie fachliche Domain- oder Integration Events.
+Der bestehende Create-Use-Case bleibt über `FlurNetz.Api` erreichbar. Plattformkonten,
+Authentifizierung, Profile sowie Identity-eigene Domain- oder Integration Events sind weiterhin
+nicht enthalten. Details stehen in [identity.md](identity.md).
 
 ## Aktueller Stand des Engagement-Moduls
 
@@ -74,27 +75,20 @@ enthalten sind Level-Logik, Rewards und eine API-Erweiterung.
 
 ## Aktueller Stand des Economy-Moduls
 
-Economy besitzt jetzt einen kleinen persistierten Vertical Slice für den community-bezogenen
-Economy-Zustand einer internen `CommunityIdentityId`. `EconomyBalance` ist ein unveränderlicher,
-auf `long` basierender und nicht-negativer Wert. Positive Gutschriften akkumulieren sicher bis
-`long.MaxValue`; ein Overflow wird sichtbar abgelehnt. Positive Abbuchungen dürfen den Saldo
-nicht überziehen und können ihn exakt auf null reduzieren.
+Economy besitzt den persistierten, community-bezogenen Saldo einer internen
+`CommunityIdentityId`. `EconomyBalance` ist ein unveränderlicher, nicht-negativer
+`long`-Wert; Credit schützt vor Overflow, Debit vor Überziehung. Der interne Store führt
+beide Mutationen mit `SELECT FOR UPDATE` aus.
 
-`CommunityEconomy` enthält ausschließlich `CommunityIdentityId` und `Balance`, startet
-bei null und verändert den Saldo nur über `Credit` und `Debit`. `Create` und `Rehydrate` sind
-getrennte Domain-Wege. Der interne `ICommunityEconomyStore` bietet Credit, Debit, Load und
-einen transaction-aware Credit-Overload ohne eigenen Commit. Die Use Cases
-`CreditEconomyBalance` und `DebitEconomyBalance` enthalten keine SQL- oder
-Transaktionslogik. Der PostgreSQL-Adapter rehydriert den Zustand und führt jede Mutation als
-atomare Read/Modify/Write-Transaktion mit `SELECT FOR UPDATE` aus. Credits legen einen fehlenden
-Zustand erst bei Erfolg lazy an; ein Debit auf einen fehlenden Zustand behandelt den Saldo als
-null, wirft bei positivem Betrag `InsufficientEconomyBalanceException` und legt keine Zeile an.
-`FlurNetz.Modules.Economy.Contracts` enthält nun ausschließlich die neutrale Fähigkeit
-`IEconomyBalanceCredit` mit `CommunityIdentityId`, `long`, `DbConnection` und `DbTransaction`.
-Sie ermöglicht eine gemeinsame Transaktion mit einem aufrufenden Slice; Economy kennt Rewards
-dabei nicht. Eine konkrete Währungsbezeichnung und eine Multi-Currency-Struktur werden bewusst
-nicht vorweggenommen; Events, Messaging, Transfers, Rewards-Trigger, Shop-Funktionalität und
-API gehören weiterhin nicht zum Slice.
+Neben den normalen atomaren Store-Pfaden existieren transaction-aware Overloads für Credit
+und Debit ohne eigenen Commit. `Economy.Contracts` veröffentlicht ausschließlich
+`IEconomyBalanceCredit` und `IEconomyBalanceDebit`, jeweils mit
+`CommunityIdentityId`, Betrag, `DbConnection` und `DbTransaction`. Rewards verwendet
+Credit; der Shop-Purchase verwendet Debit. Economy kennt keinen der Aufrufer und behält
+Domain-, Lock- und Tabellenownership vollständig selbst.
+
+Eine konkrete Währungsbezeichnung, Multi-Currency, Transfers, Ledger, Economy-eigenes
+Messaging und API gehören weiterhin nicht zum Slice. Details stehen in [economy.md](economy.md).
 
 ## Aktueller Stand des Rewards-Moduls
 
@@ -122,45 +116,49 @@ Es gibt noch keinen Runtime-Trigger, keine API und keine Worker-Anbindung.
 
 ## Aktueller Stand des Inventory-Moduls
 
-Inventory besitzt jetzt den ersten persistierten Vertical Slice für mengenbasierte Bestände.
-`ItemDefinitionId` und `InventoryQuantity` bleiben die minimalen Fachtypen;
-`CommunityInventoryEntry` besitzt zusätzlich einen expliziten Rehydration-Weg.
+Inventory besitzt den persistierten mengenbasierten Bestand mit
+`CommunityIdentityId + ItemDefinitionId` als fachlicher Position. Der
+`CommunityInventoryStore` verwendet PostgreSQL, Dapper und `SELECT FOR UPDATE`; Add legt
+fehlende Positionen lazy an, Remove erzeugt keine fehlenden Positionen und löscht Zeilen bei
+Bestand null. `Inventory:1:CreateCommunityInventoryEntries` bleibt unverändert und besitzt
+keinen Cross-Module-Foreign-Key.
 
-Der interne `ICommunityInventoryStore` bietet atomare Add-, Remove- und Load-Operationen.
-`CommunityInventoryStore` verwendet PostgreSQL, Dapper und `SELECT FOR UPDATE` auf dem
-Composite Key aus `CommunityIdentityId + ItemDefinitionId`. Add legt eine fehlende Position
-lazy an. Remove legt fehlende Positionen nicht an und löscht eine vorhandene Zeile, wenn der
-Bestand exakt null erreicht. Die Migration
-`Inventory:1:CreateCommunityInventoryEntries` gehört ausschließlich Inventory und erzwingt
-`quantity >= 0` ohne Cross-Module-Foreign-Key.
+`Inventory.Contracts` enthält `ItemDefinitionId` und die caller-neutrale
+`IInventoryQuantityGrant`-Capability. Sie nimmt zusätzlich
+`CommunityIdentityId`, einen positiven Betrag sowie `DbConnection` und
+`DbTransaction` entgegen und führt keinen eigenen Commit aus. Der Adapter delegiert an
+denselben transaction-aware Add-Kern und bewahrt dadurch Domain-, Row-Lock- und
+Sparse-Lifecycle. Shop ist der erste Aufrufer, Inventory kennt Shop jedoch nicht.
 
-`FlurNetz.Modules.Inventory.Contracts` enthält ausschließlich `ItemDefinitionId`. Die
-Implementierung referenziert neben dem eigenen Contract ausschließlich `Identity.Contracts` und
-die technische Persistence-Assembly.
-Messaging, Rewards- und Shop-Anbindung, Item-Katalog, API, Admin UI und Worker bleiben ausgeschlossen.
-Details stehen in [inventory.md](inventory.md).
+Item-Katalog, Messaging, Rewards-Ausführung, API, Admin UI und Worker bleiben außerhalb des
+Inventory-Moduls. Details stehen in [inventory.md](inventory.md).
 
 ## Aktueller Stand des Shop-Moduls
 
-Der zweite Shop-Slice ist der `Persistierte Shop-Katalog`. `ShopOfferId` ist der stabile,
-immutable Guid-basierte öffentliche Identifier in `FlurNetz.Modules.Shop.Contracts`. Das
-interne Domainmodell `ShopOffer` verbindet diese ID mit genau einer `ItemDefinitionId` aus
-`FlurNetz.Modules.Inventory.Contracts`, einem kanonischen Anzeigenamen, einer optionalen
-Beschreibung, `ShopPrice`, `IsEnabled`, einem halboffenen `AvailabilityWindow` und einem
-optionalen positiven Kauflimit pro Identität. `ShopOffer.Rehydrate` stellt persistierte
-Angebote über denselben Invariantenpfad wieder her und übernimmt den gespeicherten
-Aktivierungszustand.
+Shop besitzt jetzt drei aufeinander aufbauende Stände innerhalb derselben Modulgrenze:
+Angebotsdomain, persistierten Angebotskatalog und den ersten atomaren Inventory-Kauf.
+`Shop.Contracts` veröffentlicht `ShopOfferId`, `ShopPurchaseId`,
+`ShopPurchaseRequestId` sowie `ShopPurchaseCompletedIntegrationEvent` mit
+`shop.purchase-completed` v1.
 
-Neue Angebote starten deaktiviert. Die Angebots-ID und das Ziel-Item sind unveränderlich;
-Darstellung, Preis, Zeitfenster, Kauflimit und Aktivierung werden ausschließlich über gezielte
-Domainmethoden verändert. `Shop` referenziert jetzt `Shop.Contracts`, `Inventory.Contracts`
-und die technische `FlurNetz.Persistence`-Assembly. `Shop:1:CreateShopOffers` besitzt
-ausschließlich `shop_offers`; `ShopOfferStore` persistiert gezielt mit PostgreSQL/Dapper und
-schützt atomare Katalogmutationen mit `SELECT FOR UPDATE`. Die internen Use Cases decken
-Create, Get, List, Rename, Description, Preis, Availability, Kauflimit sowie Enable/Disable ab.
-Echte PostgreSQL-Integrationstests prüfen Migration, Constraints, Roundtrips und
-Nebenläufigkeit. Käufe, Economy, Inventory Grant, Messaging, API und Administration bleiben
-ausgeschlossen. Details stehen in [shop.md](shop.md).
+Der bestehende Katalog bleibt unverändert in `shop_offers`; Mutationen verwenden
+`SELECT FOR UPDATE`. `Shop:2:CreateShopPurchases` ergänzt
+`shop_purchase_requests`, `shop_purchase_guards` und `shop_purchases`. Der einzige
+Foreign Key ist Shop-intern von Purchase auf Offer. Identity, Economy und Inventory werden
+nicht relational gekoppelt.
+
+`PurchaseShopOffer` erzeugt die Purchase-ID serverseitig und delegiert an den
+`PostgreSqlShopPurchaseExecutor`. Dieser besitzt eine gemeinsame
+`PostgreSqlTransaction` und koordiniert Idempotenz-Reservation, Identity-Existenzprüfung,
+stabilen Offer-Snapshot mit `FOR SHARE`, Kauflimit-Guard mit `FOR UPDATE`,
+transaction-aware Economy-Debit, Inventory-Grant um exakt eins, Purchase-Write und Outbox.
+Ein Fehler rollt sämtliche Effekte gemeinsam zurück; ein identischer Request erzeugt exakt
+einen Kauf.
+
+Shop referenziert dabei ausschließlich fremde Contracts, niemals fremde
+Implementierungsassemblies oder Tabellen. API, Admin UI, Shop-Event-Consumer, Worker-Wiring,
+Warenkorb, Stock, Discounts und Refunds bleiben außerhalb dieses Slices. Details stehen in
+[shop.md](shop.md).
 
 ## Aktueller Stand des Titles-Moduls
 
