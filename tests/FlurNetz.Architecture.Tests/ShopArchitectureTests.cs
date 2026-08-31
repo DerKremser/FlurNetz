@@ -120,6 +120,19 @@ public sealed class ShopArchitectureTests
     }
 
     [Fact]
+    public void ShopStoreMutationBoundaryIsNonGenericAndSynchronous()
+    {
+        var method = typeof(IShopOfferStore).GetMethod(nameof(IShopOfferStore.ExecuteAsync));
+
+        Assert.NotNull(method);
+        Assert.False(method!.IsGenericMethod);
+        Assert.Equal(typeof(Task<bool>), method.ReturnType);
+        Assert.Equal(
+            typeof(Func<ShopOffer, bool>),
+            method.GetParameters()[1].ParameterType);
+    }
+
+    [Fact]
     public void ShopMigrationV1OwnsOnlyShopOffersWithRequiredIdentity()
     {
         var migrations = new ShopMigrationSource().GetMigrations().ToArray();

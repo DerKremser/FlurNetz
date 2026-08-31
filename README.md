@@ -159,15 +159,21 @@ persistierten internen Katalog. `ShopOfferId` ist der einzige öffentliche Shop-
 Beschreibung, ein halboffenes `AvailabilityWindow`, ein optionales positives Kauflimit pro
 Identität und einen Aktivierungszustand. Neue Angebote starten deaktiviert; Ziel-IDs bleiben
 unveränderlich, Änderungen erfolgen über gezielte Domainmethoden. `ShopOffer.Rehydrate` stellt
-persistierte Angebote mit denselben Domaininvarianten wieder her.
+persistierte Angebote mit denselben Domaininvarianten wieder her. Textgrenzen werden nach
+Unicode-Skalarwerten passend zur PostgreSQL-Zeichensemantik bewertet; U+0000 und nicht
+wohlgeformtes UTF-16 werden abgewiesen. Gesetzte Availability-Grenzen sind kanonische UTC-
+Instants mit exakt PostgreSQL-kompatibler Mikrosekundenpräzision.
 
 `Shop:1:CreateShopOffers` besitzt ausschließlich die Tabelle `shop_offers`. Der interne
 `IShopOfferStore` wird durch einen gezielten PostgreSQL-/Dapper-Store implementiert; atomare
-Katalogmutationen verwenden `SELECT FOR UPDATE`. Die Use Cases umfassen Create, Get, List,
-Rename, Description-, Preis-, Availability- und Kauflimitänderungen sowie Enable/Disable.
-Echte PostgreSQL-Integrationstests prüfen Migration, Schema, Constraints, Roundtrips und
-Nebenläufigkeit. Käufe, Economy, Inventory Grant, Messaging, API und Administration sind
-weiterhin nicht vorhanden. Details stehen in [docs/architecture/shop.md](docs/architecture/shop.md).
+Katalogmutationen verwenden `SELECT FOR UPDATE`; der Mutation-Callback ist durch
+`Task<bool> ExecuteAsync(ShopOfferId, Func<ShopOffer, bool>, CancellationToken)` tatsächlich
+synchron. Die Use Cases umfassen Create, Get, List, Rename, Description-, Preis-, Availability-
+und Kauflimitänderungen sowie Enable/Disable. Echte PostgreSQL-Integrationstests prüfen
+Migration-Scope, Schema, Constraints, Unicode-/Zeit-Roundtrips, Rollback, No-op-Updates und
+deterministische Nebenläufigkeit. Käufe, Economy, Inventory Grant, Messaging, API und
+Administration sind weiterhin nicht vorhanden. Details stehen in
+[docs/architecture/shop.md](docs/architecture/shop.md).
 
 ## Persistence Foundation
 

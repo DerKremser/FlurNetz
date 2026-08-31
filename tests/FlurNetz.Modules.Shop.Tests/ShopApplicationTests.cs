@@ -50,7 +50,9 @@ public sealed class ShopApplicationTests
         Assert.True(await new ChangeShopOfferPrice(store).ExecuteAsync(id, ShopPrice.Create(2), token));
         Assert.True(await new ChangeShopOfferAvailability(store).ExecuteAsync(
             id,
-            AvailabilityWindow.Create(DateTimeOffset.UtcNow, null),
+            AvailabilityWindow.Create(
+                new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero),
+                null),
             token));
         Assert.True(await new ChangeShopOfferPurchaseLimit(store).ExecuteAsync(id, 1, token));
         Assert.True(await new EnableShopOffer(store).ExecuteAsync(id, token));
@@ -153,9 +155,9 @@ public sealed class ShopApplicationTests
             return Task.FromResult(ListResult);
         }
 
-        public Task<TResult> ExecuteAsync<TResult>(
+        public Task<bool> ExecuteAsync(
             ShopOfferId shopOfferId,
-            Func<ShopOffer, TResult> operation,
+            Func<ShopOffer, bool> operation,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(operation);

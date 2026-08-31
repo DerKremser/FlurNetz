@@ -4,6 +4,13 @@
 
 ### Hinzugefügt
 
+- Shop-Textgrenzen auf Unicode-Skalarwerte vereinheitlicht, U+0000 und nicht wohlgeformtes
+  UTF-16 abgewiesen und die `varchar(200)`-/`varchar(2000)`-Semantik mit PostgreSQL angeglichen.
+- `AvailabilityWindow` auf kanonische UTC-Instants mit expliziter PostgreSQL-kompatibler
+  Mikrosekundenpräzision begrenzt; Sub-Mikrosekundenwerte werden kontrolliert abgewiesen.
+- Den Shop-Mutations-Callback technisch als synchronen `Func<ShopOffer, bool>` festgelegt.
+- Deterministische PostgreSQL-Concurrency-Tests sowie belastbare Migration-Scope-, Rollback-
+  und No-op-Datenbanktests ergänzt.
 - Persistierten Shop-Angebotskatalog mit `shop_offers` und der Migration `Shop:1:CreateShopOffers` ergänzt.
 - Interne Shop-Katalog-Use-Cases für Create, Get, List, Rename, Description-, Preis-, Availability- und Kauflimitänderungen sowie Enable/Disable und den gezielten `ShopOfferStore` ergänzt.
 - Kontrollierte `ShopOffer.Rehydrate`-Domainlösung sowie atomare Row-Lock-Mutationen über `SELECT FOR UPDATE` ergänzt.

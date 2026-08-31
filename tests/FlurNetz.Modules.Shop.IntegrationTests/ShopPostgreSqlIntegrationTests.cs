@@ -8,6 +8,7 @@ using FlurNetz.Modules.Shop.Persistence;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Migrations;
+using Npgsql;
 
 namespace FlurNetz.Modules.Shop.IntegrationTests;
 
@@ -17,6 +18,8 @@ namespace FlurNetz.Modules.Shop.IntegrationTests;
 public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture database)
     : IClassFixture<ShopPostgreSqlFixture>
 {
+    private static readonly TimeSpan ConcurrencyTimeout = TimeSpan.FromSeconds(10);
+
     [Fact]
     public async Task ShopMigrationCreatesExactlyItsCatalogTableAndIsIdempotent()
     {
@@ -35,22 +38,34 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         Assert.Equal(new MigrationRunResult(0, 1), secondRun);
 
         await using var connection = await factory.OpenConnectionAsync(TestToken);
-        var shopTables = (await connection.QueryAsync<string>(
+        var shopRelations = (await connection.QueryAsync<ShopRelation>(
                 new CommandDefinition(
                     """
-                    SELECT table_name
-                    FROM information_schema.tables
-                    WHERE table_schema = 'public'
-                      AND table_name IN (
-                          'shop_offers',
-                          'shop_purchases',
-                          'shop_purchase_guards',
-                          'shop_purchase_requests'
-                      )
-                    ORDER BY table_name;
+                    SELECT relation_row.relname AS RelationName,
+                           relation_row.relkind::text AS RelationKind
+                    FROM pg_class relation_row
+                    JOIN pg_namespace namespace_row
+                      ON namespace_row.oid = relation_row.relnamespace
+                    WHERE namespace_row.nspname = 'public'
+                      AND substring(relation_row.relname, 1, 5) = 'shop_'
+                    ORDER BY relation_row.relname;
                     """,
                     cancellationToken: TestToken)))
             .ToArray();
+        var userTriggerCount = await connection.QuerySingleAsync<int>(
+            new CommandDefinition(
+                """
+                SELECT COUNT(*)
+                FROM pg_trigger trigger_row
+                JOIN pg_class relation_row
+                  ON relation_row.oid = trigger_row.tgrelid
+                JOIN pg_namespace namespace_row
+                  ON namespace_row.oid = relation_row.relnamespace
+                WHERE namespace_row.nspname = 'public'
+                  AND relation_row.relname = 'shop_offers'
+                  AND NOT trigger_row.tgisinternal;
+                """,
+                cancellationToken: TestToken));
         var history = await connection.QuerySingleAsync<MigrationHistory>(
             new CommandDefinition(
                 $"""
@@ -60,7 +75,12 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
                 """,
                 cancellationToken: TestToken));
 
-        Assert.Equal(["shop_offers"], shopTables);
+        var shopRelation = Assert.Single(shopRelations);
+        Assert.Equal("shop_offers", shopRelation.RelationName);
+        Assert.Equal("r", shopRelation.RelationKind);
+        Assert.DoesNotContain(shopRelations, relation =>
+            relation.RelationName.Contains("purchase", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(0, userTriggerCount);
         Assert.Equal("Shop", history.Owner);
         Assert.Equal(1, history.Version);
         Assert.Equal("CreateShopOffers", history.Name);
@@ -170,7 +190,11 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
             new RawOffer(description: "\u2003\u00a0"),
             new RawOffer(description: " Beschreibung"),
             new RawOffer(displayName: new string('a', 201)),
-            new RawOffer(description: new string('b', 2001))
+            new RawOffer(description: new string('b', 2001)),
+            new RawOffer(displayName: RepeatUnicodeScalar("😀", 201)),
+            new RawOffer(description: RepeatUnicodeScalar("🧪", 2001)),
+            new RawOffer(displayName: "Angebot\0intern"),
+            new RawOffer(description: "Beschreibung\0intern")
         };
 
         foreach (var invalidWrite in invalidWrites)
@@ -186,7 +210,10 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
             new RawOffer(availableFrom: Utc(12)),
             new RawOffer(availableUntil: Utc(12)),
             new RawOffer(availableFrom: Utc(12), availableUntil: Utc(13)),
-            new RawOffer(description: null)
+            new RawOffer(description: null),
+            new RawOffer(
+                displayName: RepeatUnicodeScalar("😀", 200),
+                description: RepeatUnicodeScalar("🧪", 2000))
         };
 
         foreach (var validWrite in validWrites)
@@ -208,13 +235,13 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         var store = new ShopOfferStore(factory);
         var id = ShopOfferId.New();
         var itemDefinitionId = ItemDefinitionId.New();
-        var from = new DateTimeOffset(2026, 8, 31, 14, 0, 0, TimeSpan.FromHours(2));
-        var until = new DateTimeOffset(2026, 8, 31, 13, 0, 0, TimeSpan.Zero);
+        var from = new DateTimeOffset(2026, 8, 31, 14, 0, 0, TimeSpan.FromHours(2)).AddTicks(10);
+        var until = new DateTimeOffset(2026, 8, 31, 13, 0, 0, TimeSpan.Zero).AddTicks(20);
         var offer = ShopOffer.Create(
             id,
             itemDefinitionId,
-            " Angebot ",
-            " Beschreibung ",
+            " Angebot 😀 ",
+            " Beschreibung 🧪 ",
             ShopPrice.Create(42),
             AvailabilityWindow.Create(from, until),
             3);
@@ -227,12 +254,13 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         Assert.NotNull(loaded);
         Assert.Equal(id, loaded!.Id);
         Assert.Equal(itemDefinitionId, loaded.ItemDefinitionId);
-        Assert.Equal("Angebot", loaded.DisplayName);
-        Assert.Equal("Beschreibung", loaded.Description);
+        Assert.Equal("Angebot 😀", loaded.DisplayName);
+        Assert.Equal("Beschreibung 🧪", loaded.Description);
         Assert.Equal(ShopPrice.Create(42), loaded.Price);
         Assert.True(loaded.IsEnabled);
-        Assert.Equal(from.UtcDateTime, loaded.Availability.AvailableFrom!.Value.UtcDateTime);
-        Assert.Equal(until.UtcDateTime, loaded.Availability.AvailableUntil!.Value.UtcDateTime);
+        Assert.Equal(offer.Availability, loaded.Availability);
+        Assert.Equal(offer.Availability.AvailableFrom, loaded.Availability.AvailableFrom);
+        Assert.Equal(offer.Availability.AvailableUntil, loaded.Availability.AvailableUntil);
         Assert.Equal(3, loaded.PurchaseLimitPerIdentity);
         Assert.Null(await store.GetAsync(ShopOfferId.New(), TestToken));
 
@@ -313,6 +341,82 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
     }
 
     [Fact]
+    public async Task MutationCallbackExceptionRollsBackThePersistedOffer()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareShopAsync(factory);
+        var store = new ShopOfferStore(factory);
+        var id = ShopOfferId.New();
+        var original = ShopOffer.Create(
+            id,
+            ItemDefinitionId.New(),
+            "Original",
+            "Ursprünglich",
+            ShopPrice.Create(11),
+            AvailabilityWindow.Create(Utc(12).AddTicks(10), Utc(13).AddTicks(10)),
+            2);
+        original.Enable();
+
+        await store.AddAsync(original, TestToken);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ExecuteAsync(
+            id,
+            offer => MutateThenThrow(offer),
+            TestToken));
+
+        var loaded = await store.GetAsync(id, TestToken);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(original.Id, loaded!.Id);
+        Assert.Equal(original.ItemDefinitionId, loaded.ItemDefinitionId);
+        Assert.Equal(original.DisplayName, loaded.DisplayName);
+        Assert.Equal(original.Description, loaded.Description);
+        Assert.Equal(original.Price, loaded.Price);
+        Assert.Equal(original.IsEnabled, loaded.IsEnabled);
+        Assert.Equal(original.Availability, loaded.Availability);
+        Assert.Equal(original.PurchaseLimitPerIdentity, loaded.PurchaseLimitPerIdentity);
+    }
+
+    [Fact]
+    public async Task DomainNoOpDoesNotUpdateTheDatabaseRow()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareShopAsync(factory);
+        var store = new ShopOfferStore(factory);
+        var offer = ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Angebot",
+            "Beschreibung",
+            ShopPrice.Create(7),
+            AvailabilityWindow.Create(Utc(12), Utc(13)),
+            2);
+
+        await store.AddAsync(offer, TestToken);
+        var beforeXmin = await ReadXminAsync(factory, offer.Id);
+
+        var changed = await new RenameShopOffer(store).ExecuteAsync(
+            offer.Id,
+            "  Angebot  ",
+            TestToken);
+
+        var afterXmin = await ReadXminAsync(factory, offer.Id);
+        var loaded = await store.GetAsync(offer.Id, TestToken);
+
+        Assert.False(changed);
+        Assert.Equal(beforeXmin, afterXmin);
+        Assert.NotNull(loaded);
+        Assert.Equal(offer.DisplayName, loaded!.DisplayName);
+        Assert.Equal(offer.Description, loaded.Description);
+        Assert.Equal(offer.Price, loaded.Price);
+        Assert.Equal(offer.IsEnabled, loaded.IsEnabled);
+        Assert.Equal(offer.Availability, loaded.Availability);
+        Assert.Equal(offer.PurchaseLimitPerIdentity, loaded.PurchaseLimitPerIdentity);
+    }
+
+    [Fact]
     public async Task AtomicMutationOfUnknownOfferThrowsNotFound()
     {
         SkipIfDatabaseIsUnavailable();
@@ -324,35 +428,82 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
     }
 
     [Fact]
-    public async Task ConcurrentMutationsOfOneOfferAreSerializedWithoutLostFields()
+    public async Task ConcurrentMutationOfOneOfferWaitsForObservedRowLockWithoutLostFields()
     {
         SkipIfDatabaseIsUnavailable();
         await using var factory = CreateFactory();
-        await using var renameFactory = CreateFactory();
-        await using var descriptionFactory = CreateFactory();
+        await using var observerFactory = CreateFactory();
         await PrepareShopAsync(factory);
         var id = ShopOfferId.New();
         await new ShopOfferStore(factory).AddAsync(
             ShopOffer.Create(id, ItemDefinitionId.New(), "A", "Alt"),
             TestToken);
 
-        await Task.WhenAll(
-            new RenameShopOffer(new ShopOfferStore(renameFactory)).ExecuteAsync(id, "B", TestToken),
-            new ChangeShopOfferDescription(new ShopOfferStore(descriptionFactory))
-                .ExecuteAsync(id, "Neu", TestToken));
+        var firstApplicationName = $"shop-same-a-{id.Value:N}";
+        var secondApplicationName = $"shop-same-b-{id.Value:N}";
+        await using var firstFactory = CreateFactory(firstApplicationName);
+        await using var secondFactory = CreateFactory(secondApplicationName);
+        var firstCallbackEntered = CreateSignal();
+        var secondCallbackEntered = CreateSignal();
+        var releaseFirst = CreateSignal();
+        Task<bool>? firstTask = null;
+        Task<bool>? secondTask = null;
+
+        try
+        {
+            firstTask = Task.Run(() => new ShopOfferStore(firstFactory).ExecuteAsync(
+                id,
+                offer =>
+                {
+                    firstCallbackEntered.TrySetResult(true);
+                    releaseFirst.Task.GetAwaiter().GetResult();
+                    return offer.Rename("A geändert");
+                },
+                TestToken));
+
+            await firstCallbackEntered.Task.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken);
+
+            secondTask = Task.Run(() => new ShopOfferStore(secondFactory).ExecuteAsync(
+                id,
+                offer =>
+                {
+                    secondCallbackEntered.TrySetResult(true);
+                    return offer.ChangeDescription("B geändert");
+                },
+                TestToken));
+
+            await WaitForRowLockWaitAsync(
+                observerFactory,
+                secondApplicationName);
+            Assert.False(secondCallbackEntered.Task.IsCompleted);
+
+            releaseFirst.TrySetResult(true);
+            Assert.True(await firstTask.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken));
+            Assert.True(await secondTask.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            releaseFirst.TrySetResult(true);
+            await DrainTaskAsync(firstTask);
+            await DrainTaskAsync(secondTask);
+        }
 
         var loaded = await new ShopOfferStore(factory).GetAsync(id, TestToken);
-        Assert.Equal("B", loaded!.DisplayName);
-        Assert.Equal("Neu", loaded.Description);
+        Assert.Equal("A geändert", loaded!.DisplayName);
+        Assert.Equal("B geändert", loaded.Description);
     }
 
     [Fact]
-    public async Task ConcurrentMutationsOfDifferentOffersRemainIndependent()
+    public async Task ConcurrentMutationOfDifferentOffersCommitsBeforeTheHeldOfferIsReleased()
     {
         SkipIfDatabaseIsUnavailable();
         await using var factory = CreateFactory();
-        await using var firstFactory = CreateFactory();
-        await using var secondFactory = CreateFactory();
         await PrepareShopAsync(factory);
         var firstId = ShopOfferId.New();
         var secondId = ShopOfferId.New();
@@ -360,18 +511,159 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         await store.AddAsync(ShopOffer.Create(firstId, ItemDefinitionId.New(), "A"), TestToken);
         await store.AddAsync(ShopOffer.Create(secondId, ItemDefinitionId.New(), "B"), TestToken);
 
-        await Task.WhenAll(
-            new RenameShopOffer(new ShopOfferStore(firstFactory))
-                .ExecuteAsync(firstId, "A geändert", TestToken),
-            new RenameShopOffer(new ShopOfferStore(secondFactory))
-                .ExecuteAsync(secondId, "B geändert", TestToken));
+        await using var firstFactory = CreateFactory($"shop-different-a-{firstId.Value:N}");
+        await using var secondFactory = CreateFactory($"shop-different-b-{secondId.Value:N}");
+        var firstCallbackEntered = CreateSignal();
+        var secondCallbackEntered = CreateSignal();
+        var releaseFirst = CreateSignal();
+        Task<bool>? firstTask = null;
+        Task<bool>? secondTask = null;
+
+        try
+        {
+            firstTask = Task.Run(() => new ShopOfferStore(firstFactory).ExecuteAsync(
+                firstId,
+                offer =>
+                {
+                    firstCallbackEntered.TrySetResult(true);
+                    releaseFirst.Task.GetAwaiter().GetResult();
+                    return offer.Rename("A geändert");
+                },
+                TestToken));
+
+            await firstCallbackEntered.Task.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken);
+
+            secondTask = Task.Run(() => new ShopOfferStore(secondFactory).ExecuteAsync(
+                secondId,
+                offer =>
+                {
+                    secondCallbackEntered.TrySetResult(true);
+                    return offer.Rename("B geändert");
+                },
+                TestToken));
+
+            await secondCallbackEntered.Task.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken);
+            Assert.True(await secondTask.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken));
+            Assert.False(releaseFirst.Task.IsCompleted);
+            Assert.Equal("B geändert", (await store.GetAsync(secondId, TestToken))!.DisplayName);
+
+            releaseFirst.TrySetResult(true);
+            Assert.True(await firstTask.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            releaseFirst.TrySetResult(true);
+            await DrainTaskAsync(firstTask);
+            await DrainTaskAsync(secondTask);
+        }
 
         Assert.Equal("A geändert", (await store.GetAsync(firstId, TestToken))!.DisplayName);
         Assert.Equal("B geändert", (await store.GetAsync(secondId, TestToken))!.DisplayName);
     }
 
-    private PostgreSqlConnectionFactory CreateFactory() =>
-        new(new PostgreSqlOptions(database.ConnectionString));
+    private PostgreSqlConnectionFactory CreateFactory(string? applicationName = null)
+    {
+        var connectionString = database.ConnectionString;
+        if (applicationName is not null)
+        {
+            var builder = new NpgsqlConnectionStringBuilder(connectionString)
+            {
+                ApplicationName = applicationName
+            };
+            connectionString = builder.ConnectionString;
+        }
+
+        return new PostgreSqlConnectionFactory(new PostgreSqlOptions(connectionString));
+    }
+
+    private static bool MutateThenThrow(ShopOffer offer)
+    {
+        offer.Rename("Verändert");
+        offer.ChangeDescription("Andere Beschreibung");
+        offer.ChangePrice(99);
+        offer.ChangeAvailability(AvailabilityWindow.Create(Utc(14), Utc(15)));
+        offer.ChangePurchaseLimit(null);
+        offer.Disable();
+        throw new InvalidOperationException("Absichtlicher Testfehler nach der Mutation.");
+    }
+
+    private static async Task<long> ReadXminAsync(
+        PostgreSqlConnectionFactory factory,
+        ShopOfferId shopOfferId)
+    {
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        return await connection.QuerySingleAsync<long>(
+            new CommandDefinition(
+                "SELECT xmin::text::bigint FROM shop_offers WHERE id = @Id;",
+                new { Id = shopOfferId.Value },
+                cancellationToken: TestToken));
+    }
+
+    private static async Task WaitForRowLockWaitAsync(
+        PostgreSqlConnectionFactory observerFactory,
+        string applicationName)
+    {
+        await using var connection = await observerFactory.OpenConnectionAsync(TestToken);
+        var deadline = DateTime.UtcNow + ConcurrencyTimeout;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var isWaitingForLock = await connection.QuerySingleAsync<bool>(
+                new CommandDefinition(
+                    """
+                    SELECT EXISTS
+                    (
+                        SELECT 1
+                        FROM pg_stat_activity
+                        WHERE application_name = @ApplicationName
+                          AND backend_type = 'client backend'
+                          AND state = 'active'
+                          AND wait_event_type = 'Lock'
+                    );
+                    """,
+                    new { ApplicationName = applicationName },
+                    cancellationToken: TestToken));
+
+            if (isWaitingForLock)
+            {
+                return;
+            }
+
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(25),
+                TestContext.Current.CancellationToken);
+        }
+
+        Assert.Fail($"Die Verbindung {applicationName} wartete nicht auf einen PostgreSQL-Row-Lock.");
+    }
+
+    private static TaskCompletionSource<bool> CreateSignal() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private static async Task DrainTaskAsync(Task? task)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch
+        {
+            // Die Hauptassertionsfläche berichtet die eigentliche Testursache.
+        }
+    }
 
     private void SkipIfDatabaseIsUnavailable()
     {
@@ -449,6 +741,16 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
 
     private static DateTimeOffset Utc(int hour) =>
         new(2026, 8, 31, hour, 0, 0, TimeSpan.Zero);
+
+    private static string RepeatUnicodeScalar(string scalar, int count) =>
+        string.Concat(Enumerable.Repeat(scalar, count));
+
+    private sealed class ShopRelation
+    {
+        public string RelationName { get; set; } = string.Empty;
+
+        public string RelationKind { get; set; } = string.Empty;
+    }
 
     private sealed class RawOffer
     {

@@ -268,7 +268,9 @@ Application-Use-Cases, getrennte Community- und Katalog-Stores, zwei Migrationen
 und echte Integrationstests; Achievements besitzt Domain, Application, getrennte Katalog- und
 Community-Stores, eine Migration, Modulregistrierung und echte Integrationstests; Shop besitzt den
 persistierten `Shop-Katalog` mit minimalem `ShopOfferId`-Contract, `Shop:1:CreateShopOffers`,
-internen Use Cases, PostgreSQL-/Dapper-Store und Row-Lock-Mutationen. Die übrigen Contracts-Projekte
+internen Use Cases, PostgreSQL-/Dapper-Store und Row-Lock-Mutationen. Shop bewertet Textgrenzen
+nach Unicode-Skalarwerten passend zu PostgreSQL, verwirft U+0000 und nicht wohlgeformtes UTF-16
+und modelliert Availability-Grenzen als UTC-Instants mit mikrosekundengenauer Präzision. Die übrigen Contracts-Projekte
 bleiben leer.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
@@ -281,7 +283,7 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
 und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
 Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`, eine Migration und `ShopModule`; ein Host, API oder Worker verdrahtet den Katalog noch nicht. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; Shop, Titles und Achievements sind noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`, eine Migration und `ShopModule`; der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt, ein Host, API oder Worker verdrahtet den Katalog noch nicht. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; Shop, Titles und Achievements sind noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen

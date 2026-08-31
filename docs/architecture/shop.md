@@ -15,13 +15,18 @@ Schnittstellen.
 `ShopPurchaseRequestId`, Kauf-Commands, Queries und Events sind nicht vorhanden.
 
 `ShopOffer` enthält `ShopOfferId`, `ItemDefinitionId`, den kanonisch getrimmten
-`DisplayName` (1–200 Zeichen), die optionale nicht-leere `Description` (höchstens 2000
-Zeichen), `ShopPrice`, `IsEnabled`, das halboffene `AvailabilityWindow` und das optionale
-positive `PurchaseLimitPerIdentity` als `int?`. Neue Angebote sind immer deaktiviert.
+`DisplayName` (1–200 Unicode-Skalarwerte), die optionale nicht-leere `Description` (höchstens
+2000 Unicode-Skalarwerte), `ShopPrice`, `IsEnabled`, das halboffene `AvailabilityWindow` und
+das optionale positive `PurchaseLimitPerIdentity` als `int?`. U+0000 und nicht wohlgeformtes
+UTF-16 werden bereits an der Domain-Grenze abgewiesen. Neue Angebote sind immer deaktiviert.
 
 Preis und Kauflimit besitzen die Invarianten `price >= 0` beziehungsweise `null oder > 0`.
 Beim Availability-Fenster gilt `[AvailableFrom, AvailableUntil)`: Der Beginn ist inklusive,
-das Ende exklusiv; sind beide Grenzen gesetzt, muss der Beginn vor dem Ende liegen.
+das Ende exklusiv; sind beide Grenzen gesetzt, muss der Beginn vor dem Ende liegen. Gesetzte
+Grenzen werden als absolute UTC-Instants kanonisiert und müssen exakt auf einer Mikrosekunden-
+Grenze liegen, damit jeder akzeptierte Wert verlustfrei in PostgreSQL `timestamptz` persistiert
+werden kann. Sub-Mikrosekundenwerte werden weder abgerundet noch aufgerundet; ein nach der
+UTC-Kanonisierung leeres Fenster ist ungültig.
 Angebots-ID und Item-Definition-ID bleiben unveränderlich. DisplayName, Description, Preis,
 Availability, Kauflimit und Aktivierung werden ausschließlich über gezielte Domainmethoden
 geändert.
@@ -35,8 +40,9 @@ Persistence-Typen.
 
 `IShopOfferStore` liegt im `FlurNetz.Modules.Shop`-Projekt und nicht in `Shop.Contracts`. Die
 Grenze bietet ausschließlich `AddAsync`, `GetAsync`, `ListAsync` und
-`ExecuteAsync<TResult>`. Der Callback von `ExecuteAsync` ist ein synchroner
-`Func<ShopOffer, TResult>` und bleibt damit auf Domainlogik beschränkt.
+`Task<bool> ExecuteAsync(ShopOfferId, Func<ShopOffer, bool>, CancellationToken)`. Der
+nicht-generische boolesche Callback kann technisch keine `Task`- oder `Task<T>`-Rückgabe
+annehmen und bleibt damit synchron auf Domainlogik beschränkt.
 
 Die internen Katalog-Use-Cases sind:
 
@@ -82,17 +88,17 @@ auf Inventory, Identity oder andere Cross-Module-Tabellen und keine weiteren Sho
 
 `ShopOfferStore` verwendet die bestehende PostgreSQL-/Dapper-Foundation. Add schreibt alle
 Angebotsfelder ohne eigene fachliche Normalisierung. Get und List rehydrieren über den
-Domainpfad; List verwendet `ORDER BY id`. PostgreSQL speichert `timestamptz` als absoluten
-Zeitpunkt, der Store konvertiert DateTimeOffset-Werte technisch nach UTC und rekonstruiert
-damit fachlich korrekte Zeitpunkte unabhängig vom ursprünglichen Offset.
+Domainpfad; List verwendet `ORDER BY id`. Die Domain liefert für `timestamptz` bereits
+kanonische UTC-Instants mit PostgreSQL-kompatibler Mikrosekundenpräzision; der Store dupliziert
+diese Zeitlogik nicht und schreibt die Werte unverändert.
 
 Mutation öffnet eine `PostgreSqlTransaction`, lädt genau die Zielzeile mit `SELECT ... FOR
 UPDATE`, rehydriert das Angebot, bildet Vorher-/Nachher-Snapshots und aktualisiert nur bei
 tatsächlicher Änderung. Die Snapshots umfassen DisplayName, Description, Price, IsEnabled,
 beide Availability-Grenzen und PurchaseLimitPerIdentity; ID und ItemDefinitionId werden nie
-überschrieben. Danach wird committed, bei jedem Fehler vollständig zurückgerollt. Das
-serialisiert konkurrierende Änderungen desselben Angebots und lässt unterschiedliche Angebote
-unabhängig mutieren.
+überschrieben. Ein Domain-No-op liefert `false` und führt zu keinem `UPDATE`. Danach wird
+committed, bei jedem Fehler vollständig zurückgerollt. Das serialisiert konkurrierende
+Änderungen desselben Angebots und lässt unterschiedliche Angebote unabhängig mutieren.
 
 ## Modulregistrierung und Abhängigkeiten
 
@@ -111,10 +117,13 @@ Modulimplementierungen bleiben ausgeschlossen.
 `FlurNetz.Modules.Shop.Tests` prüft Rehydration, Invarianten, unveränderliche Ziel-IDs und
 die Delegation der Katalog-Use-Cases. `FlurNetz.Modules.Shop.IntegrationTests` verwendet
 echtes PostgreSQL über Testcontainers oder `FLURNETZ_TEST_CONNECTION_STRING` und prüft
-Migration/Idempotenz/Checksum, exaktes Schema, alle fachlichen DB-Constraints, Roundtrips,
-alle Katalogmutationen sowie Row-Lock-Nebenläufigkeit für gleiche und unterschiedliche
-Offers. `ShopArchitectureTests` sichert Reference Graph, Typgrenzen, Migrationseigentum,
-DI-Scope und den Ausschluss vorzeitiger Integration.
+Migration/Idempotenz/Checksum, den vollständigen `shop_`-Relationsumfang ohne benutzerdefinierte
+Trigger, das exakte Schema ohne Foreign Keys oder Defaults, alle fachlichen DB-Constraints,
+Unicode- und Zeitpräzisions-Roundtrips, alle Katalogmutationen, DB-Rollback und DB-seitige
+No-op-Beobachtung sowie deterministische Row-Lock-Nebenläufigkeit für gleiche und
+unterschiedliche Offers. `ShopArchitectureTests` sichert Reference Graph, Typgrenzen,
+Migrationseigentum, DI-Scope, den synchronen Store-Callback und den Ausschluss vorzeitiger
+Integration.
 
 Nicht enthalten sind `ShopPurchase`, `ShopPurchaseId`, `ShopPurchaseRequestId`,
 `PurchaseShopOffer`, `shop_purchases`, Purchase Guards/Requests, Economy, Coins, Balance,

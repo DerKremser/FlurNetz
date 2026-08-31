@@ -36,8 +36,13 @@ public interface IShopOfferStore
     /// <summary>
     /// Lädt und mutiert ein Angebot atomar über einen synchronen Domain-Callback.
     /// </summary>
-    Task<TResult> ExecuteAsync<TResult>(
+    /// <remarks>
+    /// Die nicht-generische Signatur akzeptiert ausschließlich <see cref="Func{T, TResult}"/>
+    /// mit dem Ergebnis <see cref="bool"/> und kann daher keine asynchrone Callback-Rückgabe
+    /// wie <c>Task</c> oder <c>Task&lt;T&gt;</c> aufnehmen.
+    /// </remarks>
+    Task<bool> ExecuteAsync(
         ShopOfferId shopOfferId,
-        Func<ShopOffer, TResult> operation,
+        Func<ShopOffer, bool> operation,
         CancellationToken cancellationToken = default);
 }

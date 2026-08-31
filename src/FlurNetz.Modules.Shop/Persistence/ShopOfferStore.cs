@@ -167,9 +167,9 @@ public sealed class ShopOfferStore : IShopOfferStore
     }
 
     /// <inheritdoc />
-    public async Task<TResult> ExecuteAsync<TResult>(
+    public async Task<bool> ExecuteAsync(
         ShopOfferId shopOfferId,
-        Func<ShopOffer, TResult> operation,
+        Func<ShopOffer, bool> operation,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -211,8 +211,8 @@ public sealed class ShopOfferStore : IShopOfferStore
                                 after.Description,
                                 Price = after.Price.Value,
                                 after.IsEnabled,
-                                AvailableFrom = ToUtc(after.AvailableFrom),
-                                AvailableUntil = ToUtc(after.AvailableUntil),
+                                AvailableFrom = after.AvailableFrom,
+                                AvailableUntil = after.AvailableUntil,
                                 after.PurchaseLimitPerIdentity
                             },
                             transaction: transaction.Transaction,
@@ -240,12 +240,10 @@ public sealed class ShopOfferStore : IShopOfferStore
         offer.Description,
         Price = offer.Price.Value,
         offer.IsEnabled,
-        AvailableFrom = ToUtc(offer.Availability.AvailableFrom),
-        AvailableUntil = ToUtc(offer.Availability.AvailableUntil),
+        AvailableFrom = offer.Availability.AvailableFrom,
+        AvailableUntil = offer.Availability.AvailableUntil,
         offer.PurchaseLimitPerIdentity
     };
-
-    private static DateTimeOffset? ToUtc(DateTimeOffset? value) => value?.ToUniversalTime();
 
     private static ShopOffer Rehydrate(ShopOfferRow row)
     {

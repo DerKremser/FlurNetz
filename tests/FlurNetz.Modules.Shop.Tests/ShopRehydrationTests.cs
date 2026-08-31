@@ -73,6 +73,26 @@ public sealed class ShopOfferRehydrationTests
     }
 
     [Fact]
+    public void RehydrateAcceptsSupplementaryUnicodeAtThePersistenceBoundary()
+    {
+        var displayName = string.Concat(Enumerable.Repeat("😀", ShopOffer.MaxDisplayNameLength));
+        var description = string.Concat(Enumerable.Repeat("🧪", ShopOffer.MaxDescriptionLength));
+
+        var offer = ShopOffer.Rehydrate(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            displayName,
+            description,
+            ShopPrice.Zero,
+            false,
+            AvailabilityWindow.Create(null, null),
+            null);
+
+        Assert.Equal(displayName, offer.DisplayName);
+        Assert.Equal(description, offer.Description);
+    }
+
+    [Fact]
     public void RehydrateRejectsInvalidValues()
     {
         var id = ShopOfferId.New();
@@ -88,6 +108,12 @@ public sealed class ShopOfferRehydrationTests
             id, itemDefinitionId, "   ", null, validPrice, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
             id, itemDefinitionId, "Angebot", "   ", validPrice, false, validAvailability, null));
+        Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
+            id, itemDefinitionId, "Angebot\0intern", null, validPrice, false, validAvailability, null));
+        Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
+            id, itemDefinitionId, "Angebot", "Beschreibung\0intern", validPrice, false, validAvailability, null));
+        Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
+            id, itemDefinitionId, "\uD800", null, validPrice, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
             id,
             itemDefinitionId,
