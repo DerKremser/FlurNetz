@@ -138,21 +138,23 @@ public sealed class InventoryArchitectureTests
             .Select(type => type.FullName)
             .ToArray();
 
-        Assert.Empty(forbiddenTypes);
+        Assert.DoesNotContain(forbiddenTypes, _ => true);
     }
 
     [Fact]
     public void InventoryContainsNoGenericRepositoryOrExternalPlatformTypes()
     {
-        Assert.Empty(InventoryImplementationAssembly
+        Assert.DoesNotContain(InventoryImplementationAssembly
             .GetExportedTypes()
             .Where(type => type.IsGenericType
-                && type.Name.Split((char)96)[0] is "IRepository" or "Repository" or "GenericRepository"));
+                && type.Name.Split((char)96)[0] is "IRepository" or "Repository" or "GenericRepository"),
+            _ => true);
 
-        Assert.Empty(InventoryImplementationAssembly
+        Assert.DoesNotContain(InventoryImplementationAssembly
             .GetTypes()
             .Where(type => ModuleArchitectureCatalog.ExternalPlatformNames.Any(platformName =>
-                type.Name.StartsWith(platformName, StringComparison.Ordinal))));
+                type.Name.StartsWith(platformName, StringComparison.Ordinal))),
+            _ => true);
     }
 
     private static string[] GetReferencedAssemblyNames(Assembly assembly) => assembly

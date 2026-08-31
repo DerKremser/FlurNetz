@@ -707,7 +707,7 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
                 TestToken)));
 
         Assert.Equal(1, attempts.Count(attempt => attempt.Purchase is not null));
-        Assert.Single(attempts.Where(attempt => attempt.Error is ShopPurchaseLimitExceededException));
+        Assert.Single(attempts, attempt => attempt.Error is ShopPurchaseLimitExceededException);
 
         await using var connection = await factory.OpenConnectionAsync(TestToken);
         Assert.Equal(90, await ReadBalanceAsync(connection, identityId));
