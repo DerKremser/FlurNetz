@@ -9,6 +9,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlurNetz.Modules.Achievements.Contracts\FlurNetz.Modules.Achievements.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
   </ItemGroup>
 
 </Project>

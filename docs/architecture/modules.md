@@ -173,6 +173,59 @@ Echte PostgreSQL-Integrationstests prüfen Migration, Katalog-Constraints, Creat
 Rename, Description-Änderung, Rollback, Rehydration und Nebenläufigkeit. Details stehen in
 [titles.md](titles.md).
 
+## Aktueller Stand des Achievements-Moduls
+
+Achievements besitzt den ersten persistierten Vertical Slice für zwei fachliche Bereiche:
+einen implementation-eigenen Definitionskatalog und permanente Community-Achievements. Das
+Modul kennt keine Runtime-Ereignisse und wird in diesem Schritt nicht durch API oder Worker
+ausgelöst.
+
+`AchievementDefinitionId` ist eine immutable, Guid-basierte Fachkennung. `AchievementDefinition`
+enthält ausschließlich ID, kanonisch getrimmten `DisplayName` und optionale `Description`.
+Anzeigenamen sind nicht leer und höchstens 100 `string.Length`-Zeichen lang; Beschreibungen
+werden aus leerem oder Whitespace-Input als `null` kanonisiert und sind höchstens 500 Zeichen
+lang. `Create` normalisiert Aufrufer-Input. `Rehydrate` akzeptiert ausschließlich bereits
+kanonische Persistenzwerte, damit beschädigte Daten nicht still repariert werden. `Rename` und
+`ChangeDescription` liefern bei einem kanonischen No-op `false`.
+
+`CommunityAchievement` enthält ausschließlich `CommunityIdentityId`,
+`AchievementDefinitionId` und den unveränderlichen `UnlockedAtUtc`. Beide IDs müssen
+strukturell gültig sein; der Zeitpunkt muss als UTC mit `Offset == TimeSpan.Zero` vorliegen.
+Ob eine Community-Identität in Identity persistiert ist, prüft Achievements nicht.
+
+Die internen Application-Use-Cases sind `CreateAchievementDefinition`,
+`GetAchievementDefinition`, `ListAchievementDefinitions`, `RenameAchievementDefinition`,
+`ChangeAchievementDescription`, `UnlockCommunityAchievement`, `GetCommunityAchievement` und
+`ListCommunityAchievements`. Der Unlock prüft die Definition im eigenen Katalog, bezieht den
+Zeitpunkt aus `IClock` und übergibt ein gültiges Domainobjekt an den Community-Store. Der erste
+erfolgreiche Write gewinnt; ein Duplicate ist ein normaler idempotenter No-op und überschreibt
+den ursprünglichen Unlock-Zeitpunkt nicht.
+
+`AchievementDefinitionStore` verwendet für Mutationen eine Transaktion mit
+`SELECT ... FOR UPDATE` und einem synchronen Domain-Callback. No-ops führen zu keinem Update.
+`CommunityAchievementStore` verwendet einen einzelnen PostgreSQL-Insert mit
+`ON CONFLICT (community_identity_id, achievement_definition_id) DO NOTHING`. Es gibt keine
+vorgelagerte Existenzabfrage, keine künstliche Root-Zeile und keine globale Community-Sperre.
+
+Die Migration `Achievements:1:CreateAchievementDefinitionsAndCommunityAchievements` legt im
+`public`-Schema zuerst `achievement_definitions` und danach `community_achievements` an. Der
+Composite Primary Key der Community-Tabelle deckt den aktuellen Lookup-Bedarf ab. Es existiert
+genau ein interner Foreign Key von `achievement_definition_id` auf `achievement_definitions`;
+es gibt ausdrücklich keinen Foreign Key auf `community_identities` oder ein anderes Modul.
+
+Das Implementierungsprojekt referenziert neben dem leeren eigenen Contract ausschließlich
+`FlurNetz.Modules.Identity.Contracts`, `FlurNetz.BuildingBlocks` und `FlurNetz.Persistence`.
+`FlurNetz.Modules.Achievements.Contracts` bleibt vollständig leer. Unit-Tests prüfen Domain-
+und Application-Semantik; echte PostgreSQL-Integrationstests prüfen Migration, Constraints,
+Rehydration, Rollback, Idempotenz und parallele Unlocks beziehungsweise Katalogmutationen.
+
+Ausgeschlossen bleiben Progress, Counter, TargetValue, Regeln, Conditions, Evaluator,
+Trigger-Konfiguration, Domain- und Integration-Events, Messaging, Inbox, Outbox, Worker, API,
+Admin UI, Rewards-, Economy-, Inventory-, Titles-, Shop-, Notifications- und Overlay-
+Anbindung, Seed-Daten, Standard-Achievements, Delete, Revoke, Reset, Archive, Enable/Disable,
+Hidden/Secret, Localization, Icon, Farbe, Rarity, Category, Points, SortOrder, Slug,
+TechnicalName und RewardPackageId.
+
 ## Contracts und Implementierung
 
 Die Contracts-Assemblies beschreiben die später öffentliche Modulgrenze. Die Contracts-Assemblies
@@ -185,7 +238,7 @@ einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Con
 mit Domain, Application, Persistence-Adapter, Migration und Registrierung ebenfalls einen internen
 Vertical Slice sowie den neutralen Credit-Capability-Contract für atomare Komposition. Rewards besitzt
 mit Domain, Application, Katalog, Grant-Executor, Migration und Registrierung den ersten persistierten
-ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt Domain, interne Use Cases, atomaren Store, Migration und Registrierung; auch sein Contracts-Projekt bleibt leer. Titles besitzt Domain, Rehydration, `TitleDefinition`, interne Application-Use-Cases, getrennte Community- und Katalog-Stores, zwei Migrationen, Modulregistrierung und echte Integrationstests; sein Contracts-Projekt bleibt ebenfalls leer.
+ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt Domain, interne Use Cases, atomaren Store, Migration und Registrierung; auch sein Contracts-Projekt bleibt leer. Titles besitzt Domain, Rehydration, `TitleDefinition`, interne Application-Use-Cases, getrennte Community- und Katalog-Stores, zwei Migrationen, Modulregistrierung und echte Integrationstests; Achievements besitzt Domain, Application, getrennte Katalog- und Community-Stores, eine Migration, Modulregistrierung und echte Integrationstests; beide Contracts-Projekte bleiben leer.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -197,7 +250,7 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
 und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
 Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; auch dieser Slice ist noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; beide Slices sind noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen
@@ -207,8 +260,9 @@ bleibt verboten. Economy darf `Identity.Contracts` und seinen eigenen öffentlic
 Capability-Contract verwenden; Rewards darf zusätzlich `Identity.Contracts` und
 `Economy.Contracts` verwenden und referenziert keine Economy-Implementierung. Inventory darf
 zusätzlich `Identity.Contracts` und die technische Persistence-Assembly verwenden; Rewards, Shop
-und Messaging bleiben verboten. Titles darf zusätzlich `Identity.Contracts` und die technische
-Persistence-Assembly verwenden; Messaging und alle fachlichen Modulimplementierungen bleiben
+und Messaging bleiben verboten. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
+und die technische Persistence-Assembly verwenden; Achievements verwendet außerdem
+`FlurNetz.BuildingBlocks` für `IClock`. Messaging und alle fachlichen Modulimplementierungen bleiben
 verboten.
 Cross-Module-Kommunikation erfolgt über freigegebene öffentliche Contracts
 und Integration Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine
@@ -222,7 +276,7 @@ Concurrency-Tests abgesichert. Economy besitzt eigene Domain-, Use-Case-, Migrat
 Rollback-, Load- und echte PostgreSQL-Concurrency-Tests. Rewards besitzt Domain- und
 Application-Unit-Tests, Architekturtests sowie ein eigenes echtes PostgreSQL-
 Integrationstestprojekt für Migration, Katalog, Atomicity, Idempotenz und Nebenläufigkeit.
-Inventory besitzt Domain- und Application-Unit-Tests, eigene Architekturgrenzen sowie echte PostgreSQL-Integrationstests für Migration, Sparse-Lifecycle, Rollback und Nebenläufigkeit. Titles besitzt Domain- und Application-Unit-Tests, eigene Architekturtests sowie echte PostgreSQL-Integrationstests für Migration, Constraints, Rollback, Rehydration und Nebenläufigkeit.
+Inventory besitzt Domain- und Application-Unit-Tests, eigene Architekturgrenzen sowie echte PostgreSQL-Integrationstests für Migration, Sparse-Lifecycle, Rollback und Nebenläufigkeit. Titles besitzt Domain- und Application-Unit-Tests, eigene Architekturtests sowie echte PostgreSQL-Integrationstests für Migration, Constraints, Rollback, Rehydration und Nebenläufigkeit. Achievements besitzt Domain- und Application-Unit-Tests, eigene Architekturtests sowie echte PostgreSQL-Integrationstests für Migration, Katalog-Constraints, Rehydration, Rollback, idempotente Unlocks und Nebenläufigkeit.
 Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
 den vollständigen Outbox-/Inbox-Weg sowie Producer- und Consumer-Atomicity gegen PostgreSQL.
 Die Architecture Tests prüfen zusätzlich Event Ownership, Contract-Minimalität, erlaubte
