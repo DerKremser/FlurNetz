@@ -103,6 +103,34 @@ public sealed class MessagingTests
     }
 
     [Fact]
+    public void IntegrationEventEnvelopeRetainsNormalizedCorrelationAndCausationIds()
+    {
+        var envelope = new IntegrationEventEnvelope(
+            Guid.NewGuid(),
+            "test.integration",
+            1,
+            new DateTimeOffset(2026, 8, 31, 16, 15, 0, TimeSpan.Zero),
+            new TestIntegrationEvent("hello", 42),
+            " correlation-123 ",
+            " causation-456 ");
+
+        Assert.Equal(" correlation-123 ", envelope.CorrelationId);
+        Assert.Equal(" causation-456 ", envelope.CausationId);
+
+        var blankEnvelope = new IntegrationEventEnvelope(
+            Guid.NewGuid(),
+            "test.integration",
+            1,
+            new DateTimeOffset(2026, 8, 31, 16, 15, 0, TimeSpan.Zero),
+            new TestIntegrationEvent("hello", 42),
+            "   ",
+            "\t");
+
+        Assert.Null(blankEnvelope.CorrelationId);
+        Assert.Null(blankEnvelope.CausationId);
+    }
+
+    [Fact]
     public void SerializerRoundTripsRegisteredPayloadWithoutClrWireType()
     {
         var registry = new IntegrationEventTypeRegistry();
