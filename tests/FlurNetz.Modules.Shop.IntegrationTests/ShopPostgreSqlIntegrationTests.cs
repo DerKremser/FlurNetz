@@ -21,21 +21,21 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
     private static readonly TimeSpan ConcurrencyTimeout = TimeSpan.FromSeconds(10);
 
     [Fact]
-    public async Task ShopMigrationCreatesExactlyItsCatalogTableAndIsIdempotent()
+    public async Task ShopMigrationsCreateCatalogAndPurchaseRelationsAndAreIdempotent()
     {
         SkipIfDatabaseIsUnavailable();
         await using var factory = CreateFactory();
         await ResetShopMigrationAsync(factory);
 
         var migrationSource = new ShopMigrationSource();
-        var migration = Assert.Single(migrationSource.GetMigrations());
+        var migrations = migrationSource.GetMigrations().OrderBy(migration => migration.Version).ToArray();
         var runner = new MigrationRunner(factory, migrationSource);
 
         var firstRun = await runner.RunAsync(TestToken);
         var secondRun = await runner.RunAsync(TestToken);
 
-        Assert.Equal(new MigrationRunResult(1, 0), firstRun);
-        Assert.Equal(new MigrationRunResult(0, 1), secondRun);
+        Assert.Equal(new MigrationRunResult(2, 0), firstRun);
+        Assert.Equal(new MigrationRunResult(0, 2), secondRun);
 
         await using var connection = await factory.OpenConnectionAsync(TestToken);
         var shopRelations = (await connection.QueryAsync<ShopRelation>(
@@ -48,44 +48,38 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
                       ON namespace_row.oid = relation_row.relnamespace
                     WHERE namespace_row.nspname = 'public'
                       AND substring(relation_row.relname, 1, 5) = 'shop_'
+                      AND relation_row.relkind = 'r'
                     ORDER BY relation_row.relname;
                     """,
                     cancellationToken: TestToken)))
             .ToArray();
-        var userTriggerCount = await connection.QuerySingleAsync<int>(
-            new CommandDefinition(
-                """
-                SELECT COUNT(*)
-                FROM pg_trigger trigger_row
-                JOIN pg_class relation_row
-                  ON relation_row.oid = trigger_row.tgrelid
-                JOIN pg_namespace namespace_row
-                  ON namespace_row.oid = relation_row.relnamespace
-                WHERE namespace_row.nspname = 'public'
-                  AND relation_row.relname = 'shop_offers'
-                  AND NOT trigger_row.tgisinternal;
-                """,
-                cancellationToken: TestToken));
-        var history = await connection.QuerySingleAsync<MigrationHistory>(
-            new CommandDefinition(
-                $"""
-                SELECT owner AS Owner, version AS Version, name AS Name, checksum AS Checksum
-                FROM {MigrationRunner.MigrationHistoryTableName}
-                WHERE owner = 'Shop' AND version = 1;
-                """,
-                cancellationToken: TestToken));
 
-        var shopRelation = Assert.Single(shopRelations);
-        Assert.Equal("shop_offers", shopRelation.RelationName);
-        Assert.Equal("r", shopRelation.RelationKind);
-        Assert.DoesNotContain(shopRelations, relation =>
-            relation.RelationName.Contains("purchase", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(0, userTriggerCount);
-        Assert.Equal("Shop", history.Owner);
-        Assert.Equal(1, history.Version);
-        Assert.Equal("CreateShopOffers", history.Name);
-        Assert.Equal(MigrationChecksum.Compute(migration.Sql), history.Checksum);
-        Assert.NotEmpty(history.Checksum);
+        var histories = (await connection.QueryAsync<MigrationHistory>(
+                new CommandDefinition(
+                    $"""
+                    SELECT owner AS Owner, version AS Version, name AS Name, checksum AS Checksum
+                    FROM {MigrationRunner.MigrationHistoryTableName}
+                    WHERE owner = 'Shop'
+                    ORDER BY version;
+                    """,
+                    cancellationToken: TestToken)))
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "shop_offers",
+                "shop_purchase_guards",
+                "shop_purchase_requests",
+                "shop_purchases"
+            ],
+            shopRelations.Select(relation => relation.RelationName).ToArray());
+        Assert.All(shopRelations, relation => Assert.Equal("r", relation.RelationKind));
+
+        Assert.Equal(2, histories.Length);
+        Assert.Equal([1L, 2L], histories.Select(history => history.Version).ToArray());
+        Assert.Equal(["CreateShopOffers", "CreateShopPurchases"], histories.Select(history => history.Name).ToArray());
+        Assert.Equal(MigrationChecksum.Compute(migrations[0].Sql), histories[0].Checksum);
+        Assert.Equal(MigrationChecksum.Compute(migrations[1].Sql), histories[1].Checksum);
     }
 
     [Fact]
@@ -677,7 +671,14 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         await new MigrationRunner(factory, new ShopMigrationSource()).RunAsync(TestToken);
         await using var connection = await factory.OpenConnectionAsync(TestToken);
         await connection.ExecuteAsync(
-            new CommandDefinition("DELETE FROM shop_offers;", cancellationToken: TestToken));
+            new CommandDefinition(
+                """
+                DELETE FROM shop_purchase_requests;
+                DELETE FROM shop_purchase_guards;
+                DELETE FROM shop_purchases;
+                DELETE FROM shop_offers;
+                """,
+                cancellationToken: TestToken));
     }
 
     private static async Task ResetShopMigrationAsync(PostgreSqlConnectionFactory factory)
@@ -687,9 +688,12 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         await connection.ExecuteAsync(
             new CommandDefinition(
                 $"""
+                DROP TABLE IF EXISTS shop_purchase_requests;
+                DROP TABLE IF EXISTS shop_purchase_guards;
+                DROP TABLE IF EXISTS shop_purchases;
                 DROP TABLE IF EXISTS shop_offers;
                 DELETE FROM {MigrationRunner.MigrationHistoryTableName}
-                WHERE owner = 'Shop' AND version = 1;
+                WHERE owner = 'Shop' AND version IN (1, 2);
                 """,
                 cancellationToken: TestToken));
     }
