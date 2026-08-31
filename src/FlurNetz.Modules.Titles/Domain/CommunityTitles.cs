@@ -49,6 +49,53 @@ public sealed class CommunityTitles
     }
 
     /// <summary>
+    /// Rekonstruiert einen bereits persistierten Title-Zustand ohne fachliche Neuanlage.
+    /// </summary>
+    /// <param name="communityIdentityId">Die gültige interne Community-Identity-ID.</param>
+    /// <param name="unlockedTitleDefinitionIds">Die persistierten Freischaltungen.</param>
+    /// <param name="currentTitleDefinitionId">Die persistierte aktuelle Auswahl oder <see langword="null"/>.</param>
+    /// <returns>Der exakt aus dem gespeicherten Zustand rekonstruierte Title-Zustand.</returns>
+    /// <exception cref="ArgumentNullException">Wenn die Freischaltungs-Sammlung fehlt.</exception>
+    /// <exception cref="ArgumentException">Wenn eine Identität oder Title-Definition ungültig ist.</exception>
+    /// <exception cref="TitleNotUnlockedException">
+    /// Wenn die aktuelle Auswahl nicht in den Freischaltungen enthalten ist.
+    /// </exception>
+    /// <remarks>
+    /// Die Collection wird in eine eigene Set-Repräsentation kopiert. Duplikate sind daher
+    /// wirkungslos, während ein inkonsistenter persistierter Current-Zustand sichtbar fehlschlägt.
+    /// </remarks>
+    public static CommunityTitles Rehydrate(
+        CommunityIdentityId communityIdentityId,
+        IEnumerable<TitleDefinitionId> unlockedTitleDefinitionIds,
+        TitleDefinitionId? currentTitleDefinitionId)
+    {
+        EnsureValidCommunityIdentityId(communityIdentityId);
+        ArgumentNullException.ThrowIfNull(unlockedTitleDefinitionIds);
+
+        var unlockedTitles = new HashSet<TitleDefinitionId>();
+        foreach (var titleDefinitionId in unlockedTitleDefinitionIds)
+        {
+            EnsureValidTitleDefinitionId(titleDefinitionId);
+            unlockedTitles.Add(titleDefinitionId);
+        }
+
+        if (currentTitleDefinitionId is { } current)
+        {
+            EnsureValidTitleDefinitionId(current);
+
+            if (!unlockedTitles.Contains(current))
+            {
+                throw new TitleNotUnlockedException();
+            }
+        }
+
+        var titles = new CommunityTitles(communityIdentityId);
+        titles._unlockedTitleDefinitionIds.UnionWith(unlockedTitles);
+        titles.CurrentTitleDefinitionId = currentTitleDefinitionId;
+        return titles;
+    }
+
+    /// <summary>
     /// Schaltet eine Title-Definition idempotent frei.
     /// </summary>
     /// <param name="titleDefinitionId">Die freizuschaltende Title-Definition.</param>

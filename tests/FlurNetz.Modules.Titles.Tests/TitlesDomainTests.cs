@@ -360,14 +360,140 @@ public sealed class CommunityTitlesTests
     }
 
     [Fact]
-    public void Foundation_HasNoPublicRehydratePath()
+    public void Rehydrate_StartsWithoutUnlocksOrCurrent()
     {
-        var rehydrateMethods = typeof(CommunityTitles)
-            .GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Where(method => method.Name == "Rehydrate")
-            .ToArray();
+        var communityIdentityId = CommunityIdentityId.New();
 
-        Assert.Empty(rehydrateMethods);
+        var titles = CommunityTitles.Rehydrate(
+            communityIdentityId,
+            [],
+            null);
+
+        Assert.Equal(communityIdentityId, titles.CommunityIdentityId);
+        Assert.Empty(titles.UnlockedTitleDefinitionIds);
+        Assert.Null(titles.CurrentTitleDefinitionId);
+    }
+
+    [Fact]
+    public void Rehydrate_RestoresMultipleUnlocks()
+    {
+        var first = TitleDefinitionId.New();
+        var second = TitleDefinitionId.New();
+
+        var titles = CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            [first, second],
+            null);
+
+        Assert.Equal(2, titles.UnlockedTitleDefinitionIds.Count);
+        Assert.Contains(first, titles.UnlockedTitleDefinitionIds);
+        Assert.Contains(second, titles.UnlockedTitleDefinitionIds);
+    }
+
+    [Fact]
+    public void Rehydrate_RestoresCurrentWhenItIsUnlocked()
+    {
+        var current = TitleDefinitionId.New();
+
+        var titles = CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            [current],
+            current);
+
+        Assert.Equal(current, titles.CurrentTitleDefinitionId);
+        Assert.True(titles.IsUnlocked(current));
+    }
+
+    [Fact]
+    public void Rehydrate_RequiresCurrentToBeUnlocked()
+    {
+        var current = TitleDefinitionId.New();
+
+        Assert.Throws<TitleNotUnlockedException>(() => CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            [],
+            current));
+    }
+
+    [Fact]
+    public void Rehydrate_RejectsInvalidCommunityIdentityId()
+    {
+        Assert.Throws<ArgumentException>(() => CommunityTitles.Rehydrate(
+            default,
+            [],
+            null));
+    }
+
+    [Fact]
+    public void Rehydrate_RejectsNullUnlockCollection()
+    {
+        Assert.Throws<ArgumentNullException>(() => CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            null!,
+            null));
+    }
+
+    [Fact]
+    public void Rehydrate_RejectsInvalidUnlock()
+    {
+        Assert.Throws<ArgumentException>(() => CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            [default(TitleDefinitionId)],
+            null));
+    }
+
+    [Fact]
+    public void Rehydrate_RejectsInvalidCurrent()
+    {
+        TitleDefinitionId? invalidCurrent = default(TitleDefinitionId);
+
+        Assert.Throws<ArgumentException>(() => CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            [],
+            invalidCurrent));
+    }
+
+    [Fact]
+    public void Rehydrate_UnifiesDuplicateUnlockIds()
+    {
+        var titleDefinitionId = TitleDefinitionId.New();
+
+        var titles = CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            [titleDefinitionId, titleDefinitionId],
+            null);
+
+        Assert.Single(titles.UnlockedTitleDefinitionIds);
+    }
+
+    [Fact]
+    public void Rehydrate_CopiesTheInputCollection()
+    {
+        var titleDefinitionId = TitleDefinitionId.New();
+        var input = new List<TitleDefinitionId> { titleDefinitionId };
+
+        var titles = CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            input,
+            null);
+        input.Clear();
+
+        Assert.Single(titles.UnlockedTitleDefinitionIds);
+        Assert.Contains(titleDefinitionId, titles.UnlockedTitleDefinitionIds);
+    }
+
+    [Fact]
+    public void Rehydrate_KeepsCurrentInsideTheUnlockSet()
+    {
+        var first = TitleDefinitionId.New();
+        var current = TitleDefinitionId.New();
+
+        var titles = CommunityTitles.Rehydrate(
+            CommunityIdentityId.New(),
+            [first, current],
+            current);
+
+        Assert.Contains(titles.CurrentTitleDefinitionId!.Value, titles.UnlockedTitleDefinitionIds);
     }
 
     private static CommunityTitles CreateTitles() =>

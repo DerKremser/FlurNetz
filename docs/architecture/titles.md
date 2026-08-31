@@ -1,10 +1,11 @@
-# Titles Foundation
+# Titles-Vertical-Slice
 
 ## Verantwortung
 
 Das Titles-Modul besitzt den fachlichen Titelzustand einer internen
 `CommunityIdentityId`. Es verwaltet die Titelberechtigungen dieser Community-Identität
-und die optionale aktuelle Titelauswahl. Externe Plattformidentitäten werden nicht im
+und die optionale aktuelle Titelauswahl. Der erste persistierte Vertical Slice speichert
+diesen Zustand unabhängig in PostgreSQL. Externe Plattformidentitäten werden nicht im
 Titles-Modul modelliert.
 
 ## `TitleDefinitionId`
@@ -13,17 +14,19 @@ Titles-Modul modelliert.
 Kennung. Sie identifiziert eine Titeldefinition ausschließlich über ihre ID. Namen,
 Anzeigenamen, Beschreibungen, Icons, Farben, CSS, Badges, Kategorien, Seltenheit,
 Sortierung, Übersetzungen, Sichtbarkeit und Unlock-Bedingungen sind keine Bestandteile
-dieser Foundation.
+dieses Slices.
 
 Ein Titelkatalog beziehungsweise ein `TitleDefinition`-Aggregat wird erst mit einem
-konkreten späteren Bedarf modelliert.
+konkreten späteren Bedarf modelliert. Es gibt noch keine `title_definitions`-Tabelle.
 
-## `CommunityTitles`
+## `CommunityTitles` und Rehydration
 
-`CommunityTitles` gehört genau einer gültigen `CommunityIdentityId`. Ein neuer Zustand
-startet ohne freigeschaltete Titel und ohne aktuelle Auswahl. Die freigeschalteten
-`TitleDefinitionId`-Werte werden intern eindeutig gehalten und nach außen nur als
-schreibgeschützter Snapshot lesbar gemacht.
+`CommunityTitles` gehört genau einer gültigen `CommunityIdentityId`. `Create` erzeugt
+einen neuen leeren Zustand. `Rehydrate` rekonstruiert dagegen einen bereits gespeicherten
+Zustand aus der Freischaltungsmenge und der optionalen aktuellen Auswahl. Die übergebene
+Collection wird in eine eigene Set-Repräsentation kopiert; Duplikate werden vereinheitlicht.
+Ein Current, der nicht freigeschaltet ist, führt mit `TitleNotUnlockedException` zu einem
+sichtbaren Fehler. Der beschädigte Zustand wird nicht automatisch repariert.
 
 Die Domain bietet folgende Operationen:
 
@@ -32,38 +35,69 @@ Die Domain bietet folgende Operationen:
 - `SetCurrent` wählt einen freigeschalteten Titel aus und ersetzt eine bestehende Auswahl.
 - `ClearCurrent` entfernt die aktuelle Auswahl, ohne Freischaltungen zu verändern.
 
-Die Rückgabewerte zeigen an, ob sich der Zustand tatsächlich verändert hat. Das Setzen
-eines nicht freigeschalteten Titels wird mit `TitleNotUnlockedException` abgelehnt.
+Die Rückgabewerte zeigen an, ob sich der Zustand tatsächlich verändert hat. Ein aktuell
+ausgewählter Titel ist immer freigeschaltet; das Sperren des aktuellen Titels entfernt
+daher zugleich die Auswahl.
 
-## Invarianten
+## Application und atomarer Store
 
-- Eine Community-Identität kann null bis beliebig viele unterschiedliche Titel besitzen.
-- Es gibt höchstens eine aktuelle Titelauswahl.
-- Ein aktuell ausgewählter Titel ist immer Teil der freigeschalteten Titelmenge.
-- Das Sperren des aktuellen Titels entfernt daher gleichzeitig die aktuelle Auswahl.
-- Fehlgeschlagene Operationen verändern den bestehenden Zustand nicht.
+Die interne Application-Schicht enthält `UnlockCommunityTitle`, `LockCommunityTitle`,
+`SetCurrentCommunityTitle` und `ClearCurrentCommunityTitle`. Sie delegieren die
+fachliche Operation an `ICommunityTitlesStore` und enthalten keine SQL-, Locking- oder
+Invariantenlogik.
 
-## Contracts
+`CommunityTitlesStore` öffnet eine `PostgreSqlTransaction`, validiert die Community-ID,
+legt die Root-Zeile bei Bedarf mit `ON CONFLICT DO NOTHING` an und sperrt sie anschließend
+mit `SELECT FOR UPDATE`. Danach werden Unlocks und Current geladen, über `Rehydrate`
+in die Domain überführt und vor dem synchronen Domain-Callback als eigene Snapshots
+gesichert. Nur der Zustands-Diff wird zurückgeschrieben. Neue Unlocks werden zuerst
+eingefügt, danach wird die Selection synchronisiert und zuletzt werden entfernte Unlocks
+gelöscht. Commit und Rückgabewert erfolgen erst nach erfolgreicher Persistierung.
 
-`FlurNetz.Modules.Titles.Contracts` bleibt in dieser Foundation vollständig leer. Es gibt
-noch keinen Cross-Module-Caller, der einen öffentlichen Titles-Contract benötigt.
+Jede Exception einschließlich `TitleNotUnlockedException` und Cancellation führt zum
+Rollback; auch eine beim ersten Zugriff erzeugte Root-Zeile wird dann nicht committed.
+Der synchrone Callback ist bewusst nicht asynchron, damit keine beliebige externe I/O in
+der offenen Titles-Transaktion ausgeführt werden kann.
 
-`FlurNetz.Modules.Titles` referenziert neben dem eigenen leeren Contracts-Projekt
-ausschließlich `FlurNetz.Modules.Identity.Contracts` und verwendet daraus die zentrale
-`CommunityIdentityId`.
+## PostgreSQL-Schema
 
-## Bewusst nicht enthalten
+Titles besitzt im bestehenden `public`-Schema genau drei eigene Tabellen:
 
-- Persistence, PostgreSQL, SQL, Dapper, Migrationen oder Rehydration
-- Repository, Store, Application Use Cases oder Modulregistrierung
-- Messaging, Domain Events, Integration Events, Inbox oder Outbox
-- Rewards-, Achievement-, Shop-, Inventory-, Progression- oder Economy-Anbindung
-- API, Controller, Endpoints, Admin UI, Worker oder Overlay
-- Titelkatalog und Darstellungsmetadaten
-- Plattformidentitäten oder externe Integrationen
+- `community_titles` mit `community_identity_id` als Aggregate- und Lock-Schlüssel
+- `community_title_unlocks` mit dem Composite Primary Key aus Community- und Titel-ID
+- `community_title_selections` mit genau einer möglichen Selection pro Community
 
-## Spätere Slices
+Die Titles-Tabellen besitzen interne Foreign Keys auf den Root und von der Selection auf
+einen passenden Unlock. Dadurch ist die Invariante Current → Unlock zusätzlich in der
+Datenbank geschützt. `community_identity_id` bleibt ein fachlicher Cross-Module-Identifier;
+es gibt keinen Foreign Key auf `community_identities` oder Tabellen anderer Module.
+Eine `title_definitions`-Tabelle wird in diesem Slice nicht angelegt.
 
-Persistence und konkrete Cross-Module-Kompositionen werden erst bei einem konkreten
-fachlichen Bedarf in eigenen Slices ergänzt. Diese Foundation nimmt weder eine spätere
-Tabellenstruktur noch eine Eventstruktur vorweg.
+Der Root-Lock serialisiert Operationen pro `CommunityIdentityId`. Unterschiedliche
+Communities können parallel verarbeitet werden. Es wird kein künstliches
+`SERIALIZABLE` und kein globaler Advisory Lock verwendet.
+
+## Contracts und Grenzen
+
+`FlurNetz.Modules.Titles.Contracts` bleibt vollständig leer. `TitleDefinitionId` und alle
+anderen Domain-, Application-, Persistence-, Migration- und Registrierungs-Typen bleiben
+implementation-owned. Das Titles-Projekt referenziert neben dem leeren eigenen Contract
+und `FlurNetz.Modules.Identity.Contracts` ausschließlich `FlurNetz.Persistence`.
+
+Nicht enthalten sind Messaging, Domain Events, Integration Events, Inbox, Outbox,
+Rewards-, Achievements-, Shop-, Inventory-, Progression- oder Economy-Anbindung, API,
+Controller, Admin UI, Worker, Overlay, Plattformintegrationen und ein Titelkatalog.
+Der Slice ist noch nicht in API oder Worker verdrahtet.
+
+## Tests
+
+Die Domain- und Application-Unit-Tests prüfen Rehydration, Kopieren und Validierung des
+Zustands, die eingefrorenen Invarianten und die reine Store-Delegation. Die
+Architecture Tests prüfen Ownership, leere Contracts, Namespace- und
+Projektabhängigkeitsgrenzen, Migration und Modulregistrierung.
+
+`FlurNetz.Modules.Titles.IntegrationTests` verwendet echtes PostgreSQL über
+Testcontainers (`postgres:15.1`) oder `FLURNETZ_TEST_CONNECTION_STRING`. Es prüft
+Migration und Idempotenz, die vier atomaren Operationen, FK-Constraints, Rehydration,
+Rollback, Isolation und konkurrierende Änderungen derselben sowie verschiedener
+Communities.

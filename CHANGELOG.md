@@ -7,6 +7,10 @@
 - Minimale Titles-Domain für freigeschaltete und aktuell ausgewählte Community-Titel.
 - Stabile `TitleDefinitionId` sowie invariantengesicherte `Unlock`-, `Lock`-, `SetCurrent`- und `ClearCurrent`-Operationen.
 - Idempotente Titelberechtigungen ohne Persistence-, Rewards-, Achievement- oder Shop-Kopplung.
+- Erster persistierter Titles-Vertical-Slice mit `CommunityTitles.Rehydrate` und atomarer Unlock-, Lock-, SetCurrent- und ClearCurrent-Persistenz.
+- Titles-eigene PostgreSQL-Migration mit drei modul-owned Tabellen und einer Datenbankinvariante von Current zu Unlock über interne Foreign Keys.
+- PostgreSQL-Root-Row-Locking pro `CommunityIdentityId` zum Schutz vor verlorenen Änderungen bei konkurrierenden Titles-Operationen.
+- Echte Titles-PostgreSQL-Integrationstests für Migration, Constraints, Rehydration, Rollback, Isolation und Nebenläufigkeit.
 - Erster persistierter Inventory-Vertical-Slice mit atomaren Add-/Remove-Operationen.
 - Inventory-eigene PostgreSQL-Migration mit Composite Primary Key und Nichtnegativ-Check.
 - Sparse Inventory-Persistenz: Bestände bei null werden gelöscht und fehlende Removes legen keine Zeile an.
