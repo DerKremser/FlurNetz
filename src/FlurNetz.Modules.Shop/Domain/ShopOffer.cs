@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Text;
 using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Shop.Contracts;
 
@@ -9,16 +11,18 @@ namespace FlurNetz.Modules.Shop.Domain;
 /// <remarks>
 /// Das Modell enthält ausschließlich Angebotsstammdaten. Es kennt weder Käufe, Identitäten,
 /// Economy, Persistence noch eine Bestandsvergabe. Neue Angebote sind immer deaktiviert.
+/// Anzeigename und Beschreibung werden nach Unicode-Skalarwerten passend zur PostgreSQL-
+/// Zeichensemantik begrenzt; U+0000 und nicht wohlgeformtes UTF-16 werden abgewiesen.
 /// </remarks>
 public sealed class ShopOffer
 {
     /// <summary>
-    /// Maximale Länge des kanonischen Anzeigenamens in .NET-<see cref="string.Length"/>-Zeichen.
+    /// Maximale Anzahl Unicode-Skalarwerte des kanonischen Anzeigenamens.
     /// </summary>
     public const int MaxDisplayNameLength = 200;
 
     /// <summary>
-    /// Maximale Länge der kanonischen Beschreibung in .NET-<see cref="string.Length"/>-Zeichen.
+    /// Maximale Anzahl Unicode-Skalarwerte der kanonischen Beschreibung.
     /// </summary>
     public const int MaxDescriptionLength = 2000;
 
@@ -29,7 +33,8 @@ public sealed class ShopOffer
         string? description,
         ShopPrice price,
         AvailabilityWindow availabilityWindow,
-        int? purchaseLimitPerIdentity)
+        int? purchaseLimitPerIdentity,
+        bool isEnabled)
     {
         Id = id;
         ItemDefinitionId = itemDefinitionId;
@@ -38,7 +43,7 @@ public sealed class ShopOffer
         Price = price;
         Availability = availabilityWindow;
         PurchaseLimitPerIdentity = purchaseLimitPerIdentity;
-        IsEnabled = false;
+        IsEnabled = isEnabled;
     }
 
     /// <summary>
@@ -126,7 +131,8 @@ public sealed class ShopOffer
             NormalizeDescription(description),
             price,
             availabilityWindow,
-            NormalizePurchaseLimit(purchaseLimitPerIdentity));
+            NormalizePurchaseLimit(purchaseLimitPerIdentity),
+            false);
     }
 
     /// <summary>
@@ -148,6 +154,38 @@ public sealed class ShopOffer
             price,
             availabilityWindow,
             purchaseLimitPerIdentity);
+    }
+
+    /// <summary>
+    /// Rekonstruiert ein bereits persistiertes Shop-Angebot vollständig.
+    /// </summary>
+    /// <remarks>
+    /// Die Rehydration verwendet dieselben Validierungen wie die Erstellung, übernimmt aber
+    /// den persistierten Aktivierungszustand unverändert. Dadurch bleiben beschädigte
+    /// Persistenzdaten sichtbar, ohne öffentliche Setter oder Persistence-Typen einzuführen.
+    /// </remarks>
+    public static ShopOffer Rehydrate(
+        ShopOfferId id,
+        ItemDefinitionId itemDefinitionId,
+        string displayName,
+        string? description,
+        ShopPrice price,
+        bool isEnabled,
+        AvailabilityWindow availabilityWindow,
+        int? purchaseLimitPerIdentity)
+    {
+        EnsureValidId(id);
+        EnsureValidItemDefinitionId(itemDefinitionId);
+
+        return new ShopOffer(
+            id,
+            itemDefinitionId,
+            NormalizeDisplayName(displayName),
+            NormalizeDescription(description),
+            price,
+            availabilityWindow,
+            NormalizePurchaseLimit(purchaseLimitPerIdentity),
+            isEnabled);
     }
 
     /// <summary>
@@ -268,22 +306,11 @@ public sealed class ShopOffer
 
     private static string NormalizeDisplayName(string? displayName)
     {
-        if (string.IsNullOrWhiteSpace(displayName))
-        {
-            throw new ArgumentException(
-                "Der Shop-Anzeigename darf nicht leer oder aus Whitespace bestehen.",
-                nameof(displayName));
-        }
-
-        var normalizedDisplayName = displayName.Trim();
-        if (normalizedDisplayName.Length > MaxDisplayNameLength)
-        {
-            throw new ArgumentException(
-                "Der Shop-Anzeigename darf höchstens " + MaxDisplayNameLength + " Zeichen lang sein.",
-                nameof(displayName));
-        }
-
-        return normalizedDisplayName;
+        return NormalizeRequiredText(
+            displayName,
+            nameof(displayName),
+            "Der Shop-Anzeigename",
+            MaxDisplayNameLength);
     }
 
     private static string? NormalizeDescription(string? description)
@@ -293,22 +320,70 @@ public sealed class ShopOffer
             return null;
         }
 
-        if (string.IsNullOrWhiteSpace(description))
+        return NormalizeRequiredText(
+            description,
+            nameof(description),
+            "Die Shop-Beschreibung",
+            MaxDescriptionLength);
+    }
+
+    private static string NormalizeRequiredText(
+        string? value,
+        string parameterName,
+        string fieldName,
+        int maximumScalarCount)
+    {
+        if (string.IsNullOrWhiteSpace(value))
         {
             throw new ArgumentException(
-                "Die Shop-Beschreibung darf nicht leer oder aus Whitespace bestehen.",
-                nameof(description));
+                $"{fieldName} darf nicht leer oder aus Whitespace bestehen.",
+                parameterName);
         }
 
-        var normalizedDescription = description.Trim();
-        if (normalizedDescription.Length > MaxDescriptionLength)
+        var normalizedValue = value.Trim();
+        var scalarCount = CountUnicodeScalars(normalizedValue, parameterName, fieldName);
+        if (scalarCount > maximumScalarCount)
         {
             throw new ArgumentException(
-                "Die Shop-Beschreibung darf höchstens " + MaxDescriptionLength + " Zeichen lang sein.",
-                nameof(description));
+                $"{fieldName} darf höchstens {maximumScalarCount} Unicode-Skalarwerte enthalten.",
+                parameterName);
         }
 
-        return normalizedDescription;
+        return normalizedValue;
+    }
+
+    private static int CountUnicodeScalars(
+        string value,
+        string parameterName,
+        string fieldName)
+    {
+        if (value.IndexOf('\0') >= 0)
+        {
+            throw new ArgumentException(
+                $"{fieldName} darf kein U+0000 enthalten.",
+                parameterName);
+        }
+
+        var remaining = value.AsSpan();
+        var scalarCount = 0;
+        while (!remaining.IsEmpty)
+        {
+            var status = Rune.DecodeFromUtf16(
+                remaining,
+                out _,
+                out var charsConsumed);
+            if (status != OperationStatus.Done)
+            {
+                throw new ArgumentException(
+                    $"{fieldName} muss gültiges, wohlgeformtes UTF-16 enthalten.",
+                    parameterName);
+            }
+
+            scalarCount++;
+            remaining = remaining[charsConsumed..];
+        }
+
+        return scalarCount;
     }
 
     private static int? NormalizePurchaseLimit(int? purchaseLimitPerIdentity)

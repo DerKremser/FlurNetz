@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text;
 using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Modules.Shop.Domain;
@@ -150,6 +151,53 @@ public sealed class AvailabilityWindowTests
     }
 
     [Fact]
+    public void Create_CanonicalizesSetBoundariesToUtc()
+    {
+        var from = new DateTimeOffset(2026, 1, 1, 14, 0, 0, TimeSpan.FromHours(2));
+        var until = new DateTimeOffset(2026, 1, 1, 13, 0, 0, TimeSpan.Zero);
+
+        var window = AvailabilityWindow.Create(from, until);
+
+        Assert.Equal(TimeSpan.Zero, window.AvailableFrom!.Value.Offset);
+        Assert.Equal(TimeSpan.Zero, window.AvailableUntil!.Value.Offset);
+        Assert.Equal(from.UtcDateTime, window.AvailableFrom.Value.UtcDateTime);
+        Assert.Equal(until.UtcDateTime, window.AvailableUntil.Value.UtcDateTime);
+        Assert.Equal(
+            AvailabilityWindow.Create(
+                new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero),
+                until),
+            window);
+    }
+
+    [Fact]
+    public void Create_AcceptsMicrosecondPrecisionForBothBoundaries()
+    {
+        var from = From.AddTicks(10);
+        var until = Until.AddTicks(10);
+
+        var window = AvailabilityWindow.Create(from, until);
+
+        Assert.Equal(from, window.AvailableFrom);
+        Assert.Equal(until, window.AvailableUntil);
+    }
+
+    [Fact]
+    public void Create_RejectsSubMicrosecondPrecision()
+    {
+        Assert.Throws<ArgumentException>(() => AvailabilityWindow.Create(From.AddTicks(1), null));
+        Assert.Throws<ArgumentException>(() => AvailabilityWindow.Create(null, Until.AddTicks(1)));
+    }
+
+    [Fact]
+    public void Create_RejectsAnEmptyWindowAfterUtcCanonicalization()
+    {
+        var from = new DateTimeOffset(2026, 1, 1, 14, 0, 0, TimeSpan.FromHours(2));
+        var until = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Throws<ArgumentException>(() => AvailabilityWindow.Create(from, until));
+    }
+
+    [Fact]
     public void Create_RejectsEqualStartAndEnd()
     {
         Assert.Throws<ArgumentException>(() => AvailabilityWindow.Create(From, From));
@@ -263,7 +311,44 @@ public sealed class ShopOfferTests
             ItemDefinitionId.New(),
             new string('a', ShopOffer.MaxDisplayNameLength));
 
-        Assert.Equal(ShopOffer.MaxDisplayNameLength, offer.DisplayName.Length);
+        Assert.Equal(ShopOffer.MaxDisplayNameLength, CountUnicodeScalars(offer.DisplayName));
+    }
+
+    [Fact]
+    public void Create_AcceptsDisplayNameAtMaximumUnicodeScalarLength()
+    {
+        var displayName = RepeatUnicodeScalar("😀", ShopOffer.MaxDisplayNameLength);
+
+        var offer = ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            displayName);
+
+        Assert.Equal(displayName, offer.DisplayName);
+        Assert.Equal(ShopOffer.MaxDisplayNameLength, CountUnicodeScalars(offer.DisplayName));
+    }
+
+    [Fact]
+    public void Create_RejectsDisplayNameAboveMaximumUnicodeScalarLength()
+    {
+        Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            RepeatUnicodeScalar("😀", ShopOffer.MaxDisplayNameLength + 1)));
+    }
+
+    [Fact]
+    public void Create_CountsMixedBmpAndSupplementaryUnicodeAsScalars()
+    {
+        var displayName = string.Concat(Enumerable.Repeat("a😀", ShopOffer.MaxDisplayNameLength / 2));
+
+        var offer = ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            displayName);
+
+        Assert.Equal(ShopOffer.MaxDisplayNameLength, CountUnicodeScalars(offer.DisplayName));
+        Assert.Equal(displayName, offer.DisplayName);
     }
 
     [Fact]
@@ -329,7 +414,28 @@ public sealed class ShopOfferTests
     {
         var offer = CreateOffer(description: new string('b', ShopOffer.MaxDescriptionLength));
 
-        Assert.Equal(ShopOffer.MaxDescriptionLength, offer.Description!.Length);
+        Assert.Equal(ShopOffer.MaxDescriptionLength, CountUnicodeScalars(offer.Description!));
+    }
+
+    [Fact]
+    public void Create_AcceptsDescriptionAtMaximumUnicodeScalarLength()
+    {
+        var description = RepeatUnicodeScalar("🧪", ShopOffer.MaxDescriptionLength);
+
+        var offer = CreateOffer(description: description);
+
+        Assert.Equal(description, offer.Description);
+        Assert.Equal(ShopOffer.MaxDescriptionLength, CountUnicodeScalars(offer.Description!));
+    }
+
+    [Fact]
+    public void Create_RejectsDescriptionAboveMaximumUnicodeScalarLength()
+    {
+        Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Angebot",
+            RepeatUnicodeScalar("🧪", ShopOffer.MaxDescriptionLength + 1)));
     }
 
     [Fact]
@@ -369,6 +475,50 @@ public sealed class ShopOfferTests
             ItemDefinitionId.New(),
             "Angebot",
             "\u2003\u00a0\u202f\u3000"));
+    }
+
+    [Fact]
+    public void Create_RejectsNullCharacterInDisplayName()
+    {
+        Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Angebot\0intern"));
+    }
+
+    [Fact]
+    public void Create_RejectsNullCharacterInDescription()
+    {
+        Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Angebot",
+            "Beschreibung\0intern"));
+    }
+
+    [Fact]
+    public void Create_RejectsUnpairedSurrogateInDisplayName()
+    {
+        foreach (var displayName in new[] { new string('\uD800', 1), new string('\uDC00', 1) })
+        {
+            Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+                ShopOfferId.New(),
+                ItemDefinitionId.New(),
+                displayName));
+        }
+    }
+
+    [Fact]
+    public void Create_RejectsUnpairedSurrogateInDescription()
+    {
+        foreach (var description in new[] { new string('\uD800', 1), new string('\uDC00', 1) })
+        {
+            Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+                ShopOfferId.New(),
+                ItemDefinitionId.New(),
+                "Angebot",
+                description));
+        }
     }
 
     [Theory]
@@ -428,6 +578,27 @@ public sealed class ShopOfferTests
     }
 
     [Fact]
+    public void Rename_AcceptsMaximumSupplementaryUnicodeScalars()
+    {
+        var displayName = RepeatUnicodeScalar("😀", ShopOffer.MaxDisplayNameLength);
+        var offer = CreateOffer();
+
+        Assert.True(offer.Rename(displayName));
+        Assert.Equal(displayName, offer.DisplayName);
+        Assert.Equal(ShopOffer.MaxDisplayNameLength, CountUnicodeScalars(offer.DisplayName));
+    }
+
+    [Fact]
+    public void Rename_RejectsNullCharacterAndUnpairedSurrogate()
+    {
+        var offer = CreateOffer();
+
+        Assert.Throws<ArgumentException>(() => offer.Rename("Neu\0intern"));
+        Assert.Throws<ArgumentException>(() => offer.Rename(new string('\uD800', 1)));
+        Assert.Equal("Angebot", offer.DisplayName);
+    }
+
+    [Fact]
     public void Rename_RejectsDisplayNameThatRemainsTooLongAfterUnicodeTrim()
     {
         var offer = CreateOffer();
@@ -474,6 +645,27 @@ public sealed class ShopOfferTests
         Assert.True(offer.ChangeDescription(
             "\u2003" + new string('d', ShopOffer.MaxDescriptionLength) + "\u3000"));
         Assert.Equal(new string('d', ShopOffer.MaxDescriptionLength), offer.Description);
+    }
+
+    [Fact]
+    public void ChangeDescription_AcceptsMaximumSupplementaryUnicodeScalars()
+    {
+        var description = RepeatUnicodeScalar("🧪", ShopOffer.MaxDescriptionLength);
+        var offer = CreateOffer();
+
+        Assert.True(offer.ChangeDescription(description));
+        Assert.Equal(description, offer.Description);
+        Assert.Equal(ShopOffer.MaxDescriptionLength, CountUnicodeScalars(offer.Description!));
+    }
+
+    [Fact]
+    public void ChangeDescription_RejectsNullCharacterAndUnpairedSurrogate()
+    {
+        var offer = CreateOffer();
+
+        Assert.Throws<ArgumentException>(() => offer.ChangeDescription("Neu\0intern"));
+        Assert.Throws<ArgumentException>(() => offer.ChangeDescription(new string('\uD800', 1)));
+        Assert.Equal("Beschreibung", offer.Description);
     }
 
     [Fact]
@@ -654,4 +846,9 @@ public sealed class ShopOfferTests
             ShopPrice.Create(25),
             AvailabilityWindow.Create(From, Until),
             purchaseLimitPerIdentity);
+
+    private static string RepeatUnicodeScalar(string scalar, int count) =>
+        string.Concat(Enumerable.Repeat(scalar, count));
+
+    private static int CountUnicodeScalars(string value) => value.EnumerateRunes().Count();
 }

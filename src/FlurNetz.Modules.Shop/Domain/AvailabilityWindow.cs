@@ -5,7 +5,9 @@ namespace FlurNetz.Modules.Shop.Domain;
 /// </summary>
 /// <remarks>
 /// Das Intervall ist halboffen: Der Start ist inklusive, das Ende exklusiv. Die Struktur liest
-/// keine Systemzeit; der Prüfzeitpunkt wird immer vom Aufrufer übergeben.
+/// keine Systemzeit; der Prüfzeitpunkt wird immer vom Aufrufer übergeben. Gesetzte Grenzen
+/// werden als absolute UTC-Instants mit PostgreSQL-kompatibler Mikrosekundenpräzision
+/// kanonisiert; Sub-Mikrosekundenwerte werden nicht still gerundet.
 /// </remarks>
 public readonly record struct AvailabilityWindow
 {
@@ -18,15 +20,18 @@ public readonly record struct AvailabilityWindow
     /// <param name="availableFrom">Optionaler inklusiver Beginn.</param>
     /// <param name="availableUntil">Optionales exklusives Ende.</param>
     /// <exception cref="ArgumentException">
-    /// Wenn beide Zeitpunkte gesetzt sind und der Beginn nicht vor dem Ende liegt.
+    /// Wenn ein Zeitpunkt nicht exakt auf einer PostgreSQL-kompatiblen Mikrosekunden-Grenze
+    /// liegt oder beide Zeitpunkte gesetzt sind und der Beginn nicht vor dem Ende liegt.
     /// </exception>
     public AvailabilityWindow(
         DateTimeOffset? availableFrom,
         DateTimeOffset? availableUntil)
     {
-        EnsureValidRange(availableFrom, availableUntil);
-        _availableFrom = availableFrom;
-        _availableUntil = availableUntil;
+        var canonicalFrom = Canonicalize(availableFrom, nameof(availableFrom));
+        var canonicalUntil = Canonicalize(availableUntil, nameof(availableUntil));
+        EnsureValidRange(canonicalFrom, canonicalUntil);
+        _availableFrom = canonicalFrom;
+        _availableUntil = canonicalUntil;
     }
 
     /// <summary>
@@ -56,14 +61,35 @@ public readonly record struct AvailabilityWindow
     /// </returns>
     public bool IsAvailableAt(DateTimeOffset at)
     {
-        return (!_availableFrom.HasValue || at >= _availableFrom.Value)
-            && (!_availableUntil.HasValue || at < _availableUntil.Value);
+        var canonicalAt = at.ToUniversalTime();
+        return (!_availableFrom.HasValue || canonicalAt >= _availableFrom.Value)
+            && (!_availableUntil.HasValue || canonicalAt < _availableUntil.Value);
     }
 
     /// <summary>
     /// Prüft, ob der übergebene Zeitpunkt innerhalb des Fensters liegt.
     /// </summary>
     public bool Contains(DateTimeOffset at) => IsAvailableAt(at);
+
+    private static DateTimeOffset? Canonicalize(
+        DateTimeOffset? value,
+        string parameterName)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        var utc = value.Value.ToUniversalTime();
+        if (utc.UtcDateTime.Ticks % TimeSpan.TicksPerMicrosecond != 0)
+        {
+            throw new ArgumentException(
+                "Verfügbarkeitszeitpunkte müssen exakt auf einer PostgreSQL-kompatiblen Mikrosekunden-Grenze liegen.",
+                parameterName);
+        }
+
+        return utc;
+    }
 
     private static void EnsureValidRange(
         DateTimeOffset? availableFrom,
