@@ -107,4 +107,8 @@
 
 ### Geändert
 
+- `IntegrationEventEnvelope` weist normalisierte `CorrelationId` und `CausationId` jetzt
+  korrekt seinen Properties zu; dadurch persistiert die Outbox die technische
+  Shop-Purchase-Request-Korrelation tatsächlich.
+
 - Der bestehende Engagement-zu-Progression-Workflow kann nun außerhalb von Tests kontinuierlich durch einen eigenen Worker-Host verarbeitet werden.
