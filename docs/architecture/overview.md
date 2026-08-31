@@ -1,6 +1,6 @@
 # Architekturübersicht
 
-FlurNetz wird modular aufgebaut. Die physischen Grenzen der vorgesehenen Fachmodule sind jetzt als getrennte Contracts- und Implementierungs-Assemblies angelegt. Identity ist das erste Modul mit einem bewusst minimalen fachlichen Vertical Slice und einer API; Engagement kann eine normalisierte Message-Aktivität gemeinsam mit einer Outbox-Nachricht persistieren; Progression konsumiert diese Nachricht und vergibt atomar 1 XP; Economy persistiert atomare Community-Salden mit PostgreSQL-Zeilensperren; Rewards besitzt nun ein minimales persistiertes und ausführbares Domainmodell für Reward Definitions, Packages, Sources und Grant-Records; Inventory besitzt den ersten persistierten Vertical Slice für mengenbasierte Community-Bestände; Titles besitzt persistierten Community-State und einen unabhängigen Definitionskatalog; Shop besitzt jetzt einen persistierten Angebotskatalog. Die übrigen noch nicht begonnenen Fachmodule enthalten keine Fachlogik, fachlichen Entities, Tabellen oder konkreten Events. Mit `FlurNetz.Api` und `FlurNetz.Worker` besitzt FlurNetz zwei unabhängige ausführbare Hosts. Fachmodule greifen nicht auf fremde Implementierungen oder Tabellen zu; Cross-Module-Komposition erfolgt über öffentliche Capabilities und gemeinsame technische Transaktionen, übrige Kommunikation über öffentliche Contracts und Integration Events.
+FlurNetz wird modular aufgebaut. Die physischen Grenzen der vorgesehenen Fachmodule sind jetzt als getrennte Contracts- und Implementierungs-Assemblies angelegt. Identity ist das erste Modul mit einem bewusst minimalen fachlichen Vertical Slice und einer API; Engagement kann eine normalisierte Message-Aktivität gemeinsam mit einer Outbox-Nachricht persistieren; Progression konsumiert diese Nachricht und vergibt atomar 1 XP; Economy persistiert atomare Community-Salden mit PostgreSQL-Zeilensperren; Rewards besitzt nun ein minimales persistiertes und ausführbares Domainmodell für Reward Definitions, Packages, Sources und Grant-Records; Inventory besitzt den ersten persistierten Vertical Slice für mengenbasierte Community-Bestände; Titles besitzt persistierten Community-State und einen unabhängigen Definitionskatalog; Shop besitzt jetzt zusätzlich zum persistierten Angebotskatalog den ersten atomaren Inventory-Purchase-Slice. Die übrigen noch nicht begonnenen Fachmodule enthalten keine Fachlogik, fachlichen Entities, Tabellen oder konkreten Events. Mit `FlurNetz.Api` und `FlurNetz.Worker` besitzt FlurNetz zwei unabhängige ausführbare Hosts. Fachmodule greifen nicht auf fremde Implementierungen oder Tabellen zu; Cross-Module-Komposition erfolgt über öffentliche Capabilities und gemeinsame technische Transaktionen, übrige Kommunikation über öffentliche Contracts und Integration Events.
 
 Identity bildet mit `CommunityIdentityId` und der minimalen `CommunityIdentity` die zentrale interne Identität eines Community-Mitglieds. Der erste Slice erzeugt diese Identität, persistiert sie in der Identity-eigenen PostgreSQL-Tabelle und lädt sie über die interne ID. Engagement nimmt eine bereits aufgelöste `CommunityIdentityId` an und persistiert intern eine Message-Aktivität mit UTC-Zeitpunkt; es fragt Identity nicht ab und verwendet keinen Cross-Module-Foreign-Key. Externe Plattformkennungen werden an Integrationsgrenzen aufgelöst und ersetzen die interne Identität nicht. Persistence und Messaging werden als getrennte technische Infrastruktur aufgebaut; externe Systeme werden über Adapter integriert.
 
@@ -16,10 +16,11 @@ Economy hält mit `CommunityEconomy` den neutralen Economy-Saldo genau einer int
 Gutschriften und Abbuchungen akzeptieren ausschließlich positive Beträge, schützen vor Overflow
 und verhindern eine Überziehung. Der Zustand wird lazy bei der ersten erfolgreichen Gutschrift
 angelegt. Der interne Store führt Credits und Debits atomar mit `SELECT FOR UPDATE` aus; ein
-fehlgeschlagener Debit auf einen fehlenden Zustand erzeugt keine Zeile. Eine konkrete
-Währungsbezeichnung, Multi-Currency, Messaging, Events, Transfers, Rewards-Trigger, Shop und
-API sind noch nicht Bestandteil dieses Economy-Slices. `Economy.Contracts` bietet inzwischen
-eine schmale transaction-aware Credit-Fähigkeit; Economy kennt deren Aufrufer nicht.
+fehlgeschlagener Debit auf einen fehlenden Zustand erzeugt keine Zeile. Eine konkrete Währungsbezeichnung, Multi-Currency, Transfers, Ledger und Economy-API sind
+weiterhin nicht Bestandteil dieses Economy-Slices. `Economy.Contracts` bietet inzwischen
+schmale transaction-aware Credit- und Debit-Fähigkeiten; Rewards verwendet Credit und der
+Shop-Purchase Debit. Economy kennt deren Aufrufer nicht und behält Domain-, Lock- und
+Tabellenownership selbst.
 
 Rewards beschreibt mit `RewardDefinition` und dem ersten konkreten Typ
 `EconomyBalanceRewardDefinition` eine Economy-Balance-Gutschrift. Definitionen und
@@ -37,8 +38,10 @@ Key beider Kennungen, eine eigene PostgreSQL-Migration und atomare Read/Modify/W
 mit `SELECT FOR UPDATE`. Add legt eine fehlende Position lazy an; Remove auf einer fehlenden
 Position verhält sich wie Bestand null und erzeugt keine Zeile. Wird ein vorhandener Bestand
 exakt auf null reduziert, löscht der Store die Zeile, sodass die Persistenz sparse bleibt.
-`Inventory.Contracts` enthält ausschließlich `ItemDefinitionId`. Messaging, Rewards-/Shop-Anbindung,
-Item-Katalog, API und Worker gehören weiterhin nicht zum Slice. Details stehen in
+`Inventory.Contracts` enthält `ItemDefinitionId` und die schmale transaction-aware
+`IInventoryQuantityGrant`-Capability. Der Shop-Purchase verwendet diese Fähigkeit innerhalb
+seiner eigenen PostgreSQL-Transaktion; Inventory kennt Shop nicht. Messaging, Reward-Ausführung,
+Item-Katalog, API und Worker gehören weiterhin nicht zum Inventory-Slice. Details stehen in
 [inventory.md](inventory.md).
 
 Titles hält mit `CommunityTitles` die freigeschalteten `TitleDefinitionId`-Werte genau einer
@@ -54,16 +57,21 @@ verwenden `SELECT FOR UPDATE` gegen Lost Updates. `Titles.Contracts` bleibt leer
 Rewards-, Achievement- und Shop-Anbindung sowie API und Worker bleiben außerhalb dieses Slices.
 Details stehen in [titles.md](titles.md).
 
-Shop besitzt mit `ShopOffer` das fachliche Angebotsmodell und mit `ShopOfferId` den einzigen
-öffentlichen Shop-Typ in `Shop.Contracts`. Das Angebot verwendet `ItemDefinitionId` aus
-`Inventory.Contracts`, `ShopPrice`, ein halboffenes `AvailabilityWindow` und ein optionales
-Kauflimit. Neue Angebote starten deaktiviert, Ziel-IDs bleiben unveränderlich und Mutationen
-laufen über gezielte Domainmethoden. `ShopOffer.Rehydrate` stellt gespeicherte Angebote über
-denselben Invariantenpfad wieder her. `Shop:1:CreateShopOffers` besitzt ausschließlich
-`shop_offers`; interne Use Cases und ein PostgreSQL-/Dapper-Store führen atomare
-`SELECT FOR UPDATE`-Mutationen aus. Echte PostgreSQL-Integrationstests prüfen Migration,
-Constraints, Roundtrips und Nebenläufigkeit. Käufe, Economy, Inventory Grant, Messaging,
-Events, API und Administration gehören weiterhin nicht zum Slice. Details stehen in
+Shop besitzt neben `ShopOffer` und dem persistierten Angebotskatalog jetzt den ersten
+atomaren Inventory-Kauf. `Shop.Contracts` veröffentlicht `ShopOfferId`,
+`ShopPurchaseId`, `ShopPurchaseRequestId` und
+`ShopPurchaseCompletedIntegrationEvent` mit dem stabilen Typ
+`shop.purchase-completed` v1. `Shop:2:CreateShopPurchases` ergänzt Purchase-, Request- und
+Guard-Persistenz; der einzige Foreign Key bleibt Shop-intern von Purchase auf Offer.
+
+`PostgreSqlShopPurchaseExecutor` besitzt eine gemeinsame PostgreSQL-Transaktion für
+Idempotenz-Reservation, Identity-Existenzprüfung, stabilen Offer-Snapshot, Kauflimit,
+transaction-aware Economy-Debit, Inventory-Grant um exakt eins, Purchase-Write und Outbox.
+Identische Requests erzeugen exakt einen Effekt; Fehler rollen alle Teilwirkungen gemeinsam
+zurück. Shop verwendet dafür ausschließlich `Identity.Contracts`, `Economy.Contracts`,
+`Inventory.Contracts`, Messaging, Persistence und BuildingBlocks, niemals fremde
+Implementierungen oder Tabellen. API, Administration, Shop-Event-Consumer, Worker-Wiring,
+Warenkorb, Stock, Discounts und Refunds bleiben außerhalb dieses Slices. Details stehen in
 [shop.md](shop.md).
 
 Streamer.bot wird später als externer Adapter behandelt und lädt keine internen FlurNetz-Assemblies. Interne FlurNetz-Projekte verwenden .NET 10. PostgreSQL ist die primäre relationale Datenbank; die technische Grundlage dafür liegt in `FlurNetz.Persistence` mit Npgsql und Dapper.
@@ -78,4 +86,8 @@ Die Persistence Foundation stellt einen SQL-first Migration Runner und eine tech
 
 `FlurNetz.Messaging` darf auf BuildingBlocks und Persistence zeigen, nicht umgekehrt. Die Outbox verwendet die vorhandene Persistence-Transaktionskapselung; die unabhängigen Hosts rufen den Processor ausdrücklich auf. Es gibt keinen externen Message Broker.
 
-Die Fachmodule verwenden jeweils das Muster `FlurNetz.Modules.<Module>.Contracts` und `FlurNetz.Modules.<Module>`. Die Implementierung darf nur ihr eigenes Contracts-Projekt und ausdrücklich erlaubte technische Infrastruktur sowie öffentliche Cross-Module-Contracts referenzieren; Engagement verwendet zusätzlich `Identity.Contracts`, Persistence und Messaging, um Activity und Outbox atomar zu speichern. Progression verwendet zusätzlich `Identity.Contracts`, Persistence, Messaging und ausschließlich `Engagement.Contracts`, um das Event als `1 XP` zu interpretieren. Economy verwendet `Identity.Contracts`, Persistence und den eigenen Economy-Contract; Rewards verwendet zusätzlich `Identity.Contracts`, `Economy.Contracts` und Persistence, aber niemals die Economy-Implementierung. Inventory verwendet den eigenen Contract, `Identity.Contracts` und Persistence; Messaging, Rewards und Shop bleiben ausgeschlossen. Shop verwendet ausschließlich `Shop.Contracts`, `Inventory.Contracts` und `FlurNetz.Persistence`; Identity, Economy, Messaging, Rewards, Administration, API und Worker bleiben ausgeschlossen. Titles verwendet den eigenen Contract, `Identity.Contracts` und Persistence; Messaging, Rewards, Achievements, Shop, API und Worker bleiben ausgeschlossen. Fremde Modulimplementierungen sind ausgeschlossen. Identity bleibt das erste Referenzmodul; Engagement veröffentlicht jetzt die erste fachliche Integration-Nachricht und Progression ist der erste Consumer. Der E2E-Workflow ist implementiert, getestet und wird durch den unabhängigen Worker-Host dauerhaft betrieben. Die vollständige Modul-Liste und Umsetzungsreihenfolge stehen in [modules.md](modules.md).
+Die Fachmodule verwenden jeweils das Muster `FlurNetz.Modules.<Module>.Contracts` und `FlurNetz.Modules.<Module>`. Die Implementierung darf nur ihr eigenes Contracts-Projekt und ausdrücklich erlaubte technische Infrastruktur sowie öffentliche Cross-Module-Contracts referenzieren; Engagement verwendet zusätzlich `Identity.Contracts`, Persistence und Messaging, um Activity und Outbox atomar zu speichern. Progression verwendet zusätzlich `Identity.Contracts`, Persistence, Messaging und ausschließlich `Engagement.Contracts`, um das Event als `1 XP` zu interpretieren. Economy verwendet `Identity.Contracts`, Persistence und den eigenen Economy-Contract; Rewards verwendet zusätzlich `Identity.Contracts`, `Economy.Contracts` und Persistence, aber niemals die Economy-Implementierung. Inventory verwendet den eigenen Contract, `Identity.Contracts` und Persistence; Shop kennt es
+nur über `IInventoryQuantityGrant`. Shop verwendet `Shop.Contracts`,
+`Identity.Contracts`, `Economy.Contracts`, `Inventory.Contracts`, BuildingBlocks,
+Messaging und Persistence; fremde Modulimplementierungen, Administration, API und Worker bleiben
+ausgeschlossen. Titles verwendet den eigenen Contract, `Identity.Contracts` und Persistence; Messaging, Rewards, Achievements, Shop, API und Worker bleiben ausgeschlossen. Fremde Modulimplementierungen sind ausgeschlossen. Identity bleibt das erste Referenzmodul; Engagement veröffentlicht jetzt die erste fachliche Integration-Nachricht und Progression ist der erste Consumer. Der E2E-Workflow ist implementiert, getestet und wird durch den unabhängigen Worker-Host dauerhaft betrieben. Die vollständige Modul-Liste und Umsetzungsreihenfolge stehen in [modules.md](modules.md).
