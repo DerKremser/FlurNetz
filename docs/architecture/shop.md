@@ -1,50 +1,55 @@
-# Shop-Katalog-Slice
+# Shop – Katalog und erster atomarer Inventory-Kauf
 
 ## Verantwortung
 
-`FlurNetz.Modules.Shop` besitzt das fachliche Angebotsmodell und den internen, persistierten
-Angebotskatalog. Dieser Slice kennt Angebotsstammdaten, Preise, Verfügbarkeit, Kauflimits und
-Aktivierung. Er kennt weder Käufe noch Identitäten, Economy, Bestandsvergabe oder externe
-Schnittstellen.
+`FlurNetz.Modules.Shop` besitzt den fachlichen Angebotskatalog sowie die Shop-eigene
+Kaufhistorie und Idempotenzgrenze. Ein Angebot verweist unveränderlich auf genau eine
+`ItemDefinitionId` aus `Inventory.Contracts`; ein erfolgreicher Kauf dieses Slices gewährt
+exakt eine Einheit dieser Item-Definition.
 
-## Öffentliche Contracts und Domain
+Shop besitzt weder Identity-, Economy- noch Inventory-Zustände. Diese Module werden beim Kauf
+ausschließlich über schmale, caller-neutrale Contracts innerhalb derselben PostgreSQL-
+Transaktion angesprochen. Es gibt kein globales Unit of Work und kein Cross-Module-SQL.
 
-`FlurNetz.Modules.Shop.Contracts` enthält ausschließlich den unveränderlichen
-`ShopOfferId`. `ItemDefinitionId` wird nicht dupliziert, sondern aus
-`FlurNetz.Modules.Inventory.Contracts` verwendet. `ShopPurchaseId`,
-`ShopPurchaseRequestId`, Kauf-Commands, Queries und Events sind nicht vorhanden.
+## Öffentliche Contracts
+
+`FlurNetz.Modules.Shop.Contracts` enthält:
+
+- `ShopOfferId`
+- `ShopPurchaseId`
+- `ShopPurchaseRequestId`
+- `ShopPurchaseCompletedIntegrationEvent`
+
+Alle drei IDs sind nicht-leere, Guid-basierte und unveränderliche Fachkennungen.
+`ShopPurchaseId` wird serverseitig erzeugt. `ShopPurchaseRequestId` wird vom aufrufenden
+Adapter bereitgestellt und ist die globale Idempotenzkennung eines Kaufrequests.
+
+Das producer-owned Integration Event besitzt den stabilen logischen Typ
+`shop.purchase-completed` und Schema-Version `1`. Die Payload enthält ausschließlich den
+unveränderlichen historischen Kauf: Purchase-, Offer-, CommunityIdentity- und
+ItemDefinition-ID, `PricePaid` und `PurchasedAtUtc`. Die Request-ID ist keine fachliche
+Event-Payload; sie wird als technische Correlation-ID des Outbox-Envelopes verwendet.
+
+`Shop.Contracts` referenziert ausschließlich `FlurNetz.Messaging`; fremde Domain- oder
+Implementierungsassemblies werden nicht veröffentlicht.
+
+## Angebotsdomain und Katalog
 
 `ShopOffer` enthält `ShopOfferId`, `ItemDefinitionId`, den kanonisch getrimmten
-`DisplayName` (1–200 Unicode-Skalarwerte), die optionale nicht-leere `Description` (höchstens
-2000 Unicode-Skalarwerte), `ShopPrice`, `IsEnabled`, das halboffene `AvailabilityWindow` und
-das optionale positive `PurchaseLimitPerIdentity` als `int?`. U+0000 und nicht wohlgeformtes
-UTF-16 werden bereits an der Domain-Grenze abgewiesen. Neue Angebote sind immer deaktiviert.
+`DisplayName` mit höchstens 200 Unicode-Skalarwerten, eine optionale nicht-leere
+`Description` mit höchstens 2000 Unicode-Skalarwerten, `ShopPrice`, `IsEnabled`, das
+halboffene `AvailabilityWindow` sowie ein optionales positives
+`PurchaseLimitPerIdentity`.
 
-Preis und Kauflimit besitzen die Invarianten `price >= 0` beziehungsweise `null oder > 0`.
-Beim Availability-Fenster gilt `[AvailableFrom, AvailableUntil)`: Der Beginn ist inklusive,
-das Ende exklusiv; sind beide Grenzen gesetzt, muss der Beginn vor dem Ende liegen. Gesetzte
-Grenzen werden als absolute UTC-Instants kanonisiert und müssen exakt auf einer Mikrosekunden-
-Grenze liegen, damit jeder akzeptierte Wert verlustfrei in PostgreSQL `timestamptz` persistiert
-werden kann. Sub-Mikrosekundenwerte werden weder abgerundet noch aufgerundet; ein nach der
-UTC-Kanonisierung leeres Fenster ist ungültig.
-Angebots-ID und Item-Definition-ID bleiben unveränderlich. DisplayName, Description, Preis,
-Availability, Kauflimit und Aktivierung werden ausschließlich über gezielte Domainmethoden
-geändert.
+U+0000 und nicht wohlgeformtes UTF-16 werden an der Domain-Grenze abgewiesen. Availability
+verwendet `[AvailableFrom, AvailableUntil)`; gesetzte Grenzen sind kanonische UTC-Instants
+mit exakt PostgreSQL-kompatibler Mikrosekundenpräzision.
 
-`ShopOffer.Rehydrate(...)` ist der kontrollierte Persistence-Einstieg der Domain. Er stellt
-alle persistierten Werte einschließlich des Aktivierungszustands wieder her und validiert
-dieselben Invarianten wie `Create`. Er führt keine öffentlichen Setter ein und enthält keine
-Persistence-Typen.
+`ShopOfferStore` persistiert den Katalog. Katalogmutationen laden genau das Zielangebot mit
+`SELECT ... FOR UPDATE`, rehydrieren die Domain und schreiben nur tatsächliche Änderungen.
+Ein No-op erzeugt kein `UPDATE`. Die unveränderlichen Ziel-IDs werden nie überschrieben.
 
-## Interne Application-Grenze
-
-`IShopOfferStore` liegt im `FlurNetz.Modules.Shop`-Projekt und nicht in `Shop.Contracts`. Die
-Grenze bietet ausschließlich `AddAsync`, `GetAsync`, `ListAsync` und
-`Task<bool> ExecuteAsync(ShopOfferId, Func<ShopOffer, bool>, CancellationToken)`. Der
-nicht-generische boolesche Callback kann technisch keine `Task`- oder `Task<T>`-Rückgabe
-annehmen und bleibt damit synchron auf Domainlogik beschränkt.
-
-Die internen Katalog-Use-Cases sind:
+Die internen Katalog-Use-Cases bleiben:
 
 - `CreateShopOffer`
 - `GetShopOffer`
@@ -57,77 +62,198 @@ Die internen Katalog-Use-Cases sind:
 - `EnableShopOffer`
 - `DisableShopOffer`
 
-Create erzeugt die `ShopOfferId` serverseitig, validiert das Angebot über die Domain, schreibt
-es deaktiviert und liefert das persistierte Domainobjekt zurück. Unbekannte IDs liefern beim
-Lesen `null`; eine unbekannte ID bei einer Mutation führt zu
-`ShopOfferNotFoundException`. Keine dieser Fehler- oder Use-Case-Klassen wird in
-`Shop.Contracts` exportiert.
+## Kaufdomain und Use Case
 
-## PostgreSQL-Persistenz
+`ShopPurchase` ist ein unveränderlicher historischer Snapshot mit:
 
-Die Migration `Shop:1:CreateShopOffers` wird von `ShopMigrationSource` geliefert und besitzt
-ausschließlich die Tabelle `shop_offers`:
+- `ShopPurchaseId`
+- `ShopOfferId`
+- `CommunityIdentityId`
+- `ItemDefinitionId`
+- `PricePaid`
+- `PurchasedAtUtc`
 
-| Spalte | PostgreSQL-Typ | Nullbarkeit |
-| --- | --- | --- |
-| `id` | `uuid` | `NOT NULL` |
-| `item_definition_id` | `uuid` | `NOT NULL` |
-| `display_name` | `varchar(200)` | `NOT NULL` |
-| `description` | `varchar(2000)` | `NULL` |
-| `price` | `bigint` | `NOT NULL` |
-| `is_enabled` | `boolean` | `NOT NULL` |
-| `available_from` | `timestamptz` | `NULL` |
-| `available_until` | `timestamptz` | `NULL` |
-| `purchase_limit_per_identity` | `integer` | `NULL` |
+Es gibt keinen Purchase-Status, keine veränderliche Menge und keinen nachträglichen Preisbezug.
+Der Snapshot bleibt daher unabhängig von späteren Änderungen am Angebot.
 
-Der Primärschlüssel besteht ausschließlich aus `id`. Datenbank-Checks sichern nicht-leere und
-kanonisch getrimmte Texte, den nicht-negativen Preis, das positive Kauflimit und die gültige
-Reihenfolge der Availability-Grenzen. Es gibt keine SQL-Defaults für fachliche Zustände,
-insbesondere wird `is_enabled` beim Insert explizit geschrieben. Es gibt keine Foreign Keys
-auf Inventory, Identity oder andere Cross-Module-Tabellen und keine weiteren Shop-Tabellen.
+`PurchaseShopOffer` nimmt `ShopPurchaseRequestId`, `ShopOfferId` und
+`CommunityIdentityId` entgegen. Der Use Case erzeugt die `ShopPurchaseId` serverseitig,
+liest die Zeit einmal über `IClock`, kanonisiert sie auf UTC mit PostgreSQL-
+Mikrosekundenpräzision und delegiert an `IShopPurchaseExecutor`.
 
-`ShopOfferStore` verwendet die bestehende PostgreSQL-/Dapper-Foundation. Add schreibt alle
-Angebotsfelder ohne eigene fachliche Normalisierung. Get und List rehydrieren über den
-Domainpfad; List verwendet `ORDER BY id`. Die Domain liefert für `timestamptz` bereits
-kanonische UTC-Instants mit PostgreSQL-kompatibler Mikrosekundenpräzision; der Store dupliziert
-diese Zeitlogik nicht und schreibt die Werte unverändert.
+`IShopPurchaseExecutor` ist eine Shop-interne Application-Grenze. Sie enthält keine Dapper-,
+Npgsql-, Connection-, Transaction- oder sonstigen technischen Datenbanktypen.
 
-Mutation öffnet eine `PostgreSqlTransaction`, lädt genau die Zielzeile mit `SELECT ... FOR
-UPDATE`, rehydriert das Angebot, bildet Vorher-/Nachher-Snapshots und aktualisiert nur bei
-tatsächlicher Änderung. Die Snapshots umfassen DisplayName, Description, Price, IsEnabled,
-beide Availability-Grenzen und PurchaseLimitPerIdentity; ID und ItemDefinitionId werden nie
-überschrieben. Ein Domain-No-op liefert `false` und führt zu keinem `UPDATE`. Danach wird
-committed, bei jedem Fehler vollständig zurückgerollt. Das serialisiert konkurrierende
-Änderungen desselben Angebots und lässt unterschiedliche Angebote unabhängig mutieren.
+## Minimale Cross-Module-Capabilities
+
+Für den atomaren Kauf existieren genau drei schmale Contracts:
+
+- `Identity.Contracts.ICommunityIdentityExistence`
+- `Economy.Contracts.IEconomyBalanceDebit`
+- `Inventory.Contracts.IInventoryQuantityGrant`
+
+Alle verwenden ausschließlich fachliche IDs beziehungsweise Beträge und neutrale
+`DbConnection`-/`DbTransaction`-Basistypen. Die implementierenden Module kennen Shop nicht.
+
+Identity prüft nur die Existenz der bereits aufgelösten internen Identität. Economy führt
+denselben Domain- und Row-Lock-Debit wie sein normaler Debit-Pfad aus, aber ohne eigenen
+Commit. Inventory verwendet denselben Domain- und Sparse-Lifecycle wie sein normaler Add-Pfad
+und gewährt im Shop-Slice exakt die Menge `1`.
+
+Shop referenziert keine fremde Modulimplementierung und schreibt niemals direkt in
+`community_identities`, `community_economies` oder `community_inventory_entries`.
+
+## Atomare Kauftransaktion
+
+`PostgreSqlShopPurchaseExecutor` besitzt die vollständige fachliche Transaktionsgrenze:
+
+1. `PostgreSqlTransaction` beginnen.
+2. `ShopPurchaseRequestId` in `shop_purchase_requests` reservieren.
+3. Bei bestehendem identischem Request den bereits persistierten Kauf laden und zurückgeben.
+4. Bei gleicher Request-ID mit anderer Identity oder anderem Offer
+   `ShopPurchaseIdempotencyConflictException` auslösen.
+5. Existenz der `CommunityIdentityId` über Identity innerhalb derselben Connection und
+   Transaction prüfen.
+6. Das Angebot mit `FOR SHARE` laden und rehydrieren.
+7. Aktivierung und `AvailabilityWindow` gegen den einmal bestimmten Kaufzeitpunkt prüfen.
+8. Falls ein Kauflimit gesetzt ist, den Guard für
+   `(shop_offer_id, community_identity_id)` lazy anlegen, mit `FOR UPDATE` sperren und
+   bereits persistierte Käufe zählen.
+9. Den gesperrten aktuellen Preis als `PricePaid` snapshotten.
+10. Bei `PricePaid > 0` Economy über `IEconomyBalanceDebit` abbuchen.
+11. Inventory über `IInventoryQuantityGrant` um exakt `1` erhöhen.
+12. Den unveränderlichen `ShopPurchase` persistieren.
+13. `shop.purchase-completed` v1 über den bestehenden Outbox-Publisher in derselben
+    Transaktion enqueuen.
+14. Erst danach committen.
+
+`FOR SHARE` erlaubt parallele Käufer desselben Angebots, verhindert aber, dass eine
+Katalogmutation mit `FOR UPDATE` Preis, Aktivierung, Availability oder Limit mitten durch
+einen Purchase-Snapshot verändert.
+
+Bei jedem Fehler werden Request-Reservation, Guard-Anlage, Economy-Debit, Inventory-Grant,
+Purchase-Write und Outbox gemeinsam zurückgerollt. Das gilt auch für Cancellation,
+unzureichenden Saldo, Inventory-Overflow, unbekannte Identity, unbekanntes oder nicht
+verfügbares Offer und überschrittenes Kauflimit.
+
+## Idempotenz und Kauflimit
+
+`shop_purchase_requests.request_id` ist die authoritative Idempotenzgrenze. Die Reservation
+enthält zusätzlich den vorab erzeugten `shop_purchase_id`, `shop_offer_id` und
+`community_identity_id`.
+
+Ein erfolgreich wiederholter identischer Request liefert denselben persistierten Kauf. Er
+erzeugt weder einen zweiten Economy-Debit noch einen zweiten Inventory-Grant, Purchase oder
+Outbox-Eintrag. Eine abweichende Wiederverwendung derselben Request-ID ist ein expliziter
+Conflict.
+
+Die Guard-Tabelle besitzt den Composite Primary Key
+`(shop_offer_id, community_identity_id)`. Dadurch werden nur konkurrierende Käufe derselben
+Identität für dasselbe Angebot serialisiert. Das Kauflimit zählt ausschließlich erfolgreiche,
+persistierte `shop_purchases`; fehlgeschlagene Versuche und zurückgerollte Requests zählen
+nicht.
+
+## PostgreSQL-Migrationen
+
+### Shop:1:CreateShopOffers
+
+Die unveränderte V1-Migration besitzt ausschließlich `shop_offers` mit:
+
+- `id uuid PRIMARY KEY`
+- `item_definition_id uuid NOT NULL`
+- `display_name varchar(200) NOT NULL`
+- `description varchar(2000) NULL`
+- `price bigint NOT NULL`
+- `is_enabled boolean NOT NULL`
+- `available_from timestamptz NULL`
+- `available_until timestamptz NULL`
+- `purchase_limit_per_identity integer NULL`
+
+Es gibt keine Cross-Module-Foreign-Keys.
+
+### Shop:2:CreateShopPurchases
+
+V2 ergänzt drei Shop-eigene Tabellen.
+
+`shop_purchases`:
+
+- `id uuid PRIMARY KEY`
+- `shop_offer_id uuid NOT NULL`
+- `community_identity_id uuid NOT NULL`
+- `purchased_inventory_item_definition_id uuid NOT NULL`
+- `price_paid bigint NOT NULL CHECK (price_paid >= 0)`
+- `purchased_at timestamptz NOT NULL`
+
+Der einzige Foreign Key ist Shop-intern von `shop_purchases.shop_offer_id` auf
+`shop_offers.id` mit restriktivem Delete-Verhalten. Identity, Economy und Inventory werden
+nicht über relationale Cross-Module-FKs gekoppelt.
+
+Zusätzliche Indizes:
+
+- `(shop_offer_id, community_identity_id)`
+- `(community_identity_id, purchased_at)`
+
+`shop_purchase_requests`:
+
+- `request_id uuid PRIMARY KEY`
+- `shop_purchase_id uuid NOT NULL UNIQUE`
+- `shop_offer_id uuid NOT NULL`
+- `community_identity_id uuid NOT NULL`
+
+`shop_purchase_guards`:
+
+- `shop_offer_id uuid NOT NULL`
+- `community_identity_id uuid NOT NULL`
+- Composite Primary Key über beide Spalten.
+
+## Outbox und Runtime
+
+Der Shop-Purchase verwendet den vorhandenen `IIntegrationEventPublisher`. Dieser öffnet keine
+eigene Verbindung und committed nicht selbst. Business-Write und Outbox-Eintrag werden deshalb
+durch denselben PostgreSQL-Commit sichtbar.
+
+Slice 3 veröffentlicht das Event ausschließlich. Es existiert noch kein Shop-Event-Consumer und
+keine Worker-Registry für `shop.purchase-completed`. Die bestehende
+Engagement→Progression-Runtime bleibt unverändert.
 
 ## Modulregistrierung und Abhängigkeiten
 
-`ShopModule.AddShopModule(...)` registriert ausschließlich `IShopOfferStore` mit
-`ShopOfferStore`, die zehn aktuellen Katalog-Use-Cases sowie `ShopMigrationSource` als
-`IMigrationSource`. Es registriert keine globale Clock, Messaging-Dienste, Host-, API-,
-Purchase- oder Administration-Komponenten. Die Host-Verdrahtung bleibt außerhalb des Moduls.
+`ShopModule.AddShopModule(...)` registriert den Katalog-Store, die zehn Katalog-Use-Cases,
+`IShopPurchaseExecutor`, `PurchaseShopOffer`, eine neutrale `IClock`-Default-
+Implementierung per `TryAddSingleton` sowie `ShopMigrationSource`.
 
-`FlurNetz.Modules.Shop` referenziert ausschließlich `Shop.Contracts`, `Inventory.Contracts`
-und `FlurNetz.Persistence`. `Shop.Contracts` bleibt frei von FlurNetz-Referenzen. Identity,
-Economy, Messaging, Rewards, Titles, Achievements, Administration, API, Worker und fremde
-Modulimplementierungen bleiben ausgeschlossen.
+Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory, API- und
+Worker-Komposition bleiben außerhalb des Shop-Moduls.
+
+Erlaubte FlurNetz-Abhängigkeiten der Shop-Implementierung sind ausschließlich:
+
+- `FlurNetz.BuildingBlocks`
+- `FlurNetz.Messaging`
+- `FlurNetz.Modules.Shop.Contracts`
+- `FlurNetz.Modules.Identity.Contracts`
+- `FlurNetz.Modules.Economy.Contracts`
+- `FlurNetz.Modules.Inventory.Contracts`
+- `FlurNetz.Persistence`
 
 ## Tests und bewusste Nicht-Ziele
 
-`FlurNetz.Modules.Shop.Tests` prüft Rehydration, Invarianten, unveränderliche Ziel-IDs und
-die Delegation der Katalog-Use-Cases. `FlurNetz.Modules.Shop.IntegrationTests` verwendet
-echtes PostgreSQL über Testcontainers oder `FLURNETZ_TEST_CONNECTION_STRING` und prüft
-Migration/Idempotenz/Checksum, den vollständigen `shop_`-Relationsumfang ohne benutzerdefinierte
-Trigger, das exakte Schema ohne Foreign Keys oder Defaults, alle fachlichen DB-Constraints,
-Unicode- und Zeitpräzisions-Roundtrips, alle Katalogmutationen, DB-Rollback und DB-seitige
-No-op-Beobachtung sowie deterministische Row-Lock-Nebenläufigkeit für gleiche und
-unterschiedliche Offers. `ShopArchitectureTests` sichert Reference Graph, Typgrenzen,
-Migrationseigentum, DI-Scope, den synchronen Store-Callback und den Ausschluss vorzeitiger
-Integration.
+Unit- und Architekturtests sichern IDs, Event-Schema, immutable Purchase-Snapshots,
+Zeitkanonisierung, DI-Scope, Reference Graph und die drei Cross-Module-Capabilities.
 
-Nicht enthalten sind `ShopPurchase`, `ShopPurchaseId`, `ShopPurchaseRequestId`,
-`PurchaseShopOffer`, `shop_purchases`, Purchase Guards/Requests, Economy, Coins, Balance,
-Inventory Grant, transaction-aware Inventory-Capability, Identity, Messaging, Domain Events,
-Integration Events, Outbox, Inbox, API, Worker-Anbindung, Administration, globales
-`ShopEnabled`, Kategorien, SortOrder, Featured, Assets, Bilder, Rabatte, Stock, Warenkorb,
-Refunds, Titles-/Rewards-Ziele, eine generische `OfferTarget`-Abstraktion und Seed-Daten.
+Die PostgreSQL-Integrationstests prüfen zusätzlich:
+
+- beide Shop-Migrationen und deren Idempotenz;
+- den vollständigen Shop-Relationsumfang;
+- den bestehenden Katalog einschließlich Unicode-, Zeit-, Rollback- und Concurrency-Garantien;
+- erfolgreichen Kauf mit gemeinsamem Economy-, Inventory-, Purchase-, Request-, Guard- und
+  Outbox-Commit;
+- parallele identische Requests mit exakt einem Effekt;
+- Idempotency-Conflict;
+- konkurrierendes Kauflimit;
+- vollständigen Rollback bei unzureichendem Economy-Saldo.
+
+Nicht enthalten sind API, Admin UI, Worker-Consumer, Warenkorb, variable Purchase-Menge, Stock,
+Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
+Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische Repositories,
+Inventory-Item-Instanzen, Titles-/Rewards-/Achievement-Ausführung oder eine generische
+`OfferTarget`-Abstraktion.
