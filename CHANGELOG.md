@@ -4,6 +4,13 @@
 
 ### Hinzugefügt
 
+- Ersten persistierten Achievements-Vertical-Slice mit implementation-eigenem Definitionskatalog und permanenten Community-Achievements hinzugefügt.
+- `AchievementDefinitionId`, `AchievementDefinition` und immutable `CommunityAchievement` mit kanonischer Unicode-Whitespace- und UTC-Semantik ergänzt.
+- Interne Achievements-Use-Cases für Create/Get/List, Rename, Description-Änderung sowie idempotenten Community-Unlock/Get/List ergänzt.
+- PostgreSQL-/Dapper-Stores mit `SELECT FOR UPDATE` für Katalogmutationen und atomarem `ON CONFLICT DO NOTHING` für Community-Unlocks ergänzt; der erste erfolgreiche Write gewinnt.
+- Achievements-eigene Migration `Achievements:1:CreateAchievementDefinitionsAndCommunityAchievements` mit Definitions- und Community-Tabelle, internem Definition-Foreign-Key und ohne Identity-Foreign-Key ergänzt.
+- Achievements-Unit-, echte PostgreSQL-Integration- und Architekturtests für Invarianten, Persistenz, Rollback, Idempotenz und Nebenläufigkeit ergänzt.
+- Messaging, Rewards, Economy, Inventory, Titles, Shop, Runtime-Trigger, API und Worker bleiben in diesem Slice bewusst ausgeschlossen.
 - Minimale Titles-Domain für freigeschaltete und aktuell ausgewählte Community-Titel.
 - Stabile `TitleDefinitionId` sowie invariantengesicherte `Unlock`-, `Lock`-, `SetCurrent`- und `ClearCurrent`-Operationen.
 - Idempotente Titelberechtigungen ohne Persistence-, Rewards-, Achievement- oder Shop-Kopplung.
