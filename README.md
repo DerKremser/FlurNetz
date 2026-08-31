@@ -1,6 +1,8 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice, den persistierten Shop-Angebotskatalog sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger, Titles-API, Achievement-Runtime-Trigger, Shop-Käufe und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice, den persistierten Shop-Angebotskatalog,
+den ersten atomaren Shop-Inventory-Kauf sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger, Titles-API, Achievement-Runtime-Trigger, Shop-API/Administration,
+Shop-Event-Consumer und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -31,7 +33,9 @@ Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `Flu
 
 ## Identity Foundation und erster Vertical Slice
 
-Identity ist das erste Referenzmodul und besitzt die zentrale interne Identität eines Community-Mitglieds. `FlurNetz.Modules.Identity.Contracts` enthält ausschließlich den stabilen, unveränderlichen Identifier `CommunityIdentityId`; `FlurNetz.Modules.Identity` enthält die minimale Domain-Identität `CommunityIdentity` mit dieser ID.
+Identity ist das erste Referenzmodul und besitzt die zentrale interne Identität eines Community-Mitglieds. `FlurNetz.Modules.Identity.Contracts` enthält den stabilen, unveränderlichen Identifier
+`CommunityIdentityId` sowie die schmale transaction-aware
+`ICommunityIdentityExistence`-Capability; `FlurNetz.Modules.Identity` enthält die minimale Domain-Identität `CommunityIdentity` mit dieser ID.
 
 Der erste Identity-Use-Case erzeugt eine neue `CommunityIdentityId`, bildet die Domain-Identity und persistiert sie in PostgreSQL. Der Dapper-/Npgsql-Adapter arbeitet gegen die Identity-eigene Tabelle `community_identities`, die ausschließlich `id uuid primary key` enthält; Laden über die interne ID ist ebenfalls enthalten. Externe Plattformkennungen werden später über Auflösung und Mapping auf die interne FlurNetz-Identität bezogen. Sie ersetzen `CommunityIdentityId` nicht.
 
@@ -72,12 +76,13 @@ nicht-negativen Economy-Saldo je interner `CommunityIdentityId`. `EconomyBalance
 `long`, schützt Gutschriften vor Overflow und verhindert bei Abbuchungen eine Überziehung.
 `CommunityEconomy` startet bei null; nur positive Beträge können gutgeschrieben oder abgebucht
 werden. Der interne Store führt Credits und Debits atomar mit PostgreSQL-Transaktionen und
-`SELECT FOR UPDATE` aus; ein Credit erzeugt den Zustand lazy erst bei Erfolg. `Economy.Contracts`
-enthält nun die neutrale, transaction-aware Fähigkeit `IEconomyBalanceCredit`; Economy kennt
-Rewards dabei nicht.
+`SELECT FOR UPDATE` aus; ein Credit erzeugt den Zustand lazy erst bei Erfolg.
+`Economy.Contracts` enthält die caller-neutralen transaction-aware Fähigkeiten
+`IEconomyBalanceCredit` und `IEconomyBalanceDebit`. Rewards verwendet Credit, der
+Shop-Purchase Debit; Economy kennt beide Aufrufer nicht.
 
-Eine konkrete Währungsbezeichnung, Multi-Currency, Messaging, Events, Transfers, Rewards-
-Trigger, Shop-Funktionalität und Economy-API sind noch nicht enthalten. Details stehen in
+Eine konkrete Währungsbezeichnung, Multi-Currency, Transfers, Ledger und Economy-API sind
+weiterhin nicht enthalten. Details stehen in
 [docs/architecture/economy.md](docs/architecture/economy.md).
 
 ## Rewards Vertical Slice
@@ -150,11 +155,13 @@ erfolgreiche Write gewinnt; ein Duplicate überschreibt den ursprünglichen Zeit
 Rewards-, Economy-, Inventory-, Titles-, Shop-, API- oder Worker-Anbindung. Details stehen in
 [docs/architecture/achievements.md](docs/architecture/achievements.md).
 
-## Shop Foundation
+## Shop Foundation und erster atomarer Purchase
 
-`FlurNetz.Modules.Shop` enthält neben dem fachlichen Angebotsfundament jetzt einen vollständig
-persistierten internen Katalog. `ShopOfferId` ist der einzige öffentliche Shop-Typ und liegt in
-`Shop.Contracts`. `ShopOffer` verwendet die gemeinsame `ItemDefinitionId` aus
+`FlurNetz.Modules.Shop` enthält neben dem fachlichen Angebotsfundament und dem vollständig
+persistierten Katalog jetzt den ersten atomaren Inventory-Kauf. `Shop.Contracts` veröffentlicht
+`ShopOfferId`, `ShopPurchaseId`, `ShopPurchaseRequestId` und
+`ShopPurchaseCompletedIntegrationEvent` mit dem stabilen Message Type
+`shop.purchase-completed` und Schema-Version `1`. `ShopOffer` verwendet die gemeinsame `ItemDefinitionId` aus
 `Inventory.Contracts`, einen `ShopPrice`, einen kanonischen Anzeigenamen, eine optionale
 Beschreibung, ein halboffenes `AvailabilityWindow`, ein optionales positives Kauflimit pro
 Identität und einen Aktivierungszustand. Neue Angebote starten deaktiviert; Ziel-IDs bleiben
@@ -164,15 +171,24 @@ Unicode-Skalarwerten passend zur PostgreSQL-Zeichensemantik bewertet; U+0000 und
 wohlgeformtes UTF-16 werden abgewiesen. Gesetzte Availability-Grenzen sind kanonische UTC-
 Instants mit exakt PostgreSQL-kompatibler Mikrosekundenpräzision.
 
-`Shop:1:CreateShopOffers` besitzt ausschließlich die Tabelle `shop_offers`. Der interne
-`IShopOfferStore` wird durch einen gezielten PostgreSQL-/Dapper-Store implementiert; atomare
-Katalogmutationen verwenden `SELECT FOR UPDATE`; der Mutation-Callback ist durch
-`Task<bool> ExecuteAsync(ShopOfferId, Func<ShopOffer, bool>, CancellationToken)` tatsächlich
-synchron. Die Use Cases umfassen Create, Get, List, Rename, Description-, Preis-, Availability-
-und Kauflimitänderungen sowie Enable/Disable. Echte PostgreSQL-Integrationstests prüfen
-Migration-Scope, Schema, Constraints, Unicode-/Zeit-Roundtrips, Rollback, No-op-Updates und
-deterministische Nebenläufigkeit. Käufe, Economy, Inventory Grant, Messaging, API und
-Administration sind weiterhin nicht vorhanden. Details stehen in
+`Shop:1:CreateShopOffers` besitzt weiterhin ausschließlich `shop_offers`; der Katalog-Store
+verwendet gezieltes PostgreSQL-/Dapper-SQL und `SELECT FOR UPDATE` für Mutationen.
+`Shop:2:CreateShopPurchases` ergänzt `shop_purchase_requests`,
+`shop_purchase_guards` und `shop_purchases`; der einzige Foreign Key ist Shop-intern von
+Purchase auf Offer.
+
+`PurchaseShopOffer` erzeugt die Purchase-ID serverseitig. Der
+`PostgreSqlShopPurchaseExecutor` koordiniert innerhalb einer gemeinsamen
+`PostgreSqlTransaction` Idempotenz, Identity-Existenzprüfung, stabilen Offer-Snapshot,
+Kauflimit, transaction-aware Economy-Debit, Inventory-Grant um exakt eins, Purchase-Write und
+Outbox. Identische Requests erzeugen exakt einen Effekt; Fehler rollen alle Teilwirkungen
+gemeinsam zurück. Shop referenziert dabei nur fremde Contracts und keine fremden
+Implementierungen oder Tabellen.
+
+Echte PostgreSQL-Integrationstests prüfen zusätzlich erfolgreichen gemeinsamen Commit,
+Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und vollständigen
+Rollback bei unzureichendem Saldo. API, Administration, Shop-Event-Consumer, Worker-Wiring,
+Warenkorb, Stock, Discounts und Refunds bleiben außerhalb dieses Slices. Details stehen in
 [docs/architecture/shop.md](docs/architecture/shop.md).
 
 ## Persistence Foundation
@@ -181,11 +197,19 @@ Administration sind weiterhin nicht vorhanden. Details stehen in
 
 `FlurNetz.Persistence.IntegrationTests` testet Verbindungen, Commit/Rollback und den Migration Runner gegen PostgreSQL. Für den automatischen Testlauf wird Docker für Testcontainers benötigt. Alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` auf eine isolierte PostgreSQL-Testdatenbank zeigen.
 
-Identity, Engagement, Progression, Economy, Rewards, Inventory, Titles und Achievements besitzen jeweils eigene fachliche Tabellen und gezielte Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression, Economy, Rewards, Inventory und Titles verwenden für konkurrierende beziehungsweise verpflichtende Mutationen atomare Transaktionen und gezielte Zeilensperren; Achievements verwendet einen atomaren Composite-Key-Insert für idempotente Unlocks. Rewards und Economy koordinieren ihre Writes über eine gemeinsame Connection/Transaction und erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; Rewards, Inventory, Titles und Achievements sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert, Rewards, Inventory, Titles und Achievements besitzen weder API noch Worker-Trigger. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Identity, Engagement, Progression, Economy, Rewards, Inventory, Titles, Achievements und Shop besitzen jeweils eigene fachliche Tabellen und gezielte Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression, Economy, Rewards, Inventory und Titles verwenden für konkurrierende beziehungsweise verpflichtende Mutationen atomare Transaktionen und gezielte Zeilensperren; Achievements verwendet einen atomaren Composite-Key-Insert für idempotente Unlocks. Rewards und Economy koordinieren ihre Writes über eine gemeinsame Connection/Transaction.
+Der Shop-Purchase koordiniert Request-, Guard- und Purchase-Writes mit Identity-Existenzprüfung,
+Economy-Debit, Inventory-Grant und Outbox in einer zweiten konkreten gemeinsamen
+PostgreSQL-Transaktion. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; Rewards, Inventory, Titles und Achievements sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert, Rewards, Inventory, Titles und Achievements besitzen weder API noch Worker-Trigger. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store, eigener Migration und Sparse-Zero-Lifecycle und bleibt ohne Messaging sowie Rewards-/Shop-Anbindung. Titles ergänzt nun zusätzlich zu Rehydration und Community-State einen persistierten Definitionskatalog mit `TitleDefinition`, internen Create/Get/List/Rename/Description-Use-Cases, `Titles:2:CreateTitleDefinitions`, Row-Locking und echten Katalog-Concurrency-Tests. Achievements ergänzt einen persistierten Definitionskatalog und permanente, atomare, idempotente Community-Unlocks mit eigener Migration und Concurrency-Tests. Shop besitzt jetzt mit `Shop:1:CreateShopOffers` einen persistierten Angebotskatalog mit internen Katalog-Use-Cases, gezieltem PostgreSQL-/Dapper-Store, Row-Lock-Mutationen und echten PostgreSQL-Integrationstests. Käufe, Economy, Inventory Grant, Messaging, API und Worker bleiben ausgeschlossen. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store,
+eigener Migration und Sparse-Zero-Lifecycle und veröffentlicht jetzt zusätzlich die schmale
+caller-neutrale `IInventoryQuantityGrant`-Capability für gemeinsame Transaktionen. Titles ergänzt nun zusätzlich zu Rehydration und Community-State einen persistierten Definitionskatalog mit `TitleDefinition`, internen Create/Get/List/Rename/Description-Use-Cases, `Titles:2:CreateTitleDefinitions`, Row-Locking und echten Katalog-Concurrency-Tests. Achievements ergänzt einen persistierten Definitionskatalog und permanente, atomare, idempotente Community-Unlocks mit eigener Migration und Concurrency-Tests. Shop besitzt mit `Shop:1:CreateShopOffers` den persistierten Angebotskatalog und mit
+`Shop:2:CreateShopPurchases` den ersten atomaren Inventory-Purchase inklusive Idempotenz,
+Kauflimit, Economy-Debit, Inventory-Grant, Purchase-Persistenz und Outbox. API,
+Administration, Event-Consumer und Worker-Wiring bleiben ausgeschlossen. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 
