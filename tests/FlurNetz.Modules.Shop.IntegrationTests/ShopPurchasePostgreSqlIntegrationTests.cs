@@ -336,6 +336,201 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
     }
 
     [Fact]
+    public async Task UnknownIdentityRollsBackRequestWithoutAnyPurchaseEffect()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(factory, itemDefinitionId, price: 0);
+        var unknownIdentityId = CommunityIdentityId.New();
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        var exception = await Assert.ThrowsAsync<ShopPurchaseIdentityNotFoundException>(
+            () => useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                unknownIdentityId,
+                TestToken));
+
+        Assert.Equal(unknownIdentityId, exception.CommunityIdentityId);
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_guards"));
+        Assert.Equal(0L, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
+    public async Task UnknownOfferRollsBackRequestWithoutAnyPurchaseEffect()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        await Assert.ThrowsAsync<ShopOfferNotFoundException>(
+            () => useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                ShopOfferId.New(),
+                identityId,
+                TestToken));
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_guards"));
+        Assert.Equal(0L, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
+    public async Task DisabledOfferIsRejectedAndRequestReservationRollsBack()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        var offer = ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Deaktiviertes Angebot",
+            null,
+            ShopPrice.Zero,
+            AvailabilityWindow.Create(null, null));
+        await new ShopOfferStore(factory).AddAsync(offer, TestToken);
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        await Assert.ThrowsAsync<ShopOfferUnavailableForPurchaseException>(
+            () => useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                identityId,
+                TestToken));
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
+    public async Task OfferOutsideAvailabilityWindowIsRejectedAndRequestReservationRollsBack()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        var offer = ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Zukünftiges Angebot",
+            null,
+            ShopPrice.Zero,
+            AvailabilityWindow.Create(PurchaseTime.AddHours(1), null));
+        offer.Enable();
+        await new ShopOfferStore(factory).AddAsync(offer, TestToken);
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        await Assert.ThrowsAsync<ShopOfferUnavailableForPurchaseException>(
+            () => useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                identityId,
+                TestToken));
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
+    public async Task ReusingRequestForDifferentIdentityIsRejectedWithoutSecondEffect()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var firstIdentityId = await CreateIdentityAsync(factory);
+        var secondIdentityId = await CreateIdentityAsync(factory);
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(factory, itemDefinitionId, price: 0);
+        var requestId = ShopPurchaseRequestId.New();
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        var firstPurchase = await useCase.ExecuteAsync(
+            requestId,
+            offer.Id,
+            firstIdentityId,
+            TestToken);
+
+        var exception = await Assert.ThrowsAsync<ShopPurchaseIdempotencyConflictException>(
+            () => useCase.ExecuteAsync(
+                requestId,
+                offer.Id,
+                secondIdentityId,
+                TestToken));
+
+        Assert.Equal(requestId, exception.RequestId);
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(1, await ReadQuantityAsync(connection, firstIdentityId, itemDefinitionId));
+        Assert.Null(await ReadQuantityOrNullAsync(connection, secondIdentityId, itemDefinitionId));
+        Assert.Equal(1L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(1L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(1L, await CountOutboxAsync(connection));
+
+        var storedPurchaseId = await connection.QuerySingleAsync<Guid>(
+            new CommandDefinition(
+                "SELECT shop_purchase_id FROM shop_purchase_requests WHERE request_id = @RequestId;",
+                new { RequestId = requestId.Value },
+                cancellationToken: TestToken));
+        Assert.Equal(firstPurchase.Id.Value, storedPurchaseId);
+    }
+
+    [Fact]
+    public async Task UnlimitedParallelPurchasesBothSucceedWithoutPurchaseGuard()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        await CreditAsync(factory, identityId, 100);
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(factory, itemDefinitionId, price: 10);
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        var purchases = await Task.WhenAll(
+            useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                identityId,
+                TestToken),
+            useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                identityId,
+                TestToken));
+
+        Assert.NotEqual(purchases[0].Id, purchases[1].Id);
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(80, await ReadBalanceAsync(connection, identityId));
+        Assert.Equal(2, await ReadQuantityAsync(connection, identityId, itemDefinitionId));
+        Assert.Equal(2L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(2L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_guards"));
+        Assert.Equal(2L, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
     public async Task ConcurrentDuplicateRequestReturnsSamePurchaseAndAppliesEffectsOnce()
     {
         SkipIfDatabaseIsUnavailable();
