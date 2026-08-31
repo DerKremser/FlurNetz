@@ -313,13 +313,16 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
 
     private static async Task PreparePurchaseDatabaseAsync(PostgreSqlConnectionFactory factory)
     {
-        var migrations = new MessagingMigrationSource().GetMigrations()
-            .Concat(new IdentityMigrationSource().GetMigrations())
-            .Concat(new EconomyMigrationSource().GetMigrations())
-            .Concat(new InventoryMigrationSource().GetMigrations())
-            .Concat(new ShopMigrationSource().GetMigrations());
+        IMigrationSource[] migrationSources =
+        [
+            new MessagingMigrationSource(),
+            new IdentityMigrationSource(),
+            new EconomyMigrationSource(),
+            new InventoryMigrationSource(),
+            new ShopMigrationSource()
+        ];
 
-        await new MigrationRunner(factory, new MigrationSource(migrations))
+        await new MigrationRunner(factory, migrationSources)
             .RunAsync(TestToken);
 
         await using var connection = await factory.OpenConnectionAsync(TestToken);
