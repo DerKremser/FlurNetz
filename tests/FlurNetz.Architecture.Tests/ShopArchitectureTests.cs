@@ -1,5 +1,8 @@
+using System.Data.Common;
 using System.Reflection;
-using FlurNetz.Modules.Inventory.Contracts;
+using FlurNetz.BuildingBlocks.Time;
+using FlurNetz.Messaging.Integration;
+using FlurNetz.Messaging.Persistence;
 using FlurNetz.Modules.Shop;
 using FlurNetz.Modules.Shop.Application;
 using FlurNetz.Modules.Shop.Contracts;
@@ -11,9 +14,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace FlurNetz.Architecture.Tests;
 
-/// <summary>
-/// Sichert Assembly-, Typ-, Persistenz- und DI-Grenzen des Shop-Katalog-Slices.
-/// </summary>
 public sealed class ShopArchitectureTests
 {
     private static Assembly ShopImplementationAssembly =>
@@ -23,146 +23,149 @@ public sealed class ShopArchitectureTests
         ModuleArchitectureCatalog.LoadAssembly("FlurNetz.Modules.Shop.Contracts");
 
     [Fact]
-    public void ShopImplementationReferencesOnlyShopInventoryContractsAndPersistence()
+    public void ShopImplementationReferencesOnlyApprovedTechnicalAssembliesAndForeignContracts()
     {
         var references = GetReferencedAssemblyNames(ShopImplementationAssembly);
         var allowedReferences = new HashSet<string>(StringComparer.Ordinal)
         {
+            "FlurNetz.BuildingBlocks",
+            "FlurNetz.Messaging",
             "FlurNetz.Modules.Shop.Contracts",
+            "FlurNetz.Modules.Identity.Contracts",
+            "FlurNetz.Modules.Economy.Contracts",
             "FlurNetz.Modules.Inventory.Contracts",
             "FlurNetz.Persistence"
         };
 
         Assert.Contains("FlurNetz.Modules.Shop.Contracts", references);
+        Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
+        Assert.Contains("FlurNetz.Modules.Economy.Contracts", references);
         Assert.Contains("FlurNetz.Modules.Inventory.Contracts", references);
+        Assert.Contains("FlurNetz.Messaging", references);
         Assert.Contains("FlurNetz.Persistence", references);
-        Assert.DoesNotContain("FlurNetz.Modules.Identity.Contracts", references);
-        Assert.DoesNotContain("FlurNetz.Messaging", references);
+        Assert.DoesNotContain("FlurNetz.Modules.Identity", references);
         Assert.DoesNotContain("FlurNetz.Modules.Economy", references);
-        Assert.DoesNotContain("FlurNetz.Modules.Administration", references);
+        Assert.DoesNotContain("FlurNetz.Modules.Inventory", references);
+        Assert.DoesNotContain("FlurNetz.Modules.Rewards", references);
         Assert.DoesNotContain("FlurNetz.Api", references);
         Assert.DoesNotContain("FlurNetz.Worker", references);
         Assert.All(references, reference => Assert.Contains(reference, allowedReferences));
     }
 
     [Fact]
-    public void ShopContractsReferenceNoFlurNetzAssemblies()
+    public void ShopContractsReferenceOnlyMessaging()
     {
-        Assert.Empty(GetReferencedAssemblyNames(ShopContractsAssembly));
+        Assert.Equal(["FlurNetz.Messaging"], GetReferencedAssemblyNames(ShopContractsAssembly));
     }
 
     [Fact]
-    public void ShopContractsContainOnlyShopOfferId()
+    public void ShopContractsContainOnlyStableIdentifiersAndPurchaseCompletedEvent()
     {
-        var exportedTypes = ShopContractsAssembly.GetExportedTypes();
+        var exportedTypes = ShopContractsAssembly.GetExportedTypes().ToHashSet();
 
-        var shopOfferId = Assert.Single(exportedTypes);
-        Assert.Equal(typeof(ShopOfferId), shopOfferId);
-        Assert.Equal(ShopContractsAssembly, shopOfferId.Assembly);
-        Assert.Null(ShopContractsAssembly.GetType("FlurNetz.Modules.Shop.Domain.ShopOffer"));
+        Assert.True(exportedTypes.SetEquals(
+        [
+            typeof(ShopOfferId),
+            typeof(ShopPurchaseId),
+            typeof(ShopPurchaseRequestId),
+            typeof(ShopPurchaseCompletedIntegrationEvent)
+        ]));
+        Assert.True(typeof(IIntegrationEvent).IsAssignableFrom(typeof(ShopPurchaseCompletedIntegrationEvent)));
+        Assert.Equal("shop.purchase-completed", ShopPurchaseCompletedIntegrationEvent.MessageType);
+        Assert.Equal(1, ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
     }
 
     [Fact]
-    public void ShopDomainAndCatalogTypesRemainInTheImplementationAssembly()
+    public void ShopDomainCatalogAndPurchaseTypesRemainInImplementationAssembly()
     {
         var expectedTypes = new[]
         {
             typeof(ShopOffer),
             typeof(ShopPrice),
             typeof(AvailabilityWindow),
+            typeof(ShopPurchase),
             typeof(IShopOfferStore),
-            typeof(ShopOfferNotFoundException),
-            typeof(CreateShopOffer),
-            typeof(GetShopOffer),
-            typeof(ListShopOffers),
-            typeof(RenameShopOffer),
-            typeof(ChangeShopOfferDescription),
-            typeof(ChangeShopOfferPrice),
-            typeof(ChangeShopOfferAvailability),
-            typeof(ChangeShopOfferPurchaseLimit),
-            typeof(EnableShopOffer),
-            typeof(DisableShopOffer),
+            typeof(IShopPurchaseExecutor),
+            typeof(PurchaseShopOffer),
+            typeof(PostgreSqlShopPurchaseExecutor),
             typeof(ShopOfferStore),
             typeof(ShopMigrationSource),
             typeof(ShopModule)
         };
 
-        foreach (var expectedType in expectedTypes)
-        {
-            Assert.Equal(ShopImplementationAssembly, expectedType.Assembly);
-            Assert.Null(ShopContractsAssembly.GetType(expectedType.FullName!));
-        }
+        Assert.All(expectedTypes, type => Assert.Equal(ShopImplementationAssembly, type.Assembly));
+        Assert.DoesNotContain(
+            ShopContractsAssembly.GetTypes(),
+            type => expectedTypes.Contains(type));
     }
 
     [Fact]
-    public void ShopOfferExposesControlledRehydrationWithinTheDomainAssembly()
-    {
-        var method = typeof(ShopOffer).GetMethod(
-            nameof(ShopOffer.Rehydrate),
-            BindingFlags.Public | BindingFlags.Static,
-            [
-                typeof(ShopOfferId),
-                typeof(ItemDefinitionId),
-                typeof(string),
-                typeof(string),
-                typeof(ShopPrice),
-                typeof(bool),
-                typeof(AvailabilityWindow),
-                typeof(int?)
-            ]);
-
-        Assert.NotNull(method);
-        Assert.Equal(typeof(ShopOffer), method!.ReturnType);
-        Assert.Equal(typeof(ShopOffer), method.DeclaringType);
-        Assert.Equal(ShopImplementationAssembly, method.DeclaringType!.Assembly);
-        Assert.Null(typeof(ShopOffer).GetProperty(nameof(ShopOffer.Id))!.GetSetMethod());
-        Assert.Null(typeof(ShopOffer).GetProperty(nameof(ShopOffer.ItemDefinitionId))!.GetSetMethod());
-    }
-
-    [Fact]
-    public void ShopStoreMutationBoundaryIsNonGenericAndSynchronous()
+    public void ShopOfferStoreMutationBoundaryRemainsNonGenericAndSynchronous()
     {
         var method = typeof(IShopOfferStore).GetMethod(nameof(IShopOfferStore.ExecuteAsync));
 
         Assert.NotNull(method);
         Assert.False(method!.IsGenericMethod);
         Assert.Equal(typeof(Task<bool>), method.ReturnType);
-        Assert.Equal(
-            typeof(Func<ShopOffer, bool>),
-            method.GetParameters()[1].ParameterType);
+        Assert.Equal(typeof(Func<ShopOffer, bool>), method.GetParameters()[1].ParameterType);
     }
 
     [Fact]
-    public void ShopMigrationV1OwnsOnlyShopOffersWithRequiredIdentity()
+    public void ShopPurchaseApplicationBoundaryDoesNotLeakDatabaseTypes()
     {
-        var migrations = new ShopMigrationSource().GetMigrations().ToArray();
+        var method = typeof(IShopPurchaseExecutor).GetMethod(nameof(IShopPurchaseExecutor.ExecuteAsync));
 
-        var migration = Assert.Single(migrations);
-        Assert.Equal("Shop", migration.Owner);
-        Assert.Equal(1, migration.Version);
-        Assert.Equal("CreateShopOffers", migration.Name);
-        Assert.Contains("CREATE TABLE IF NOT EXISTS shop_offers", migration.Sql);
-        Assert.DoesNotContain("shop_purchases", migration.Sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("shop_purchase_guards", migration.Sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("shop_purchase_requests", migration.Sql, StringComparison.Ordinal);
-        Assert.DoesNotContain("REFERENCES", migration.Sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("price bigint NOT NULL", migration.Sql);
-        Assert.Contains("is_enabled boolean NOT NULL", migration.Sql);
-        Assert.Contains("available_from timestamptz NULL", migration.Sql);
-        Assert.Contains("available_until timestamptz NULL", migration.Sql);
-        Assert.Contains("purchase_limit_per_identity integer NULL", migration.Sql);
+        Assert.NotNull(method);
+        Assert.DoesNotContain(
+            method!.GetParameters(),
+            parameter => parameter.ParameterType == typeof(DbConnection)
+                || parameter.ParameterType == typeof(DbTransaction)
+                || parameter.ParameterType.FullName?.Contains("Npgsql", StringComparison.Ordinal) == true
+                || parameter.ParameterType.FullName?.Contains("Dapper", StringComparison.Ordinal) == true);
     }
 
     [Fact]
-    public void ShopModuleRegistersOnlyTheCurrentCatalogSlice()
+    public void ShopMigrationKeepsCatalogV1AndAddsFocusedPurchaseV2()
+    {
+        var migrations = new ShopMigrationSource().GetMigrations().OrderBy(m => m.Version).ToArray();
+
+        Assert.Equal(2, migrations.Length);
+
+        var catalog = migrations[0];
+        Assert.Equal("Shop", catalog.Owner);
+        Assert.Equal(1, catalog.Version);
+        Assert.Equal("CreateShopOffers", catalog.Name);
+        Assert.Contains("CREATE TABLE IF NOT EXISTS shop_offers", catalog.Sql);
+        Assert.DoesNotContain("shop_purchases", catalog.Sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("REFERENCES", catalog.Sql, StringComparison.OrdinalIgnoreCase);
+
+        var purchase = migrations[1];
+        Assert.Equal("Shop", purchase.Owner);
+        Assert.Equal(2, purchase.Version);
+        Assert.Equal("CreateShopPurchases", purchase.Name);
+        Assert.Contains("shop_purchase_requests", purchase.Sql, StringComparison.Ordinal);
+        Assert.Contains("shop_purchase_guards", purchase.Sql, StringComparison.Ordinal);
+        Assert.Contains("shop_purchases", purchase.Sql, StringComparison.Ordinal);
+        Assert.Contains("UNIQUE (shop_purchase_id)", purchase.Sql, StringComparison.Ordinal);
+        Assert.Contains("REFERENCES shop_offers (id)", purchase.Sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("REFERENCES community_identities", purchase.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REFERENCES community_inventory", purchase.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REFERENCES community_economies", purchase.Sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ShopModuleRegistersCatalogPurchaseExecutorClockAndMigrationOnly()
     {
         var services = new ServiceCollection();
 
         var result = services.AddShopModule();
 
         Assert.Same(services, result);
-        Assert.Equal(12, services.Count);
+        Assert.Equal(15, services.Count);
+        AssertService<IClock, SystemClock>(services, ServiceLifetime.Singleton);
         AssertService<IShopOfferStore, ShopOfferStore>(services, ServiceLifetime.Scoped);
+        AssertService<IShopPurchaseExecutor, PostgreSqlShopPurchaseExecutor>(services, ServiceLifetime.Scoped);
+        AssertService<PurchaseShopOffer, PurchaseShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<CreateShopOffer, CreateShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<GetShopOffer, GetShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<ListShopOffers, ListShopOffers>(services, ServiceLifetime.Scoped);
@@ -175,10 +178,7 @@ public sealed class ShopArchitectureTests
         AssertService<DisableShopOffer, DisableShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<IMigrationSource, ShopMigrationSource>(services, ServiceLifetime.Singleton);
         Assert.DoesNotContain(services, descriptor =>
-            descriptor.ServiceType.FullName?.Contains("Clock", StringComparison.OrdinalIgnoreCase) == true
-            || descriptor.ServiceType.FullName?.Contains("Message", StringComparison.OrdinalIgnoreCase) == true
-            || (descriptor.ServiceType.FullName?.Contains("Purchase", StringComparison.OrdinalIgnoreCase) == true
-                && descriptor.ServiceType != typeof(ChangeShopOfferPurchaseLimit)));
+            descriptor.ServiceType == typeof(IIntegrationEventPublisher));
     }
 
     [Fact]
@@ -209,22 +209,27 @@ public sealed class ShopArchitectureTests
     }
 
     [Fact]
-    public void ShopContainsNoPrematurePurchaseMessagingOrGenericRepositoryTypes()
+    public void ShopContainsNoForeignImplementationGenericRepositoryOrPrematureFeatureTypes()
     {
+        var references = GetReferencedAssemblyNames(ShopImplementationAssembly);
+        Assert.DoesNotContain(references, reference =>
+            reference is "FlurNetz.Modules.Identity"
+                or "FlurNetz.Modules.Economy"
+                or "FlurNetz.Modules.Inventory"
+                or "FlurNetz.Modules.Rewards"
+                or "FlurNetz.Modules.Titles"
+                or "FlurNetz.Modules.Achievements");
+
         var forbiddenNameParts = new[]
         {
-            "Purchase",
-            "Message",
-            "Event",
-            "Economy",
+            "GenericRepository",
+            "UnitOfWork",
+            "Cart",
+            "Refund",
+            "Coupon",
+            "Discount",
+            "Stock",
             "Administration",
-            "Api",
-            "Grant",
-            "Repository",
-            "Identity",
-            "Reward",
-            "Title",
-            "Achievement",
             "Worker"
         };
 
@@ -232,7 +237,6 @@ public sealed class ShopArchitectureTests
             .GetTypes()
             .Where(type => forbiddenNameParts.Any(namePart =>
                 type.Name.Contains(namePart, StringComparison.Ordinal)))
-            .Where(type => type != typeof(ChangeShopOfferPurchaseLimit))
             .Select(type => type.FullName)
             .ToArray();
 
@@ -244,17 +248,16 @@ public sealed class ShopArchitectureTests
         ServiceLifetime lifetime)
         where TImplementation : TService
     {
-        var descriptor = Assert.Single(
-            services,
-            service => service.ServiceType == typeof(TService));
+        var descriptor = Assert.Single(services, service => service.ServiceType == typeof(TService));
         Assert.Equal(typeof(TImplementation), descriptor.ImplementationType);
         Assert.Equal(lifetime, descriptor.Lifetime);
     }
 
     private static string[] GetReferencedAssemblyNames(Assembly assembly) => assembly
         .GetReferencedAssemblies()
-        .Select(referencedAssembly => referencedAssembly.Name)
+        .Select(reference => reference.Name)
         .Where(name => name is not null && name.StartsWith("FlurNetz.", StringComparison.Ordinal))
         .Select(name => name!)
+        .Order(StringComparer.Ordinal)
         .ToArray();
 }

@@ -3,16 +3,11 @@ using FlurNetz.Persistence.Migrations;
 namespace FlurNetz.Modules.Shop.Migrations;
 
 /// <summary>
-/// Liefert die erste fachliche PostgreSQL-Migration des Shop-Moduls.
+/// Liefert die fachlichen PostgreSQL-Migrationen des Shop-Moduls.
 /// </summary>
-/// <remarks>
-/// Der Shop ist Eigentümer seiner Angebotskatalogtabelle. Die ItemDefinitionId bleibt ein
-/// stabiler Cross-Module-Identifier ohne Foreign Key; Käufe, Economy, Inventory Grant,
-/// Messaging und weitere Zukunftstabellen gehören ausdrücklich nicht zu dieser Migration.
-/// </remarks>
 public sealed class ShopMigrationSource : IMigrationSource
 {
-    private const string MigrationSql = """
+    private const string CreateShopOffersSql = """
         CREATE TABLE IF NOT EXISTS shop_offers
         (
             id uuid NOT NULL,
@@ -80,11 +75,64 @@ public sealed class ShopMigrationSource : IMigrationSource
         );
         """;
 
+    private const string CreateShopPurchasesSql = """
+        CREATE TABLE IF NOT EXISTS shop_purchase_requests
+        (
+            request_id uuid NOT NULL,
+            shop_purchase_id uuid NOT NULL,
+            shop_offer_id uuid NOT NULL,
+            community_identity_id uuid NOT NULL,
+
+            CONSTRAINT pk_shop_purchase_requests
+                PRIMARY KEY (request_id),
+
+            CONSTRAINT uq_shop_purchase_requests_purchase
+                UNIQUE (shop_purchase_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS shop_purchase_guards
+        (
+            shop_offer_id uuid NOT NULL,
+            community_identity_id uuid NOT NULL,
+
+            CONSTRAINT pk_shop_purchase_guards
+                PRIMARY KEY (shop_offer_id, community_identity_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS shop_purchases
+        (
+            id uuid NOT NULL,
+            shop_offer_id uuid NOT NULL,
+            community_identity_id uuid NOT NULL,
+            purchased_inventory_item_definition_id uuid NOT NULL,
+            price_paid bigint NOT NULL,
+            purchased_at timestamptz NOT NULL,
+
+            CONSTRAINT pk_shop_purchases
+                PRIMARY KEY (id),
+
+            CONSTRAINT fk_shop_purchases_shop_offer
+                FOREIGN KEY (shop_offer_id)
+                REFERENCES shop_offers (id)
+                ON DELETE RESTRICT,
+
+            CONSTRAINT ck_shop_purchases_price_paid_non_negative
+                CHECK (price_paid >= 0)
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_shop_purchases_offer_identity
+            ON shop_purchases (shop_offer_id, community_identity_id);
+
+        CREATE INDEX IF NOT EXISTS ix_shop_purchases_identity_purchased_at
+            ON shop_purchases (community_identity_id, purchased_at);
+        """;
+
     /// <summary>
-    /// Gibt die erste und derzeit einzige Shop-Migration zurück.
+    /// Gibt den persistierten Angebotskatalog und die atomare Purchase-Persistenz zurück.
     /// </summary>
     public IEnumerable<Migration> GetMigrations()
     {
-        yield return new Migration("Shop", 1, "CreateShopOffers", MigrationSql);
+        yield return new Migration("Shop", 1, "CreateShopOffers", CreateShopOffersSql);
+        yield return new Migration("Shop", 2, "CreateShopPurchases", CreateShopPurchasesSql);
     }
 }

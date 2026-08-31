@@ -12,10 +12,20 @@ Dapper ist die schlanke SQL-Ausführungsbasis. Es gibt bewusst keinen ORM und ke
 
 `PostgreSqlTransaction` besitzt genau eine geöffnete Connection und deren PostgreSQL-Transaction. `BeginAsync`, `CommitAsync`, `RollbackAsync` und `DisposeAsync` arbeiten asynchron und unterstützen `CancellationToken`. Wird eine aktive Transaction disposed, wird sie zurückgerollt. Dadurch können spätere technische oder fachliche SQL-Operationen dieselbe Connection und Transaction verwenden.
 
-Diese technische Grenze ermöglicht auch eine bewusst konkrete atomare Komposition zwischen
+Diese technische Grenze ermöglicht bewusst konkrete atomare Kompositionen zwischen
 fachlichen Modulen. Der Rewards-Executor führt seine Grant-Records und die Economy-
 Gutschrift über den öffentlichen `IEconomyBalanceCredit`-Contract mit derselben Connection
-und Transaction aus. Das ist kein globales Unit-of-Work-Framework und kein generischer
+und Transaction aus.
+
+Der Shop-Purchase-Executor ist die zweite konkrete Komposition. Er besitzt eine
+`PostgreSqlTransaction` und koordiniert darin seine Request-/Guard-/Purchase-Writes,
+`ICommunityIdentityExistence`, `IEconomyBalanceDebit`,
+`IInventoryQuantityGrant` und den vorhandenen `IIntegrationEventPublisher`. Die fremden
+Module führen innerhalb der bereitgestellten `DbConnection`/`DbTransaction` keinen eigenen
+Commit aus. Dadurch werden Shop-Kauf, Economy-Debit, Inventory-Grant und Outbox gemeinsam
+bestätigt oder zurückgerollt.
+
+Das ist weiterhin kein globales Unit-of-Work-Framework und kein generischer
 Cross-Module-Repository-Vertrag; die jeweilige fachliche Transaktionsgrenze bleibt beim
 aufrufenden Slice.
 
@@ -89,6 +99,15 @@ auch während des Writes gültig. Der Root-Lock serialisiert nur Operationen der
 aus und verwendet bei Rename sowie Description-Änderung einen Row-Lock mit
 `SELECT FOR UPDATE`; ein UPDATE erfolgt nur bei tatsächlicher Domain-Änderung.
 
+Shop besitzt zusätzlich die unveränderte Migration `Shop:1:CreateShopOffers` und
+`Shop:2:CreateShopPurchases`. V2 legt `shop_purchase_requests`,
+`shop_purchase_guards` und `shop_purchases` an. Der einzige Foreign Key dieser
+Purchase-Migration ist Shop-intern von `shop_purchases.shop_offer_id` auf
+`shop_offers.id`; Identity-, Economy- und Inventory-Beziehungen bleiben bewusst ohne
+Cross-Module-Foreign-Key. Der Purchase-Executor verwendet einen `FOR SHARE`-Lock auf dem
+Angebot und einen `FOR UPDATE`-Guard pro Offer/Identity, bevor er die transaction-aware
+Capabilities der fremden Module aufruft.
+
 ## Tests
 
 `FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Der Progression-Slice besitzt eigene PostgreSQL-Tests für Migration, lazy Initialisierung, Domain-Rehydration, Rollback, Not-Found und parallele Grants gegen echte Zeilensperren. Der Economy-Slice prüft Migration, Lazy-Lifecycle, Laden, Debit-Fehler, Overflow-Rollback, Datenbank-Check und konkurrierende Credits sowie Debits gegen echte Zeilensperren. Der Rewards-Slice prüft in einem eigenen Testcontainers-Projekt Migration und Idempotenz, Katalogpersistenz, Package-Atomicity, Overflow-Rollback, Partial-State, parallele Duplicate-Grants und die gemeinsame Economy-Transaktion. Der Inventory-Slice besitzt eigene echte PostgreSQL-Tests für Composite Key, Sparse-Lifecycle, Rollback, Isolation mehrerer Bestandspositionen und konkurrierende Adds sowie Removes. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
@@ -99,3 +118,7 @@ Rehydration, Rollback und echte Katalog-Concurrency gegen PostgreSQL. Standardm�
 dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet.
 Docker muss für diese Testvariante verfügbar sein; alternativ kann
 `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
+`FlurNetz.Modules.Shop.IntegrationTests` prüft zusätzlich den atomaren Purchase über die
+realen Identity-, Economy-, Inventory- und Messaging-Adapter: erfolgreicher gemeinsamer
+Commit, Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und
+vollständiger Rollback bei unzureichendem Saldo.

@@ -1,6 +1,7 @@
+using System.Data.Common;
 using FlurNetz.Modules.Identity.Contracts;
-using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Inventory.Application;
+using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Inventory.Domain;
 
 namespace FlurNetz.Modules.Inventory.Tests;
@@ -105,6 +106,18 @@ internal sealed class RecordingInventoryStore(InventoryQuantity result) : ICommu
         return Task.FromResult(result);
     }
 
+    public Task<InventoryQuantity> AddAsync(
+        CommunityIdentityId communityIdentityId,
+        ItemDefinitionId itemDefinitionId,
+        long amount,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        Record(StoreOperation.Add, communityIdentityId, itemDefinitionId, amount, cancellationToken);
+        return Task.FromResult(result);
+    }
+
     public Task<InventoryQuantity> RemoveAsync(
         CommunityIdentityId communityIdentityId,
         ItemDefinitionId itemDefinitionId,
@@ -112,7 +125,6 @@ internal sealed class RecordingInventoryStore(InventoryQuantity result) : ICommu
         CancellationToken cancellationToken = default)
     {
         Record(StoreOperation.Remove, communityIdentityId, itemDefinitionId, amount, cancellationToken);
-
         return RemoveException is null
             ? Task.FromResult(result)
             : Task.FromException<InventoryQuantity>(RemoveException);
@@ -121,10 +133,8 @@ internal sealed class RecordingInventoryStore(InventoryQuantity result) : ICommu
     public Task<CommunityInventoryEntry?> GetAsync(
         CommunityIdentityId communityIdentityId,
         ItemDefinitionId itemDefinitionId,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult<CommunityInventoryEntry?>(null);
-    }
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<CommunityInventoryEntry?>(null);
 
     private void Record(
         StoreOperation operation,

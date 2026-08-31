@@ -74,12 +74,12 @@ Initialisierung nacheinander, parallele Debits werden durch dieselbe
 Zeilensperre und die Domain-Invariante korrekt begrenzt.
 
 Die interne Persistenzgrenze ist `ICommunityEconomyStore` mit den normalen
-`CreditAsync`, `DebitAsync` und `GetByCommunityIdentityIdAsync`-Operationen sowie einem
-transaction-aware `CreditAsync`-Overload. Der Overload nimmt nur `DbConnection` und
-`DbTransaction` entgegen, führt keinen Commit aus und verwendet exakt denselben
-Read/Modify/Write-Kern wie der normale Credit-Pfad. Die beiden internen Application Use
-Cases `CreditEconomyBalance` und `DebitEconomyBalance` enthalten weder SQL noch
-Transaktionssteuerung.
+`CreditAsync`, `DebitAsync` und `GetByCommunityIdentityIdAsync`-Operationen sowie
+transaction-aware Overloads für Credit und Debit. Beide Overloads nehmen ausschließlich
+`DbConnection` und `DbTransaction` entgegen, führen keinen Commit aus und verwenden
+denselben Read/Modify/Write-Kern, dieselbe Domainlogik und dieselben PostgreSQL-Row-Locks
+wie die normalen Pfade. Die beiden internen Application Use Cases `CreditEconomyBalance`
+und `DebitEconomyBalance` enthalten weder SQL noch Transaktionssteuerung.
 
 Die Migration `Economy:1:CreateCommunityEconomies` gehört dem Economy-Modul und
 legt `community_economies` mit exakt den Spalten
@@ -107,17 +107,25 @@ Multi-Currency-Struktur. Das Modell besitzt genau einen Saldo pro
 `CommunityIdentityId`; mehrere Währungen werden erst bei nachgewiesenem
 fachlichem Bedarf bewusst ergänzt.
 
-`FlurNetz.Modules.Economy.Contracts` enthält nun ausschließlich die schmale,
-Rewards-neutrale Fähigkeit `IEconomyBalanceCredit`. Sie nimmt die zentrale
-`CommunityIdentityId`, einen positiven Betrag sowie neutrale `DbConnection`- und
-`DbTransaction`-Parameter entgegen. Dadurch kann ein aufrufendes Modul seine fachlichen
-Writes und die Economy-Gutschrift in exakt derselben Transaktion koordinieren. Economy kennt
-den Aufrufer Rewards nicht; der Adapter delegiert weiterhin an den bestehenden Store und
-damit an dieselbe Domain- und SQL-Logik.
+`FlurNetz.Modules.Economy.Contracts` enthält ausschließlich zwei schmale,
+caller-neutrale transaction-aware Fähigkeiten:
 
-Es gibt weiterhin kein Messaging, keine Inbox/Outbox und keine Domain- oder Integration
-Events. Ebenso sind noch keine Transfers, Rewards-Trigger, kein Shop und keine API-Anbindung
-Bestandteil des Economy-Moduls. Der Worker bleibt unverändert.
+- `IEconomyBalanceCredit`
+- `IEconomyBalanceDebit`
+
+Beide nehmen die zentrale `CommunityIdentityId`, einen positiven Betrag sowie neutrale
+`DbConnection`- und `DbTransaction`-Parameter entgegen. Dadurch kann ein aufrufender
+fachlicher Slice seine eigenen Writes und die Economy-Mutation in exakt derselben
+PostgreSQL-Transaktion koordinieren, ohne Economy-Tabellen direkt zu kennen.
+
+Rewards verwendet den Credit-Contract. Der Shop-Purchase-Slice verwendet den Debit-Contract.
+Economy kennt weder Rewards noch Shop als Aufrufer; beide Adapter delegieren an den bestehenden
+Store und damit an dieselbe Domain-, Row-Lock- und SQL-Logik.
+
+Es gibt weiterhin kein Economy-eigenes Messaging, keine Inbox/Outbox und keine Domain- oder
+Integration Events. Ebenso sind keine Transfers, kein Ledger, keine Multi-Currency-Struktur,
+keine Shop-Produktlogik und keine API-Anbindung Bestandteil des Economy-Moduls. Der Worker
+bleibt unverändert.
 
 Die fachfremden Referenzen der Economy-Implementierung sind
 `FlurNetz.Modules.Identity.Contracts` und `FlurNetz.Persistence`. Eine Referenz

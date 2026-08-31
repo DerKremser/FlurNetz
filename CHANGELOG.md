@@ -4,6 +4,23 @@
 
 ### Hinzugefügt
 
+- Ersten atomaren Inventory-Shop-Kauf mit `PurchaseShopOffer`, serverseitiger
+  `ShopPurchaseId` und global eindeutiger `ShopPurchaseRequestId` für Idempotenz ergänzt.
+- `Shop:2:CreateShopPurchases` mit `shop_purchases`, `shop_purchase_requests` und
+  `shop_purchase_guards` ergänzt; der einzige neue Foreign Key bleibt Shop-intern von
+  Purchase auf Offer.
+- Caller-neutrale transaction-aware Capabilities
+  `ICommunityIdentityExistence`, `IEconomyBalanceDebit` und
+  `IInventoryQuantityGrant` ergänzt, ohne fremde Modulimplementierungen oder Tabellen-SQL
+  in Shop einzuführen.
+- Atomare PostgreSQL-Orchestrierung für Idempotenz-Reservation, Identity-Prüfung,
+  Offer-Snapshot, Kauflimit, Economy-Debit, Inventory-Grant, Purchase-Persistenz und Outbox
+  innerhalb einer gemeinsamen Transaktion ergänzt.
+- Producer-owned `ShopPurchaseCompletedIntegrationEvent` mit stabilem Message Type
+  `shop.purchase-completed` und Schema-Version `1` ergänzt.
+- Shop-Purchase-Integrationstests gegen echtes PostgreSQL für gemeinsamen Commit,
+  parallele Duplicate-Requests, Idempotency-Conflict, konkurrierendes Kauflimit und
+  vollständigen Rollback bei unzureichendem Economy-Saldo ergänzt.
 - Shop-Textgrenzen auf Unicode-Skalarwerte vereinheitlicht, U+0000 und nicht wohlgeformtes
   UTF-16 abgewiesen und die `varchar(200)`-/`varchar(2000)`-Semantik mit PostgreSQL angeglichen.
 - `AvailabilityWindow` auf kanonische UTC-Instants mit expliziter PostgreSQL-kompatibler
@@ -15,7 +32,7 @@
 - Interne Shop-Katalog-Use-Cases für Create, Get, List, Rename, Description-, Preis-, Availability- und Kauflimitänderungen sowie Enable/Disable und den gezielten `ShopOfferStore` ergänzt.
 - Kontrollierte `ShopOffer.Rehydrate`-Domainlösung sowie atomare Row-Lock-Mutationen über `SELECT FOR UPDATE` ergänzt.
 - Echte Shop-PostgreSQL-Integrationstests für Migration, exaktes Schema, DB-Constraints, Roundtrips und Nebenläufigkeit ergänzt.
-- Käufe, Economy, Inventory Grant, Messaging, API und Administration bleiben in diesem Slice bewusst ausgeschlossen.
+- API, Administration, Shop-Event-Consumer und Worker-Wiring bleiben im Purchase-Slice bewusst ausgeschlossen.
 - Ersten Shop-Foundation-Slice mit `ShopOffer`, `ShopPrice`, `AvailabilityWindow` und gezielten Domainmutationen für fachliche Shop-Angebote hinzugefügt.
 - Stabilen öffentlichen `ShopOfferId`-Contract und die gemeinsame Verwendung von `Inventory.Contracts.ItemDefinitionId` im Shop ergänzt.
 - Shop-Unit- und Architekturtests für Angebotsinvarianten, Zeitfenster, Aktivierung, Kauflimits und Modulgrenzen ergänzt.
@@ -89,5 +106,9 @@
 - Echte API-Integrationstests vom HTTP-Request bis zur PostgreSQL-Persistierung.
 
 ### Geändert
+
+- `IntegrationEventEnvelope` weist normalisierte `CorrelationId` und `CausationId` jetzt
+  korrekt seinen Properties zu; dadurch persistiert die Outbox die technische
+  Shop-Purchase-Request-Korrelation tatsächlich.
 
 - Der bestehende Engagement-zu-Progression-Workflow kann nun außerhalb von Tests kontinuierlich durch einen eigenen Worker-Host verarbeitet werden.

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <RootNamespace>FlurNetz.Modules.Shop</RootNamespace>
@@ -8,7 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Economy.Contracts\FlurNetz.Modules.Economy.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Inventory.Contracts\FlurNetz.Modules.Inventory.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
   </ItemGroup>

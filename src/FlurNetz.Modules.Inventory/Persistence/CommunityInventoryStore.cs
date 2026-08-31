@@ -11,12 +11,6 @@ namespace FlurNetz.Modules.Inventory.Persistence;
 /// <summary>
 /// Persistiert Community-Bestandspositionen mit atomaren, parametrisierten PostgreSQL-Operationen.
 /// </summary>
-/// <remarks>
-/// Add initialisiert ausschließlich im Add-Pfad eine fehlende Position mit Menge null und sperrt
-/// sie anschließend mit <c>FOR UPDATE</c>. Remove legt fehlende Positionen nicht an. Sinkt eine
-/// vorhandene Menge exakt auf null, wird die Zeile gelöscht, damit die Persistenz nur tatsächlich
-/// vorhandene Bestände enthält. Jede Read/Modify/Write-Sequenz bleibt in derselben Transaktion.
-/// </remarks>
 public sealed class CommunityInventoryStore : ICommunityInventoryStore
 {
     private const string InitializeSql = """
@@ -66,8 +60,6 @@ public sealed class CommunityInventoryStore : ICommunityInventoryStore
     /// <summary>
     /// Erstellt den Store mit der technischen Verbindungsfabrik.
     /// </summary>
-    /// <param name="connectionFactory">Fabrik für geöffnete PostgreSQL-Verbindungen.</param>
-    /// <exception cref="ArgumentNullException">Wenn die Verbindungsfabrik fehlt.</exception>
     public CommunityInventoryStore(IPostgreSqlConnectionFactory connectionFactory)
     {
         ArgumentNullException.ThrowIfNull(connectionFactory);
@@ -87,7 +79,7 @@ public sealed class CommunityInventoryStore : ICommunityInventoryStore
 
         try
         {
-            var result = await AddInTransactionAsync(
+            var result = await AddAsync(
                 communityIdentityId,
                 itemDefinitionId,
                 amount,
@@ -104,6 +96,49 @@ public sealed class CommunityInventoryStore : ICommunityInventoryStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<InventoryQuantity> AddAsync(
+        CommunityIdentityId communityIdentityId,
+        ItemDefinitionId itemDefinitionId,
+        long amount,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
+        var validItemDefinitionId = ItemDefinitionId.Create(itemDefinitionId.Value);
+
+        var parameters = new
+        {
+            CommunityIdentityId = validCommunityIdentityId.Value,
+            ItemDefinitionId = validItemDefinitionId.Value
+        };
+
+        await connection.ExecuteAsync(
+                new CommandDefinition(
+                    InitializeSql,
+                    parameters,
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        var row = await connection.QuerySingleAsync<InventoryRow>(
+                new CommandDefinition(
+                    SelectForUpdateSql,
+                    parameters,
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        var entry = ToDomain(row);
+        entry.Add(amount);
+
+        return await UpdateAsync(entry, connection, transaction, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -163,45 +198,6 @@ public sealed class CommunityInventoryStore : ICommunityInventoryStore
             .ConfigureAwait(false);
 
         return row is null ? null : ToDomain(row);
-    }
-
-    private static async Task<InventoryQuantity> AddInTransactionAsync(
-        CommunityIdentityId communityIdentityId,
-        ItemDefinitionId itemDefinitionId,
-        long amount,
-        System.Data.Common.DbConnection connection,
-        System.Data.Common.DbTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
-        var validItemDefinitionId = ItemDefinitionId.Create(itemDefinitionId.Value);
-
-        var parameters = new
-        {
-            CommunityIdentityId = validCommunityIdentityId.Value,
-            ItemDefinitionId = validItemDefinitionId.Value
-        };
-
-        await connection.ExecuteAsync(
-                new CommandDefinition(
-                    InitializeSql,
-                    parameters,
-                    transaction: transaction,
-                    cancellationToken: cancellationToken))
-            .ConfigureAwait(false);
-
-        var row = await connection.QuerySingleAsync<InventoryRow>(
-                new CommandDefinition(
-                    SelectForUpdateSql,
-                    parameters,
-                    transaction: transaction,
-                    cancellationToken: cancellationToken))
-            .ConfigureAwait(false);
-
-        var entry = ToDomain(row);
-        entry.Add(amount);
-
-        return await UpdateAsync(entry, connection, transaction, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<InventoryQuantity> RemoveInTransactionAsync(

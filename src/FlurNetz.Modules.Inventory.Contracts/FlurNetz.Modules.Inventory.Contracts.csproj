@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <RootNamespace>FlurNetz.Modules.Inventory.Contracts</RootNamespace>
@@ -6,5 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+  </ItemGroup>
 
 </Project>

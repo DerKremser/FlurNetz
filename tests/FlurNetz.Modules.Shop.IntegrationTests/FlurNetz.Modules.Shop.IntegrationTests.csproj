@@ -11,6 +11,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity\FlurNetz.Modules.Identity.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Economy\FlurNetz.Modules.Economy.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Inventory\FlurNetz.Modules.Inventory.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Shop\FlurNetz.Modules.Shop.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Inventory.Contracts\FlurNetz.Modules.Inventory.Contracts.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />

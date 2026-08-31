@@ -15,9 +15,17 @@ Mappingdaten und ersetzen niemals die interne FlurNetz-Identität.
 
 ## Aktueller Vertical-Slice-Stand
 
-`FlurNetz.Modules.Identity.Contracts` bildet die öffentliche Grenze und enthält derzeit
-ausschließlich `CommunityIdentityId`. Der unveränderliche Value Type basiert auf `Guid`,
+`FlurNetz.Modules.Identity.Contracts` bildet die öffentliche Grenze und enthält
+`CommunityIdentityId` sowie die schmale caller-neutrale
+`ICommunityIdentityExistence`-Capability. Der unveränderliche Identifier basiert auf `Guid`,
 weist `Guid.Empty` zurück und kann für neue interne Identitäten über `New()` erzeugt werden.
+
+`ICommunityIdentityExistence` prüft eine bereits aufgelöste `CommunityIdentityId` innerhalb
+einer vom aufrufenden Slice bereitgestellten `DbConnection` und `DbTransaction`. Der Contract
+führt keinen Commit aus und veröffentlicht weder Repository- noch Identity-Domainobjekte. Der
+erste reale Aufrufer ist der Shop-Purchase-Slice, der die Existenzprüfung damit in dieselbe
+PostgreSQL-Transaktion wie Debit, Inventory-Grant, Purchase und Outbox einbindet. Identity kennt
+Shop dabei nicht.
 
 `FlurNetz.Modules.Identity` enthält die minimale Domain-Identität `CommunityIdentity`. Sie
 trägt ausschließlich eine gültige `CommunityIdentityId`; ihre ID kann nach der Erzeugung nicht
@@ -31,11 +39,14 @@ technische `PostgreSqlTransaction`. Die erste fachliche Migration gehört Identi
 über den bestehenden SQL-first Migration Runner ausgeführt und in dessen History unter
 `Identity:1:CreateCommunityIdentities` nachverfolgt.
 
-`Identity.Contracts` bleibt bewusst auf den öffentlichen Identifier begrenzt. Der
-Persistenz-Port, der Use Case, der Adapter und die Migrationsquelle sind keine öffentlichen
-Cross-Module-Verträge. Andere Module verwenden künftig die interne `CommunityIdentityId`;
-externe Plattformkennungen werden erst an einer späteren Resolution-/Mapping-Grenze
-zugeordnet.
+`Identity.Contracts` bleibt bewusst auf den öffentlichen Identifier und die gezielte
+Existenz-Capability begrenzt. Der allgemeine Persistenz-Port, Create-Use-Case, die
+Domain-Identität und die Migrationsquelle sind keine Cross-Module-Verträge. Die konkrete
+`CommunityIdentityExistence`-Implementierung liest ausschließlich
+`community_identities` über die vom Aufrufer übergebene Transaktion.
+
+Andere Module verwenden weiterhin die interne `CommunityIdentityId`; externe
+Plattformkennungen werden erst an einer späteren Resolution-/Mapping-Grenze zugeordnet.
 
 ## HTTP-Adapter
 

@@ -1,4 +1,6 @@
+using System.Data.Common;
 using System.Reflection;
+using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Inventory.Application;
 using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Inventory.Domain;
@@ -7,9 +9,6 @@ using FlurNetz.Modules.Inventory.Persistence;
 
 namespace FlurNetz.Architecture.Tests;
 
-/// <summary>
-/// Sichert Scope, Typ-Ownership und Abhängigkeitsgrenzen des persistierten Inventory-Slices.
-/// </summary>
 public sealed class InventoryArchitectureTests
 {
     private static Assembly InventoryImplementationAssembly =>
@@ -38,55 +37,66 @@ public sealed class InventoryArchitectureTests
     }
 
     [Fact]
-    public void InventoryContractsReferenceNoFlurNetzAssemblies()
+    public void InventoryContractsReferenceOnlyIdentityContracts()
     {
-        var references = GetReferencedAssemblyNames(InventoryContractsAssembly);
-
-        Assert.Empty(references);
+        Assert.Equal(
+            ["FlurNetz.Modules.Identity.Contracts"],
+            GetReferencedAssemblyNames(InventoryContractsAssembly));
     }
 
     [Fact]
-    public void InventoryContractsContainOnlyTheRequiredPublicItemDefinitionId()
+    public void InventoryContractsContainOnlyItemDefinitionIdAndNeutralGrantCapability()
     {
-        var exportedTypes = InventoryContractsAssembly.GetExportedTypes();
+        var exportedTypes = InventoryContractsAssembly.GetExportedTypes().ToHashSet();
 
-        var itemDefinitionId = Assert.Single(exportedTypes);
-        Assert.Equal(typeof(ItemDefinitionId), itemDefinitionId);
-        Assert.Equal(InventoryContractsAssembly, itemDefinitionId.Assembly);
+        Assert.True(exportedTypes.SetEquals(
+        [
+            typeof(ItemDefinitionId),
+            typeof(IInventoryQuantityGrant)
+        ]));
+
+        var method = typeof(IInventoryQuantityGrant).GetMethod(
+            nameof(IInventoryQuantityGrant.GrantAsync),
+            [
+                typeof(CommunityIdentityId),
+                typeof(ItemDefinitionId),
+                typeof(long),
+                typeof(DbConnection),
+                typeof(DbTransaction),
+                typeof(CancellationToken)
+            ]);
+
+        Assert.NotNull(method);
+        Assert.Equal(typeof(Task), method!.ReturnType);
     }
 
     [Fact]
-    public void InventoryDomainTypesRemainInTheImplementationAssembly()
+    public void InventoryDomainAndImplementationTypesRemainOwnedByInventory()
     {
-        var expectedTypeNames = new[]
+        var domainTypeNames = new[]
         {
             "FlurNetz.Modules.Inventory.Domain.InventoryQuantity",
             "FlurNetz.Modules.Inventory.Domain.InsufficientInventoryQuantityException",
             "FlurNetz.Modules.Inventory.Domain.CommunityInventoryEntry"
         };
 
-        foreach (var typeName in expectedTypeNames)
+        foreach (var typeName in domainTypeNames)
         {
             Assert.NotNull(InventoryImplementationAssembly.GetType(typeName));
             Assert.Null(InventoryContractsAssembly.GetType(typeName));
         }
 
-        Assert.Null(InventoryImplementationAssembly.GetType("FlurNetz.Modules.Inventory.Domain.ItemDefinitionId"));
-    }
+        var implementationTypes = new[]
+        {
+            typeof(ICommunityInventoryStore),
+            typeof(CommunityInventoryStore),
+            typeof(InventoryMigrationSource),
+            typeof(AddInventoryQuantity),
+            typeof(RemoveInventoryQuantity),
+            typeof(InventoryQuantityGrant)
+        };
 
-    [Fact]
-    public void InventoryPersistenceAndApplicationTypesRemainInImplementationAssembly()
-    {
-        Assert.Equal(InventoryImplementationAssembly, typeof(ICommunityInventoryStore).Assembly);
-        Assert.Equal(InventoryImplementationAssembly, typeof(CommunityInventoryStore).Assembly);
-        Assert.Equal(InventoryImplementationAssembly, typeof(InventoryMigrationSource).Assembly);
-        Assert.Equal(InventoryImplementationAssembly, typeof(AddInventoryQuantity).Assembly);
-        Assert.Equal(InventoryImplementationAssembly, typeof(RemoveInventoryQuantity).Assembly);
-
-        Assert.DoesNotContain(typeof(ICommunityInventoryStore), InventoryContractsAssembly.GetTypes());
-        Assert.DoesNotContain(typeof(CommunityInventoryStore), InventoryContractsAssembly.GetTypes());
-        Assert.DoesNotContain(typeof(AddInventoryQuantity), InventoryContractsAssembly.GetTypes());
-        Assert.DoesNotContain(typeof(RemoveInventoryQuantity), InventoryContractsAssembly.GetTypes());
+        Assert.All(implementationTypes, type => Assert.Equal(InventoryImplementationAssembly, type.Assembly));
     }
 
     [Fact]
@@ -118,8 +128,7 @@ public sealed class InventoryArchitectureTests
             "Product",
             "Purchase",
             "Price",
-            "Cost",
-            "Grant"
+            "Cost"
         };
 
         var forbiddenTypes = InventoryImplementationAssembly
@@ -129,39 +138,30 @@ public sealed class InventoryArchitectureTests
             .Select(type => type.FullName)
             .ToArray();
 
-        Assert.Empty(forbiddenTypes);
+        Assert.DoesNotContain(forbiddenTypes, _ => true);
     }
 
     [Fact]
-    public void InventoryContainsNoGenericRepositoryTypes()
+    public void InventoryContainsNoGenericRepositoryOrExternalPlatformTypes()
     {
-        var forbiddenTypes = InventoryImplementationAssembly
+        Assert.DoesNotContain(InventoryImplementationAssembly
             .GetExportedTypes()
             .Where(type => type.IsGenericType
-                && type.Name.Split('`')[0] is "IRepository" or "Repository" or "GenericRepository")
-            .Select(type => type.FullName)
-            .ToArray();
+                && type.Name.Split((char)96)[0] is "IRepository" or "Repository" or "GenericRepository"),
+            _ => true);
 
-        Assert.Empty(forbiddenTypes);
-    }
-
-    [Fact]
-    public void InventoryContainsNoExternalPlatformIdentityTypes()
-    {
-        var forbiddenTypes = InventoryImplementationAssembly
+        Assert.DoesNotContain(InventoryImplementationAssembly
             .GetTypes()
             .Where(type => ModuleArchitectureCatalog.ExternalPlatformNames.Any(platformName =>
-                type.Name.StartsWith(platformName, StringComparison.Ordinal)))
-            .Select(type => type.FullName)
-            .ToArray();
-
-        Assert.Empty(forbiddenTypes);
+                type.Name.StartsWith(platformName, StringComparison.Ordinal))),
+            _ => true);
     }
 
     private static string[] GetReferencedAssemblyNames(Assembly assembly) => assembly
         .GetReferencedAssemblies()
-        .Select(referencedAssembly => referencedAssembly.Name)
+        .Select(reference => reference.Name)
         .Where(name => name is not null && name.StartsWith("FlurNetz.", StringComparison.Ordinal))
         .Select(name => name!)
+        .Order(StringComparer.Ordinal)
         .ToArray();
 }

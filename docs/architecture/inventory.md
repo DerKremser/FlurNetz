@@ -71,26 +71,34 @@ Persistenzgrenze.
 Delete liegen in derselben Transaktion. Dadurch werden Lost Updates bei parallelen Änderungen an
 derselben Bestandsposition verhindert.
 
-Es gibt weiterhin bewusst keinen transaction-aware öffentlichen Inventory-Contract und keinen
-Overload für fremde Modultransaktionen. `ItemDefinitionId` ist ausschließlich der gemeinsame
-fachliche Identifier; eine Grant-Capability wird erst eingeführt, wenn ein späterer Slice sie
-tatsächlich benötigt.
+Für die erste reale Cross-Module-Bestandsvergabe enthält `Inventory.Contracts` zusätzlich
+`IInventoryQuantityGrant`. Die Fähigkeit nimmt `CommunityIdentityId`, `ItemDefinitionId`,
+eine positive Menge sowie neutrale `DbConnection`- und `DbTransaction`-Parameter entgegen.
+Sie führt keinen eigenen Commit aus.
+
+`InventoryQuantityGrant` delegiert ausschließlich an einen transaction-aware
+`ICommunityInventoryStore.AddAsync`-Overload. Dieser verwendet denselben
+`SELECT FOR UPDATE`-, Domain- und Sparse-Lifecycle wie der normale Add-Pfad. Inventory kennt
+den aufrufenden Shop nicht und erhält keine Shop-Typen.
 
 ## Migration und Registrierung
 
 `Inventory:1:CreateCommunityInventoryEntries` gehört ausschließlich dem Inventory-Modul und legt
 nur die Inventory-eigene Tabelle an. Die Migration enthält keine Cross-Module-Foreign-Keys.
 
-`AddInventoryModule` registriert den Store, die beiden internen Use Cases und
-`InventoryMigrationSource`. Kein Host verdrahtet Inventory in diesem Slice; API, Worker und
-Runtime-Trigger bleiben unberührt.
+`AddInventoryModule` registriert den Store, `IInventoryQuantityGrant`, die beiden internen
+Use Cases und `InventoryMigrationSource`. Kein Host verdrahtet zusätzliche
+Inventory-Runtime-Trigger; API und Worker bleiben unberührt.
 
 ## Contracts und bewusste Ausschlüsse
 
-`FlurNetz.Modules.Inventory.Contracts` enthält in diesem Slice ausschließlich
-`ItemDefinitionId`. Bestandsoperationen, Stores, Domainobjekte und Persistence bleiben intern.
-Die Inventory-Implementierung darf ausschließlich den eigenen Contract, `Identity.Contracts` und
-die technische `FlurNetz.Persistence`-Assembly referenzieren.
+`FlurNetz.Modules.Inventory.Contracts` enthält ausschließlich `ItemDefinitionId` und die
+schmale caller-neutrale `IInventoryQuantityGrant`-Capability. Dafür referenziert die
+Contracts-Assembly `Identity.Contracts`; sie referenziert weder Shop noch Persistence oder
+fremde Implementierungen. Stores, Domainobjekte und SQL-Persistenz bleiben intern.
+
+Die Inventory-Implementierung referenziert ausschließlich den eigenen Contract,
+`Identity.Contracts` und die technische `FlurNetz.Persistence`-Assembly.
 
 Weiterhin nicht enthalten sind:
 
@@ -101,7 +109,7 @@ Weiterhin nicht enthalten sind:
 - Item-Katalog, Namen, Beschreibungen, Icons, Kategorien oder Seltenheiten
 - Stack-Limits, einzigartige Item-Instanzen oder Instanzzustände
 - Ausrüstung, Verbrauch, Handel, Transfer, Ablaufzeiten oder Ownership-Historie
-- öffentliche transaction-aware Inventory-Capabilities oder Inventory-Grant-Funktionen
+- weitere öffentliche Bestandsmutationen außerhalb der gezielten Grant-Capability
 
 ## Tests
 

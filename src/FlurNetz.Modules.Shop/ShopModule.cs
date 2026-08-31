@@ -1,32 +1,32 @@
+using FlurNetz.BuildingBlocks.Time;
 using FlurNetz.Modules.Shop.Application;
 using FlurNetz.Modules.Shop.Migrations;
 using FlurNetz.Modules.Shop.Persistence;
 using FlurNetz.Persistence.Migrations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FlurNetz.Modules.Shop;
 
 /// <summary>
-/// Registriert die tatsächlich vorhandenen Komponenten des Shop-Katalog-Slices.
+/// Registriert den persistierten Shop-Katalog und den ersten atomaren Inventory-Purchase-Slice.
 /// </summary>
 /// <remarks>
-/// Die technische PostgreSQL-Verbindungsfabrik bleibt Verantwortung des Composition Roots.
-/// Shop registriert ausschließlich seinen Store, die internen Katalog-Use-Cases und die
-/// eigene Migration; Host-, API-, Messaging- und Purchase-Komposition sind nicht enthalten.
+/// Connection Factory, Messaging-Serializer, Event-Registry und Outbox-Publisher bleiben
+/// Verantwortung des Composition Roots beziehungsweise ihrer technischen Module.
 /// </remarks>
 public static class ShopModule
 {
     /// <summary>
-    /// Registriert den Shop-Store, die Katalog-Use-Cases und die Shop-Migration.
+    /// Registriert Shop-Katalog, Purchase-Use-Case, atomaren Executor und Shop-Migrationen.
     /// </summary>
-    /// <param name="services">Der Dependency-Injection-Container des Composition Roots.</param>
-    /// <returns>Die übergebene Service-Sammlung für weitere Registrierungen.</returns>
-    /// <exception cref="ArgumentNullException">Wenn <paramref name="services"/> fehlt.</exception>
     public static IServiceCollection AddShopModule(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.TryAddSingleton<IClock, SystemClock>();
         services.AddScoped<IShopOfferStore, ShopOfferStore>();
+        services.AddScoped<IShopPurchaseExecutor, PostgreSqlShopPurchaseExecutor>();
         services.AddScoped<CreateShopOffer>();
         services.AddScoped<GetShopOffer>();
         services.AddScoped<ListShopOffers>();
@@ -37,6 +37,7 @@ public static class ShopModule
         services.AddScoped<ChangeShopOfferPurchaseLimit>();
         services.AddScoped<EnableShopOffer>();
         services.AddScoped<DisableShopOffer>();
+        services.AddScoped<PurchaseShopOffer>();
         services.AddSingleton<IMigrationSource, ShopMigrationSource>();
 
         return services;

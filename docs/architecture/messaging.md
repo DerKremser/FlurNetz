@@ -1,9 +1,10 @@
 # Messaging Foundation
 
 `FlurNetz.Messaging` ist die technische Grundlage für Kommunikation zwischen FlurNetz-
-Modulgrenzen. Der erste reale fachliche Einsatz verbindet Engagement und Progression über
-Outbox, Processor und Inbox. Die Foundation bleibt fachlich neutral und kennt weder die
-Module noch deren Contracts.
+Modulgrenzen. Der erste vollständige Producer/Consumer-Workflow verbindet Engagement und
+Progression über Outbox, Processor und Inbox. Der Shop-Purchase-Slice ist der zweite reale
+Outbox-Produzent und veröffentlicht `shop.purchase-completed` v1 atomar mit dem Kauf.
+Die Foundation bleibt fachlich neutral und kennt weder die Module noch deren Contracts.
 
 ## Domain Events und Integration Events
 
@@ -91,3 +92,24 @@ von CLR-Refactorings unabhängig.
 Der Workflow-Test führt `OutboxProcessor.ProcessBatchAsync(...)` weiterhin direkt aus,
 während `FlurNetz.Worker` denselben Foundation-Processor außerhalb von Tests
 kontinuierlich betreibt.
+
+## Shop-Purchase als zweiter Outbox-Produzent
+
+Der atomare Shop-Purchase erzeugt nach erfolgreicher Identity-Prüfung, Economy-Abbuchung,
+Inventory-Vergabe und Purchase-Persistenz ein
+`ShopPurchaseCompletedIntegrationEvent` mit dem stabilen logischen Typ
+`shop.purchase-completed` und Schema-Version `1`.
+
+Der `PostgreSqlShopPurchaseExecutor` verwendet den bestehenden
+`IIntegrationEventPublisher` innerhalb derselben `PostgreSqlTransaction`. Damit werden
+Request-Reservation, Economy-Debit, Inventory-Grant, Shop-Purchase und Outbox-Nachricht durch
+denselben Commit sichtbar. Ein Fehler vor dem Commit hinterlässt auch keine Outbox-Nachricht.
+
+Die `ShopPurchaseRequestId` gehört nicht in die Event-Payload; sie wird als technische
+`CorrelationId` des Envelopes verwendet. Die fachliche Payload enthält ausschließlich den
+unveränderlichen Kauf-Snapshot.
+
+Slice 3 ergänzt bewusst keinen Consumer für dieses Event. Der bestehende Worker registriert
+`shop.purchase-completed` noch nicht und wird nicht verändert. Ein späterer Consumer muss
+seinen Eventtyp und seine stabile Consumer-Identity ausdrücklich registrieren und kann dann
+die vorhandene Inbox-/Retry-Infrastruktur verwenden.
