@@ -3,12 +3,13 @@ using FlurNetz.Persistence.Migrations;
 namespace FlurNetz.Modules.Titles.Migrations;
 
 /// <summary>
-/// Liefert die erste fachliche PostgreSQL-Migration des Titles-Vertical-Slices.
+/// Liefert die chronologische fachliche PostgreSQL-Migrationsreihe des Titles-Moduls.
 /// </summary>
 /// <remarks>
-/// Titles besitzt und verknüpft ausschließlich seine drei eigenen Tabellen. Die
-/// CommunityIdentityId bleibt ein fachlicher Cross-Module-Identifier ohne Foreign Key
-/// auf die Identity-Persistenz.
+/// Migration 1 legt den Community-State an, Migration 2 ergänzt den
+/// Definitionskatalog. Titles besitzt seine eigenen Tabellen; die CommunityIdentityId
+/// bleibt ein fachlicher Cross-Module-Identifier ohne Foreign Key auf die
+/// Identity-Persistenz.
 /// </remarks>
 public sealed class TitlesMigrationSource : IMigrationSource
 {
@@ -60,21 +61,37 @@ public sealed class TitlesMigrationSource : IMigrationSource
                 PRIMARY KEY (id),
 
             CONSTRAINT ck_title_definitions_display_name_not_blank
-                CHECK (btrim(display_name) <> ''),
+                CHECK (
+                    btrim(
+                        display_name,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    ) <> ''
+                ),
 
             CONSTRAINT ck_title_definitions_display_name_trimmed
-                CHECK (display_name = btrim(display_name)),
+                CHECK (
+                    display_name = btrim(
+                        display_name,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    )
+                ),
 
             CONSTRAINT ck_title_definitions_description_not_blank
                 CHECK (
                     description IS NULL
-                    OR btrim(description) <> ''
+                    OR btrim(
+                        description,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    ) <> ''
                 ),
 
             CONSTRAINT ck_title_definitions_description_trimmed
                 CHECK (
                     description IS NULL
-                    OR description = btrim(description)
+                    OR description = btrim(
+                        description,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    )
                 )
         );
         """;

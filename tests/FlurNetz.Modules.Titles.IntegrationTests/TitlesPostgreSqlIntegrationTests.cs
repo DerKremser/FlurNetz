@@ -723,60 +723,36 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
             VALUES (@Id, @DisplayName, @Description);
             """;
 
-        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
-            sql,
-            new
-            {
-                Id = Guid.NewGuid(),
-                DisplayName = "   ",
-                Description = (string?)null
-            },
-            cancellationToken: TestToken)));
-        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
-            sql,
-            new
-            {
-                Id = Guid.NewGuid(),
-                DisplayName = " Veteran ",
-                Description = (string?)null
-            },
-            cancellationToken: TestToken)));
-        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
-            sql,
-            new
-            {
-                Id = Guid.NewGuid(),
-                DisplayName = new string('x', 101),
-                Description = (string?)null
-            },
-            cancellationToken: TestToken)));
-        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
-            sql,
-            new
-            {
-                Id = Guid.NewGuid(),
-                DisplayName = "Veteran",
-                Description = "   "
-            },
-            cancellationToken: TestToken)));
-        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
-            sql,
-            new
-            {
-                Id = Guid.NewGuid(),
-                DisplayName = "Veteran",
-                Description = " Old "
-            },
-            cancellationToken: TestToken)));
-        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
-            sql,
-            new
-            {
-                Id = Guid.NewGuid(),
-                DisplayName = "Veteran",
-                Description = new string('x', 501)
-            },
-            cancellationToken: TestToken)));
+        async Task AssertRejectedAsync(string displayName, string? description)
+        {
+            await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(
+                new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Id = Guid.NewGuid(),
+                        DisplayName = displayName,
+                        Description = description
+                    },
+                    cancellationToken: TestToken)));
+        }
+
+        await AssertRejectedAsync("   ", null);
+        await AssertRejectedAsync(" Veteran ", null);
+        await AssertRejectedAsync(new string('x', 101), null);
+        await AssertRejectedAsync("Veteran", "   ");
+        await AssertRejectedAsync("Veteran", " Old ");
+        await AssertRejectedAsync("Veteran", new string('x', 501));
+
+        await AssertRejectedAsync("\t", null);
+        await AssertRejectedAsync("\tVeteran\t", null);
+        await AssertRejectedAsync("\u00A0", null);
+        await AssertRejectedAsync("\u00A0Veteran\u00A0", null);
+        await AssertRejectedAsync("Veteran", "\t");
+        await AssertRejectedAsync("Veteran", "\tBeschreibung\t");
+        await AssertRejectedAsync("Veteran", "\u00A0");
+        await AssertRejectedAsync("Veteran", "\u00A0Beschreibung\u00A0");
+        await AssertRejectedAsync("Veteran", "\u2003");
     }
 
     [Fact]

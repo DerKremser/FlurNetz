@@ -518,6 +518,34 @@ public sealed class TitleDefinitionTests
     }
 
     [Fact]
+    public void Create_CanonicalizesTabAndUnicodeWhitespaceAroundValues()
+    {
+        var definition = TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "\t\u00A0Veteran\u00A0\t",
+            "\t\u2003Beschreibung\u2003\t");
+
+        Assert.Equal("Veteran", definition.DisplayName);
+        Assert.Equal("Beschreibung", definition.Description);
+    }
+
+    [Fact]
+    public void Create_RejectsUnicodeWhitespaceOnlyDisplayNameAndCanonicalizesDescriptionToNull()
+    {
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "\t\u00A0\u2003",
+            null));
+
+        var definition = TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "Veteran",
+            "\t\u00A0\u2003");
+
+        Assert.Null(definition.Description);
+    }
+
+    [Fact]
     public void Create_RejectsNullDisplayName()
     {
         Assert.Throws<ArgumentException>(() => TitleDefinition.Create(
