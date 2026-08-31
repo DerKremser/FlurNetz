@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Reflection;
 using FlurNetz.BuildingBlocks.Results;
 using FlurNetz.Modules.Identity.Contracts;
@@ -6,33 +7,19 @@ using FlurNetz.Modules.Identity.Migrations;
 
 namespace FlurNetz.Architecture.Tests;
 
-/// <summary>
-/// Sichert die öffentliche Identity-Grenze und die Trennung von externer Plattformidentität.
-/// </summary>
 public sealed class IdentityArchitectureTests
 {
     private static Assembly IdentityContractsAssembly => typeof(CommunityIdentityId).Assembly;
-
     private static Assembly IdentityImplementationAssembly => typeof(CommunityIdentity).Assembly;
 
     [Fact]
-    public void IdentityContractsReferenceNoIdentityImplementation()
+    public void IdentityContractsReferenceNoImplementationPersistenceOrMessaging()
     {
-        var forbiddenReferences = GetReferencedAssemblyNames(IdentityContractsAssembly)
-            .Where(name => StringComparer.Ordinal.Equals(name, "FlurNetz.Modules.Identity"))
-            .ToArray();
+        var references = GetReferencedAssemblyNames(IdentityContractsAssembly);
 
-        Assert.Empty(forbiddenReferences);
-    }
-
-    [Fact]
-    public void IdentityContractsReferenceNoPersistenceOrMessaging()
-    {
-        var forbiddenReferences = GetReferencedAssemblyNames(IdentityContractsAssembly)
-            .Where(name => name is "FlurNetz.Persistence" or "FlurNetz.Messaging")
-            .ToArray();
-
-        Assert.Empty(forbiddenReferences);
+        Assert.DoesNotContain("FlurNetz.Modules.Identity", references);
+        Assert.DoesNotContain("FlurNetz.Persistence", references);
+        Assert.DoesNotContain("FlurNetz.Messaging", references);
     }
 
     [Fact]
@@ -44,15 +31,7 @@ public sealed class IdentityArchitectureTests
             .ToArray();
 
         Assert.Empty(forbiddenReferences);
-    }
-
-    [Fact]
-    public void IdentityImplementationReferencesPersistenceButNoMessaging()
-    {
-        var references = GetReferencedAssemblyNames(IdentityImplementationAssembly);
-
-        Assert.Contains("FlurNetz.Persistence", references);
-        Assert.DoesNotContain("FlurNetz.Messaging", references);
+        Assert.Contains("FlurNetz.Persistence", GetReferencedAssemblyNames(IdentityImplementationAssembly));
     }
 
     [Fact]
@@ -65,11 +44,27 @@ public sealed class IdentityArchitectureTests
     }
 
     [Fact]
-    public void IdentityContractsExposeOnlyTheInternalIdentityIdentifier()
+    public void IdentityContractsExposeOnlyIdentifierAndTransactionAwareExistenceCapability()
     {
-        var exportedTypes = IdentityContractsAssembly.GetExportedTypes();
+        var exportedTypes = IdentityContractsAssembly.GetExportedTypes().ToHashSet();
 
-        Assert.Equal([typeof(CommunityIdentityId)], exportedTypes);
+        Assert.True(exportedTypes.SetEquals(
+        [
+            typeof(CommunityIdentityId),
+            typeof(ICommunityIdentityExistence)
+        ]));
+
+        var method = typeof(ICommunityIdentityExistence).GetMethod(
+            nameof(ICommunityIdentityExistence.ExistsAsync),
+            [
+                typeof(CommunityIdentityId),
+                typeof(DbConnection),
+                typeof(DbTransaction),
+                typeof(CancellationToken)
+            ]);
+
+        Assert.NotNull(method);
+        Assert.Equal(typeof(Task<bool>), method!.ReturnType);
     }
 
     [Fact]
@@ -77,7 +72,15 @@ public sealed class IdentityArchitectureTests
     {
         var centralIdentityTypes = IdentityContractsAssembly.GetTypes()
             .Concat(IdentityImplementationAssembly.GetTypes())
-            .Where(IsExternalPlatformIdentityType)
+            .Where(type =>
+            {
+                var typeName = type.Name.Split((char)96)[0];
+                return ModuleArchitectureCatalog.ExternalPlatformNames.Any(platformName =>
+                    typeName.StartsWith(platformName, StringComparison.Ordinal)
+                    && (typeName.EndsWith("Id", StringComparison.Ordinal)
+                        || typeName.EndsWith("Identifier", StringComparison.Ordinal)
+                        || typeName.EndsWith("Identity", StringComparison.Ordinal)));
+            })
             .Select(type => type.FullName)
             .ToArray();
 
@@ -85,7 +88,7 @@ public sealed class IdentityArchitectureTests
     }
 
     [Fact]
-    public void IdentityContractsContainNoPersistenceOrApplicationPortTypes()
+    public void IdentityContractsContainNoRepositoryMigrationCommandOrHandlerTypes()
     {
         var forbiddenTypes = IdentityContractsAssembly.GetExportedTypes()
             .Where(type => type.Name.Contains("Repository", StringComparison.Ordinal)
@@ -93,7 +96,6 @@ public sealed class IdentityArchitectureTests
                 || type.Name.Contains("Migration", StringComparison.Ordinal)
                 || type.Name.Contains("Command", StringComparison.Ordinal)
                 || type.Name.Contains("Handler", StringComparison.Ordinal))
-            .Select(type => type.FullName)
             .ToArray();
 
         Assert.Empty(forbiddenTypes);
@@ -111,19 +113,8 @@ public sealed class IdentityArchitectureTests
 
     private static string[] GetReferencedAssemblyNames(Assembly assembly) => assembly
         .GetReferencedAssemblies()
-        .Select(referencedAssembly => referencedAssembly.Name)
+        .Select(reference => reference.Name)
         .Where(name => name is not null)
         .Select(name => name!)
         .ToArray();
-
-    private static bool IsExternalPlatformIdentityType(Type type)
-    {
-        var typeName = type.Name.Split('`')[0];
-
-        return ModuleArchitectureCatalog.ExternalPlatformNames.Any(platformName =>
-            typeName.StartsWith(platformName, StringComparison.Ordinal)
-            && (typeName.EndsWith("Id", StringComparison.Ordinal)
-                || typeName.EndsWith("Identifier", StringComparison.Ordinal)
-                || typeName.EndsWith("Identity", StringComparison.Ordinal)));
-    }
 }

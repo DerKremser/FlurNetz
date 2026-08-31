@@ -2,9 +2,6 @@ using System.Reflection;
 
 namespace FlurNetz.Architecture.Tests;
 
-/// <summary>
-/// Liefert die eine bekannte Modul-Liste und ermittelt die zugehörigen Assemblies explizit.
-/// </summary>
 internal static class ModuleArchitectureCatalog
 {
     public static IReadOnlyList<string> ExternalPlatformNames { get; } =
@@ -34,19 +31,13 @@ internal static class ModuleArchitectureCatalog
         new("Administration")
     ];
 
-    /// <summary>
-    /// Lädt ausschließlich einen bekannten Assembly-Namen; ein Dateisystem-Scan ist dadurch nicht nötig.
-    /// </summary>
     public static Assembly LoadAssembly(string assemblyName) => Assembly.Load(new AssemblyName(assemblyName));
 
     internal sealed record ModuleDefinition(string Name)
     {
         public string ImplementationAssemblyName => $"FlurNetz.Modules.{Name}";
-
         public string ContractsAssemblyName => $"FlurNetz.Modules.{Name}.Contracts";
-
         public string ImplementationNamespace => $"FlurNetz.Modules.{Name}";
-
         public string ContractsNamespace => $"FlurNetz.Modules.{Name}.Contracts";
 
         public IReadOnlyList<string> AllowedImplementationModuleReferences =>
@@ -67,7 +58,12 @@ internal static class ModuleArchitectureCatalog
                 "Inventory" =>
                     [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
                 "Shop" =>
-                    [ContractsAssemblyName, "FlurNetz.Modules.Inventory.Contracts"],
+                    [
+                        ContractsAssemblyName,
+                        "FlurNetz.Modules.Identity.Contracts",
+                        "FlurNetz.Modules.Economy.Contracts",
+                        "FlurNetz.Modules.Inventory.Contracts"
+                    ],
                 "Titles" =>
                     [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
                 "Achievements" =>
