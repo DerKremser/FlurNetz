@@ -15,7 +15,7 @@ public interface IEconomyBalanceDebit
 {
     /// <summary>
     /// Bucht einen positiven Betrag innerhalb der bereitgestellten Transaktion ab.
-/// </summary>
+    /// </summary>
     Task DebitAsync(
         CommunityIdentityId communityIdentityId,
         long amount,
