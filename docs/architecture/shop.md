@@ -247,10 +247,22 @@ Die PostgreSQL-Integrationstests prüfen zusätzlich:
 - den bestehenden Katalog einschließlich Unicode-, Zeit-, Rollback- und Concurrency-Garantien;
 - erfolgreichen Kauf mit gemeinsamem Economy-, Inventory-, Purchase-, Request-, Guard- und
   Outbox-Commit;
-- parallele identische Requests mit exakt einem Effekt;
-- Idempotency-Conflict;
-- konkurrierendes Kauflimit;
-- vollständigen Rollback bei unzureichendem Economy-Saldo.
+- kostenlosen Kauf ohne Economy-Zeile;
+- parallele identische Requests mit exakt einem Effekt und derselben Purchase-ID;
+- Idempotency-Conflict bei abweichendem Offer oder abweichender Identity;
+- sichtbar fehlschlagende korrupte Request→Purchase-Abbildungen ohne erneute Business-Effekte;
+- konkurrierendes Kauflimit sowie parallele unbegrenzte Käufe ohne Guard;
+- unbekannte Identity und unbekanntes Offer;
+- deaktivierte und außerhalb ihres Availability-Fensters liegende Offers;
+- Rollback bei unzureichendem Economy-Saldo;
+- Rollback eines bereits ausgeführten Debits bei Inventory-Overflow;
+- Rollback aller Business-Writes bei Outbox-Fehler;
+- unveränderliche historische Purchase-Snapshots nach späteren Katalogänderungen;
+- den tatsächlich beobachteten PostgreSQL-Lock-Wait einer Katalogmutation während eines
+  laufenden Purchase-Snapshots.
+
+Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Roundtrip von
+`shop.purchase-completed` v1 über die bestehende explizite Messaging-Registry.
 
 Nicht enthalten sind API, Admin UI, Worker-Consumer, Warenkorb, variable Purchase-Menge, Stock,
 Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
