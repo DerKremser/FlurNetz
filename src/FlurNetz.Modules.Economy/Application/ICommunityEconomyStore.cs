@@ -17,10 +17,6 @@ public interface ICommunityEconomyStore
     /// <summary>
     /// Schreibt einen positiven Betrag atomar gut und liefert den neuen Saldo nach Commit.
     /// </summary>
-    /// <param name="communityIdentityId">Die bereits aufgelöste interne Identität.</param>
-    /// <param name="amount">Der positive gutzuschreibende Betrag.</param>
-    /// <param name="cancellationToken">Token zum Abbrechen des Vorgangs.</param>
-    /// <returns>Der neue Economy-Saldo nach erfolgreichem Persistieren.</returns>
     Task<EconomyBalance> CreditAsync(
         CommunityIdentityId communityIdentityId,
         long amount,
@@ -29,12 +25,6 @@ public interface ICommunityEconomyStore
     /// <summary>
     /// Schreibt einen positiven Betrag innerhalb einer bereits bestehenden Transaktion gut.
     /// </summary>
-    /// <param name="communityIdentityId">Die bereits aufgelöste interne Identität.</param>
-    /// <param name="amount">Der positive gutzuschreibende Betrag.</param>
-    /// <param name="connection">Die geöffnete gemeinsame Datenbankverbindung.</param>
-    /// <param name="transaction">Die zu <paramref name="connection"/> gehörende Transaktion.</param>
-    /// <param name="cancellationToken">Token zum Abbrechen des Datenbankvorgangs.</param>
-    /// <returns>Der neue Economy-Saldo vor dem Commit der äußeren Transaktion.</returns>
     /// <remarks>
     /// Dieser Overload führt keinen Commit aus. Dadurch kann eine übergeordnete fachliche
     /// Operation Economy gemeinsam mit eigenen Writes atomar bestätigen oder zurückrollen.
@@ -49,10 +39,6 @@ public interface ICommunityEconomyStore
     /// <summary>
     /// Bucht einen positiven Betrag atomar ab und liefert den neuen Saldo nach Commit.
     /// </summary>
-    /// <param name="communityIdentityId">Die bereits aufgelöste interne Identität.</param>
-    /// <param name="amount">Der positive abzubuchende Betrag.</param>
-    /// <param name="cancellationToken">Token zum Abbrechen des Vorgangs.</param>
-    /// <returns>Der neue Economy-Saldo nach erfolgreichem Persistieren.</returns>
     /// <exception cref="InsufficientEconomyBalanceException">Wenn der Saldo nicht ausreicht.</exception>
     Task<EconomyBalance> DebitAsync(
         CommunityIdentityId communityIdentityId,
@@ -60,11 +46,22 @@ public interface ICommunityEconomyStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Bucht einen positiven Betrag innerhalb einer bereits bestehenden Transaktion ab.
+    /// </summary>
+    /// <remarks>
+    /// Dieser Overload führt keinen Commit aus. Die fachliche Validierung und Row-Lock-
+    /// Semantik bleiben identisch zum normalen Debit-Pfad.
+    /// </remarks>
+    Task<EconomyBalance> DebitAsync(
+        CommunityIdentityId communityIdentityId,
+        long amount,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Lädt einen Economy-Zustand ohne beim Lesen einen fehlenden Zustand anzulegen.
     /// </summary>
-    /// <param name="communityIdentityId">Die gesuchte interne Identität.</param>
-    /// <param name="cancellationToken">Token zum Abbrechen des Lesevorgangs.</param>
-    /// <returns>Der Zustand oder <see langword="null"/>, wenn keine Zeile existiert.</returns>
     Task<CommunityEconomy?> GetByCommunityIdentityIdAsync(
         CommunityIdentityId communityIdentityId,
         CancellationToken cancellationToken = default);

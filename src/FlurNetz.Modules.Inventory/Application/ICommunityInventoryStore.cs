@@ -17,11 +17,6 @@ public interface ICommunityInventoryStore
     /// <summary>
     /// Fügt einer Bestandsposition atomar eine positive Menge hinzu.
     /// </summary>
-    /// <param name="communityIdentityId">Die bereits aufgelöste interne Identität.</param>
-    /// <param name="itemDefinitionId">Die Inventory-eigene Item-Definition.</param>
-    /// <param name="amount">Die positive hinzuzufügende Menge.</param>
-    /// <param name="cancellationToken">Token zum Abbrechen des Vorgangs.</param>
-    /// <returns>Die neue Menge nach erfolgreichem Commit.</returns>
     Task<InventoryQuantity> AddAsync(
         CommunityIdentityId communityIdentityId,
         ItemDefinitionId itemDefinitionId,
@@ -29,13 +24,24 @@ public interface ICommunityInventoryStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Fügt einer Bestandsposition innerhalb einer bereits bestehenden Transaktion eine
+    /// positive Menge hinzu.
+    /// </summary>
+    /// <remarks>
+    /// Dieser Overload führt keinen Commit aus und verwendet denselben Domain- und
+    /// Sparse-Lifecycle wie der normale Add-Pfad.
+    /// </remarks>
+    Task<InventoryQuantity> AddAsync(
+        CommunityIdentityId communityIdentityId,
+        ItemDefinitionId itemDefinitionId,
+        long amount,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Entfernt atomar eine positive Menge ohne Unterbestand.
     /// </summary>
-    /// <param name="communityIdentityId">Die bereits aufgelöste interne Identität.</param>
-    /// <param name="itemDefinitionId">Die Inventory-eigene Item-Definition.</param>
-    /// <param name="amount">Die positive zu entfernende Menge.</param>
-    /// <param name="cancellationToken">Token zum Abbrechen des Vorgangs.</param>
-    /// <returns>Die neue Menge nach erfolgreichem Commit.</returns>
     /// <exception cref="InsufficientInventoryQuantityException">Wenn der vorhandene Bestand nicht ausreicht.</exception>
     Task<InventoryQuantity> RemoveAsync(
         CommunityIdentityId communityIdentityId,
@@ -46,10 +52,6 @@ public interface ICommunityInventoryStore
     /// <summary>
     /// Lädt genau eine Bestandsposition, ohne beim Lesen einen fehlenden Zustand anzulegen.
     /// </summary>
-    /// <param name="communityIdentityId">Die gesuchte interne Identität.</param>
-    /// <param name="itemDefinitionId">Die gesuchte Item-Definition.</param>
-    /// <param name="cancellationToken">Token zum Abbrechen des Lesevorgangs.</param>
-    /// <returns>Die Bestandsposition oder <see langword="null"/>, wenn keine positive Position persistiert ist.</returns>
     Task<CommunityInventoryEntry?> GetAsync(
         CommunityIdentityId communityIdentityId,
         ItemDefinitionId itemDefinitionId,

@@ -1,4 +1,5 @@
 using FlurNetz.Modules.Identity.Application;
+using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Identity.Migrations;
 using FlurNetz.Modules.Identity.Persistence;
 using FlurNetz.Persistence.Migrations;
@@ -26,6 +27,7 @@ public static class IdentityModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddScoped<ICommunityIdentityRepository, CommunityIdentityRepository>();
+        services.AddScoped<ICommunityIdentityExistence, CommunityIdentityExistence>();
         services.AddScoped<CreateCommunityIdentity>();
         services.AddSingleton<IMigrationSource, IdentityMigrationSource>();
 
