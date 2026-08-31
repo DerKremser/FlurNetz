@@ -25,6 +25,7 @@ using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Migrations;
 using FlurNetz.Persistence.Transactions;
+using Npgsql;
 
 namespace FlurNetz.Modules.Shop.IntegrationTests;
 
@@ -36,6 +37,8 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
 {
     private static readonly DateTimeOffset PurchaseTime =
         new(2026, 8, 31, 16, 15, 0, TimeSpan.Zero);
+
+    private static readonly TimeSpan ConcurrencyTimeout = TimeSpan.FromSeconds(10);
 
     [Fact]
     public async Task SuccessfulPurchaseCommitsDebitInventoryPurchaseRequestAndOutboxTogether()
@@ -531,6 +534,75 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
     }
 
     [Fact]
+    public async Task CatalogMutationWaitsForPurchaseOfferSnapshotLock()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var setupFactory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(setupFactory);
+
+        var identityId = await CreateIdentityAsync(setupFactory);
+        await CreditAsync(setupFactory, identityId, 100);
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(setupFactory, itemDefinitionId, price: 25);
+
+        var purchaseApplicationName = $"shop-purchase-lock-{offer.Id.Value:N}";
+        var mutationApplicationName = $"shop-mutation-lock-{offer.Id.Value:N}";
+        await using var purchaseFactory = CreateFactory(purchaseApplicationName);
+        await using var mutationFactory = CreateFactory(mutationApplicationName);
+        await using var observerFactory = CreateFactory();
+
+        var blockingPublisher = new BlockingIntegrationEventPublisher(
+            CreateOutboxPublisher(PurchaseTime));
+        var useCase = CreateUseCase(purchaseFactory, PurchaseTime, blockingPublisher);
+
+        Task<ShopPurchase>? purchaseTask = null;
+        Task<bool>? mutationTask = null;
+
+        try
+        {
+            purchaseTask = Task.Run(() => useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                identityId,
+                TestToken));
+
+            await blockingPublisher.Entered.Task.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken);
+
+            mutationTask = Task.Run(() => new ShopOfferStore(mutationFactory).ExecuteAsync(
+                offer.Id,
+                current => current.ChangePrice(99),
+                TestToken));
+
+            await WaitForRowLockWaitAsync(observerFactory, mutationApplicationName);
+            Assert.False(mutationTask.IsCompleted);
+
+            blockingPublisher.Release.TrySetResult(true);
+
+            var purchase = await purchaseTask.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken);
+            Assert.True(await mutationTask.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken));
+
+            Assert.Equal(25, purchase.PricePaid.Value);
+            Assert.Equal(99, (await new ShopOfferStore(setupFactory).GetAsync(offer.Id, TestToken))!.Price.Value);
+
+            await using var connection = await setupFactory.OpenConnectionAsync(TestToken);
+            Assert.Equal(1L, await CountAsync(connection, "shop_purchases"));
+            Assert.Equal(1L, await CountOutboxAsync(connection));
+        }
+        finally
+        {
+            blockingPublisher.Release.TrySetResult(true);
+            await DrainTaskAsync(purchaseTask);
+            await DrainTaskAsync(mutationTask);
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentDuplicateRequestReturnsSamePurchaseAndAppliesEffectsOnce()
     {
         SkipIfDatabaseIsUnavailable();
@@ -678,8 +750,21 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
         Assert.Equal(0L, await CountOutboxAsync(connection));
     }
 
-    private PostgreSqlConnectionFactory CreateFactory() =>
-        new(new PostgreSqlOptions(database.ConnectionString));
+    private PostgreSqlConnectionFactory CreateFactory(string? applicationName = null)
+    {
+        var connectionString = database.ConnectionString;
+
+        if (applicationName is not null)
+        {
+            var builder = new NpgsqlConnectionStringBuilder(connectionString)
+            {
+                ApplicationName = applicationName
+            };
+            connectionString = builder.ConnectionString;
+        }
+
+        return new PostgreSqlConnectionFactory(new PostgreSqlOptions(connectionString));
+    }
 
     private static PurchaseShopOffer CreateUseCase(
         PostgreSqlConnectionFactory factory,
@@ -687,18 +772,7 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
         IIntegrationEventPublisher? publisher = null)
     {
         var clock = new FixedClock(now);
-
-        if (publisher is null)
-        {
-            var registry = new IntegrationEventTypeRegistry();
-            registry.Register<ShopPurchaseCompletedIntegrationEvent>(
-                ShopPurchaseCompletedIntegrationEvent.MessageType,
-                ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
-
-            publisher = new PostgreSqlOutboxPublisher(
-                new IntegrationEventJsonSerializer(registry),
-                clock);
-        }
+        publisher ??= CreateOutboxPublisher(now);
 
         var executor = new PostgreSqlShopPurchaseExecutor(
             factory,
@@ -708,6 +782,18 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
             publisher);
 
         return new PurchaseShopOffer(executor, clock);
+    }
+
+    private static IIntegrationEventPublisher CreateOutboxPublisher(DateTimeOffset now)
+    {
+        var registry = new IntegrationEventTypeRegistry();
+        registry.Register<ShopPurchaseCompletedIntegrationEvent>(
+            ShopPurchaseCompletedIntegrationEvent.MessageType,
+            ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
+
+        return new PostgreSqlOutboxPublisher(
+            new IntegrationEventJsonSerializer(registry),
+            new FixedClock(now));
     }
 
     private static async Task PreparePurchaseDatabaseAsync(PostgreSqlConnectionFactory factory)
@@ -875,6 +961,61 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
                 "SELECT COUNT(*)::bigint FROM flurnetz_messaging.outbox_messages;",
                 cancellationToken: TestToken));
 
+    private static async Task WaitForRowLockWaitAsync(
+        PostgreSqlConnectionFactory observerFactory,
+        string applicationName)
+    {
+        await using var connection = await observerFactory.OpenConnectionAsync(TestToken);
+        var deadline = DateTime.UtcNow + ConcurrencyTimeout;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var isWaitingForLock = await connection.QuerySingleAsync<bool>(
+                new CommandDefinition(
+                    """
+                    SELECT EXISTS
+                    (
+                        SELECT 1
+                        FROM pg_stat_activity
+                        WHERE application_name = @ApplicationName
+                          AND backend_type = 'client backend'
+                          AND state = 'active'
+                          AND wait_event_type = 'Lock'
+                    );
+                    """,
+                    new { ApplicationName = applicationName },
+                    cancellationToken: TestToken));
+
+            if (isWaitingForLock)
+            {
+                return;
+            }
+
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(25),
+                TestContext.Current.CancellationToken);
+        }
+
+        Assert.Fail($"Die Verbindung {applicationName} wartete nicht auf einen PostgreSQL-Lock.");
+    }
+
+    private static async Task DrainTaskAsync(Task? task)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch
+        {
+            // Der eigentliche Testpfad bewertet die erwartete Ausnahme.
+        }
+    }
+
     private void SkipIfDatabaseIsUnavailable()
     {
         Assert.SkipUnless(database.IsAvailable, database.SkipReason);
@@ -885,6 +1026,26 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow { get; } = utcNow;
+    }
+
+    private sealed class BlockingIntegrationEventPublisher(IIntegrationEventPublisher inner)
+        : IIntegrationEventPublisher
+    {
+        public TaskCompletionSource<bool> Entered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<bool> Release { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task EnqueueAsync(
+            PostgreSqlTransaction transaction,
+            IntegrationEventEnvelope envelope,
+            CancellationToken cancellationToken = default)
+        {
+            Entered.TrySetResult(true);
+            await Release.Task.WaitAsync(cancellationToken);
+            await inner.EnqueueAsync(transaction, envelope, cancellationToken);
+        }
     }
 
     private sealed class ThrowingIntegrationEventPublisher : IIntegrationEventPublisher
