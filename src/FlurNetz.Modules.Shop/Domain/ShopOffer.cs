@@ -29,7 +29,8 @@ public sealed class ShopOffer
         string? description,
         ShopPrice price,
         AvailabilityWindow availabilityWindow,
-        int? purchaseLimitPerIdentity)
+        int? purchaseLimitPerIdentity,
+        bool isEnabled)
     {
         Id = id;
         ItemDefinitionId = itemDefinitionId;
@@ -38,7 +39,7 @@ public sealed class ShopOffer
         Price = price;
         Availability = availabilityWindow;
         PurchaseLimitPerIdentity = purchaseLimitPerIdentity;
-        IsEnabled = false;
+        IsEnabled = isEnabled;
     }
 
     /// <summary>
@@ -126,7 +127,8 @@ public sealed class ShopOffer
             NormalizeDescription(description),
             price,
             availabilityWindow,
-            NormalizePurchaseLimit(purchaseLimitPerIdentity));
+            NormalizePurchaseLimit(purchaseLimitPerIdentity),
+            false);
     }
 
     /// <summary>
@@ -148,6 +150,38 @@ public sealed class ShopOffer
             price,
             availabilityWindow,
             purchaseLimitPerIdentity);
+    }
+
+    /// <summary>
+    /// Rekonstruiert ein bereits persistiertes Shop-Angebot vollständig.
+    /// </summary>
+    /// <remarks>
+    /// Die Rehydration verwendet dieselben Validierungen wie die Erstellung, übernimmt aber
+    /// den persistierten Aktivierungszustand unverändert. Dadurch bleiben beschädigte
+    /// Persistenzdaten sichtbar, ohne öffentliche Setter oder Persistence-Typen einzuführen.
+    /// </remarks>
+    public static ShopOffer Rehydrate(
+        ShopOfferId id,
+        ItemDefinitionId itemDefinitionId,
+        string displayName,
+        string? description,
+        ShopPrice price,
+        bool isEnabled,
+        AvailabilityWindow availabilityWindow,
+        int? purchaseLimitPerIdentity)
+    {
+        EnsureValidId(id);
+        EnsureValidItemDefinitionId(itemDefinitionId);
+
+        return new ShopOffer(
+            id,
+            itemDefinitionId,
+            NormalizeDisplayName(displayName),
+            NormalizeDescription(description),
+            price,
+            availabilityWindow,
+            NormalizePurchaseLimit(purchaseLimitPerIdentity),
+            isEnabled);
     }
 
     /// <summary>

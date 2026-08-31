@@ -142,19 +142,25 @@ Details stehen in [inventory.md](inventory.md).
 
 ## Aktueller Stand des Shop-Moduls
 
-Der erste Shop-Slice ist die `Shop Foundation`. `ShopOfferId` ist der stabile, immutable
-Guid-basierte öffentliche Identifier in `FlurNetz.Modules.Shop.Contracts`. Das interne
-Domainmodell `ShopOffer` verbindet diese ID mit genau einer `ItemDefinitionId` aus
+Der zweite Shop-Slice ist der `Persistierte Shop-Katalog`. `ShopOfferId` ist der stabile,
+immutable Guid-basierte öffentliche Identifier in `FlurNetz.Modules.Shop.Contracts`. Das
+interne Domainmodell `ShopOffer` verbindet diese ID mit genau einer `ItemDefinitionId` aus
 `FlurNetz.Modules.Inventory.Contracts`, einem kanonischen Anzeigenamen, einer optionalen
 Beschreibung, `ShopPrice`, `IsEnabled`, einem halboffenen `AvailabilityWindow` und einem
-optionalen positiven Kauflimit pro Identität.
+optionalen positiven Kauflimit pro Identität. `ShopOffer.Rehydrate` stellt persistierte
+Angebote über denselben Invariantenpfad wieder her und übernimmt den gespeicherten
+Aktivierungszustand.
 
 Neue Angebote starten deaktiviert. Die Angebots-ID und das Ziel-Item sind unveränderlich;
 Darstellung, Preis, Zeitfenster, Kauflimit und Aktivierung werden ausschließlich über gezielte
-Domainmethoden verändert. `Shop` referenziert nur `Shop.Contracts` und `Inventory.Contracts`.
-Persistenz, Käufe, Economy, Inventory Grant, transaction-aware Inventory-Capabilities,
-Messaging, Events, API und Administration sind noch nicht Bestandteil dieses Slices. Details
-stehen in [shop.md](shop.md).
+Domainmethoden verändert. `Shop` referenziert jetzt `Shop.Contracts`, `Inventory.Contracts`
+und die technische `FlurNetz.Persistence`-Assembly. `Shop:1:CreateShopOffers` besitzt
+ausschließlich `shop_offers`; `ShopOfferStore` persistiert gezielt mit PostgreSQL/Dapper und
+schützt atomare Katalogmutationen mit `SELECT FOR UPDATE`. Die internen Use Cases decken
+Create, Get, List, Rename, Description, Preis, Availability, Kauflimit sowie Enable/Disable ab.
+Echte PostgreSQL-Integrationstests prüfen Migration, Constraints, Roundtrips und
+Nebenläufigkeit. Käufe, Economy, Inventory Grant, Messaging, API und Administration bleiben
+ausgeschlossen. Details stehen in [shop.md](shop.md).
 
 ## Aktueller Stand des Titles-Moduls
 
@@ -260,8 +266,9 @@ interne Use Cases, atomaren Store, Migration und Registrierung; sein Contracts-P
 `ItemDefinitionId`. Titles besitzt Domain, Rehydration, `TitleDefinition`, interne
 Application-Use-Cases, getrennte Community- und Katalog-Stores, zwei Migrationen, Modulregistrierung
 und echte Integrationstests; Achievements besitzt Domain, Application, getrennte Katalog- und
-Community-Stores, eine Migration, Modulregistrierung und echte Integrationstests; Shop besitzt die
-interne `Shop Foundation` mit minimalem `ShopOfferId`-Contract. Die übrigen Contracts-Projekte
+Community-Stores, eine Migration, Modulregistrierung und echte Integrationstests; Shop besitzt den
+persistierten `Shop-Katalog` mit minimalem `ShopOfferId`-Contract, `Shop:1:CreateShopOffers`,
+internen Use Cases, PostgreSQL-/Dapper-Store und Row-Lock-Mutationen. Die übrigen Contracts-Projekte
 bleiben leer.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
@@ -274,7 +281,7 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
 und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
 Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Shop nutzt ausschließlich seine interne Domain und den Contract für `ItemDefinitionId`; es gibt weder Persistence noch Modulregistrierung oder Host-Verdrahtung. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; Shop, Titles und Achievements sind noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`, eine Migration und `ShopModule`; ein Host, API oder Worker verdrahtet den Katalog noch nicht. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; Shop, Titles und Achievements sind noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen
@@ -283,9 +290,9 @@ ausschließlich `Engagement.Contracts` und Messaging verwenden; die Engagement-I
 bleibt verboten. Economy darf `Identity.Contracts` und seinen eigenen öffentlichen
 Capability-Contract verwenden; Rewards darf zusätzlich `Identity.Contracts` und
 `Economy.Contracts` verwenden und referenziert keine Economy-Implementierung. Inventory darf
-zusätzlich `Identity.Contracts` und die technische Persistence-Assembly verwenden; Rewards, Shop
-und Messaging bleiben verboten. Shop verwendet ausschließlich `Shop.Contracts` und
-`Inventory.Contracts`. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
+zusätzlich `Identity.Contracts` und die technische Persistence-Assembly verwenden; Rewards und
+Messaging bleiben verboten. Shop verwendet ausschließlich `Shop.Contracts`,
+`Inventory.Contracts` und die technische `FlurNetz.Persistence`-Assembly. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
 und die technische Persistence-Assembly verwenden; Achievements verwendet außerdem
 `FlurNetz.BuildingBlocks` für `IClock`. Messaging und alle fachlichen Modulimplementierungen bleiben
 verboten.

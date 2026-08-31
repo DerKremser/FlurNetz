@@ -167,6 +167,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlurNetz.Modules.Titles.Int
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlurNetz.Modules.Achievements.IntegrationTests", "tests\FlurNetz.Modules.Achievements.IntegrationTests\FlurNetz.Modules.Achievements.IntegrationTests.csproj", "{764185F6-8626-41E0-A423-ABBF91273E18}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlurNetz.Modules.Shop.IntegrationTests", "tests\FlurNetz.Modules.Shop.IntegrationTests\FlurNetz.Modules.Shop.IntegrationTests.csproj", "{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -957,6 +959,18 @@ Global
 		{764185F6-8626-41E0-A423-ABBF91273E18}.Release|x64.Build.0 = Release|Any CPU
 		{764185F6-8626-41E0-A423-ABBF91273E18}.Release|x86.ActiveCfg = Release|Any CPU
 		{764185F6-8626-41E0-A423-ABBF91273E18}.Release|x86.Build.0 = Release|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Debug|x64.Build.0 = Debug|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Debug|x86.Build.0 = Debug|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Release|x64.ActiveCfg = Release|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Release|x64.Build.0 = Release|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Release|x86.ActiveCfg = Release|Any CPU
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1042,5 +1056,6 @@ Global
 		{342BAE30-1271-463D-A591-4EC4C26B3CF2} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{2625428F-D07A-42B3-884B-8A575BA86E34} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{764185F6-8626-41E0-A423-ABBF91273E18} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{B2F3F09E-BC92-4CB8-8334-A6B32DAD5070} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
