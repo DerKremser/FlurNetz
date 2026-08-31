@@ -1,5 +1,6 @@
 using System.Reflection;
 using FlurNetz.Modules.Inventory.Application;
+using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Inventory.Domain;
 using FlurNetz.Modules.Inventory.Migrations;
 using FlurNetz.Modules.Inventory.Persistence;
@@ -37,9 +38,21 @@ public sealed class InventoryArchitectureTests
     }
 
     [Fact]
-    public void InventoryContractsRemainEmpty()
+    public void InventoryContractsReferenceNoFlurNetzAssemblies()
     {
-        Assert.Empty(InventoryContractsAssembly.GetExportedTypes());
+        var references = GetReferencedAssemblyNames(InventoryContractsAssembly);
+
+        Assert.Empty(references);
+    }
+
+    [Fact]
+    public void InventoryContractsContainOnlyTheRequiredPublicItemDefinitionId()
+    {
+        var exportedTypes = InventoryContractsAssembly.GetExportedTypes();
+
+        var itemDefinitionId = Assert.Single(exportedTypes);
+        Assert.Equal(typeof(ItemDefinitionId), itemDefinitionId);
+        Assert.Equal(InventoryContractsAssembly, itemDefinitionId.Assembly);
     }
 
     [Fact]
@@ -47,7 +60,6 @@ public sealed class InventoryArchitectureTests
     {
         var expectedTypeNames = new[]
         {
-            "FlurNetz.Modules.Inventory.Domain.ItemDefinitionId",
             "FlurNetz.Modules.Inventory.Domain.InventoryQuantity",
             "FlurNetz.Modules.Inventory.Domain.InsufficientInventoryQuantityException",
             "FlurNetz.Modules.Inventory.Domain.CommunityInventoryEntry"
@@ -58,6 +70,8 @@ public sealed class InventoryArchitectureTests
             Assert.NotNull(InventoryImplementationAssembly.GetType(typeName));
             Assert.Null(InventoryContractsAssembly.GetType(typeName));
         }
+
+        Assert.Null(InventoryImplementationAssembly.GetType("FlurNetz.Modules.Inventory.Domain.ItemDefinitionId"));
     }
 
     [Fact]

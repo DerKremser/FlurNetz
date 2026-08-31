@@ -66,6 +66,8 @@ internal static class ModuleArchitectureCatalog
                     ],
                 "Inventory" =>
                     [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
+                "Shop" =>
+                    [ContractsAssemblyName, "FlurNetz.Modules.Inventory.Contracts"],
                 "Titles" =>
                     [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
                 "Achievements" =>

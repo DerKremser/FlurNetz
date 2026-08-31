@@ -4,6 +4,10 @@
 
 ### Hinzugefügt
 
+- Ersten Shop-Foundation-Slice mit `ShopOffer`, `ShopPrice`, `AvailabilityWindow` und gezielten Domainmutationen für fachliche Shop-Angebote hinzugefügt.
+- Stabilen öffentlichen `ShopOfferId`-Contract und die gemeinsame Verwendung von `Inventory.Contracts.ItemDefinitionId` im Shop ergänzt.
+- Shop-Unit- und Architekturtests für Angebotsinvarianten, Zeitfenster, Aktivierung, Kauflimits und Modulgrenzen ergänzt.
+- `ItemDefinitionId` aus der Inventory-Domain in `FlurNetz.Modules.Inventory.Contracts` verschoben; Bestandsoperationen und Persistence bleiben intern.
 - Ersten persistierten Achievements-Vertical-Slice mit implementation-eigenem Definitionskatalog und permanenten Community-Achievements hinzugefügt.
 - `AchievementDefinitionId`, `AchievementDefinition` und immutable `CommunityAchievement` mit kanonischer Unicode-Whitespace- und UTC-Semantik ergänzt.
 - Interne Achievements-Use-Cases für Create/Get/List, Rename, Description-Änderung sowie idempotenten Community-Unlock/Get/List ergänzt.

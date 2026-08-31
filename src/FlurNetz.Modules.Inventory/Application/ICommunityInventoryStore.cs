@@ -1,3 +1,4 @@
+using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Inventory.Domain;
 

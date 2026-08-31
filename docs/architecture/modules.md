@@ -134,10 +134,27 @@ Bestand exakt null erreicht. Die Migration
 `Inventory:1:CreateCommunityInventoryEntries` gehört ausschließlich Inventory und erzwingt
 `quantity >= 0` ohne Cross-Module-Foreign-Key.
 
-`FlurNetz.Modules.Inventory.Contracts` bleibt leer. Die Implementierung referenziert neben dem
-eigenen Contract ausschließlich `Identity.Contracts` und die technische Persistence-Assembly.
+`FlurNetz.Modules.Inventory.Contracts` enthält ausschließlich `ItemDefinitionId`. Die
+Implementierung referenziert neben dem eigenen Contract ausschließlich `Identity.Contracts` und
+die technische Persistence-Assembly.
 Messaging, Rewards- und Shop-Anbindung, Item-Katalog, API, Admin UI und Worker bleiben ausgeschlossen.
 Details stehen in [inventory.md](inventory.md).
+
+## Aktueller Stand des Shop-Moduls
+
+Der erste Shop-Slice ist die `Shop Foundation`. `ShopOfferId` ist der stabile, immutable
+Guid-basierte öffentliche Identifier in `FlurNetz.Modules.Shop.Contracts`. Das interne
+Domainmodell `ShopOffer` verbindet diese ID mit genau einer `ItemDefinitionId` aus
+`FlurNetz.Modules.Inventory.Contracts`, einem kanonischen Anzeigenamen, einer optionalen
+Beschreibung, `ShopPrice`, `IsEnabled`, einem halboffenen `AvailabilityWindow` und einem
+optionalen positiven Kauflimit pro Identität.
+
+Neue Angebote starten deaktiviert. Die Angebots-ID und das Ziel-Item sind unveränderlich;
+Darstellung, Preis, Zeitfenster, Kauflimit und Aktivierung werden ausschließlich über gezielte
+Domainmethoden verändert. `Shop` referenziert nur `Shop.Contracts` und `Inventory.Contracts`.
+Persistenz, Käufe, Economy, Inventory Grant, transaction-aware Inventory-Capabilities,
+Messaging, Events, API und Administration sind noch nicht Bestandteil dieses Slices. Details
+stehen in [shop.md](shop.md).
 
 ## Aktueller Stand des Titles-Moduls
 
@@ -238,7 +255,14 @@ einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Con
 mit Domain, Application, Persistence-Adapter, Migration und Registrierung ebenfalls einen internen
 Vertical Slice sowie den neutralen Credit-Capability-Contract für atomare Komposition. Rewards besitzt
 mit Domain, Application, Katalog, Grant-Executor, Migration und Registrierung den ersten persistierten
-ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt Domain, interne Use Cases, atomaren Store, Migration und Registrierung; auch sein Contracts-Projekt bleibt leer. Titles besitzt Domain, Rehydration, `TitleDefinition`, interne Application-Use-Cases, getrennte Community- und Katalog-Stores, zwei Migrationen, Modulregistrierung und echte Integrationstests; Achievements besitzt Domain, Application, getrennte Katalog- und Community-Stores, eine Migration, Modulregistrierung und echte Integrationstests; beide Contracts-Projekte bleiben leer.
+ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt Domain,
+interne Use Cases, atomaren Store, Migration und Registrierung; sein Contracts-Projekt enthält
+`ItemDefinitionId`. Titles besitzt Domain, Rehydration, `TitleDefinition`, interne
+Application-Use-Cases, getrennte Community- und Katalog-Stores, zwei Migrationen, Modulregistrierung
+und echte Integrationstests; Achievements besitzt Domain, Application, getrennte Katalog- und
+Community-Stores, eine Migration, Modulregistrierung und echte Integrationstests; Shop besitzt die
+interne `Shop Foundation` mit minimalem `ShopOfferId`-Contract. Die übrigen Contracts-Projekte
+bleiben leer.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -250,7 +274,7 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
 und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
 Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; beide Slices sind noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Shop nutzt ausschließlich seine interne Domain und den Contract für `ItemDefinitionId`; es gibt weder Persistence noch Modulregistrierung oder Host-Verdrahtung. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; Shop, Titles und Achievements sind noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen
@@ -260,7 +284,8 @@ bleibt verboten. Economy darf `Identity.Contracts` und seinen eigenen öffentlic
 Capability-Contract verwenden; Rewards darf zusätzlich `Identity.Contracts` und
 `Economy.Contracts` verwenden und referenziert keine Economy-Implementierung. Inventory darf
 zusätzlich `Identity.Contracts` und die technische Persistence-Assembly verwenden; Rewards, Shop
-und Messaging bleiben verboten. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
+und Messaging bleiben verboten. Shop verwendet ausschließlich `Shop.Contracts` und
+`Inventory.Contracts`. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
 und die technische Persistence-Assembly verwenden; Achievements verwendet außerdem
 `FlurNetz.BuildingBlocks` für `IClock`. Messaging und alle fachlichen Modulimplementierungen bleiben
 verboten.
