@@ -24,6 +24,7 @@ using FlurNetz.Modules.Shop.Persistence;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Migrations;
+using FlurNetz.Persistence.Transactions;
 
 namespace FlurNetz.Modules.Shop.IntegrationTests;
 
@@ -135,6 +136,203 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
         Assert.Equal(ShopPurchaseCompletedIntegrationEvent.SchemaVersion, outbox.SchemaVersion);
         Assert.Equal(PurchaseTime, outbox.OccurredAtUtc);
         Assert.Equal(requestId.Value.ToString("D"), outbox.CorrelationId);
+    }
+
+    [Fact]
+    public async Task FreePurchaseSkipsEconomyRowAndCommitsInventoryPurchaseAndOutbox()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(factory, itemDefinitionId, price: 0);
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        var purchase = await useCase.ExecuteAsync(
+            ShopPurchaseRequestId.New(),
+            offer.Id,
+            identityId,
+            TestToken);
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Null(await ReadBalanceOrNullAsync(connection, identityId));
+        Assert.Equal(1, await ReadQuantityAsync(connection, identityId, itemDefinitionId));
+        Assert.Equal(0, purchase.PricePaid.Value);
+        Assert.Equal(1L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(1L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(1L, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
+    public async Task InventoryOverflowRollsBackPriorEconomyDebitAndAllPurchaseWrites()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        await CreditAsync(factory, identityId, 100);
+        var itemDefinitionId = ItemDefinitionId.New();
+        _ = await new CommunityInventoryStore(factory)
+            .AddAsync(identityId, itemDefinitionId, long.MaxValue, TestToken);
+        var offer = await CreateEnabledOfferAsync(
+            factory,
+            itemDefinitionId,
+            price: 25,
+            purchaseLimit: 1);
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        await Assert.ThrowsAsync<OverflowException>(
+            () => useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                identityId,
+                TestToken));
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(100, await ReadBalanceAsync(connection, identityId));
+        Assert.Equal(long.MaxValue, await ReadQuantityAsync(connection, identityId, itemDefinitionId));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_guards"));
+        Assert.Equal(0L, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
+    public async Task OutboxFailureRollsBackDebitInventoryPurchaseRequestAndGuard()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        await CreditAsync(factory, identityId, 100);
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(
+            factory,
+            itemDefinitionId,
+            price: 25,
+            purchaseLimit: 1);
+        var useCase = CreateUseCase(
+            factory,
+            PurchaseTime,
+            new ThrowingIntegrationEventPublisher());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                identityId,
+                TestToken));
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(100, await ReadBalanceAsync(connection, identityId));
+        Assert.Null(await ReadQuantityOrNullAsync(connection, identityId, itemDefinitionId));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_guards"));
+        Assert.Equal(0L, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
+    public async Task CorruptIdempotencyMappingFailsVisiblyWithoutReapplyingEffects()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        await CreditAsync(factory, identityId, 100);
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(factory, itemDefinitionId, price: 25);
+        var requestId = ShopPurchaseRequestId.New();
+
+        await using (var connection = await factory.OpenConnectionAsync(TestToken))
+        {
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    """
+                    INSERT INTO shop_purchase_requests
+                        (request_id, shop_purchase_id, shop_offer_id, community_identity_id)
+                    VALUES
+                        (@RequestId, @ShopPurchaseId, @ShopOfferId, @CommunityIdentityId);
+                    """,
+                    new
+                    {
+                        RequestId = requestId.Value,
+                        ShopPurchaseId = Guid.NewGuid(),
+                        ShopOfferId = offer.Id.Value,
+                        CommunityIdentityId = identityId.Value
+                    },
+                    cancellationToken: TestToken));
+        }
+
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => useCase.ExecuteAsync(
+                requestId,
+                offer.Id,
+                identityId,
+                TestToken));
+
+        Assert.Contains("keinen persistierten Kauf", exception.Message, StringComparison.Ordinal);
+
+        await using var verificationConnection = await factory.OpenConnectionAsync(TestToken);
+        Assert.Equal(100, await ReadBalanceAsync(verificationConnection, identityId));
+        Assert.Null(await ReadQuantityOrNullAsync(verificationConnection, identityId, itemDefinitionId));
+        Assert.Equal(0L, await CountAsync(verificationConnection, "shop_purchases"));
+        Assert.Equal(1L, await CountAsync(verificationConnection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountOutboxAsync(verificationConnection));
+    }
+
+    [Fact]
+    public async Task PurchaseSnapshotRemainsUnchangedAfterLaterOfferPriceMutation()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(factory);
+
+        var identityId = await CreateIdentityAsync(factory);
+        await CreditAsync(factory, identityId, 100);
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(factory, itemDefinitionId, price: 25);
+        var useCase = CreateUseCase(factory, PurchaseTime);
+
+        var purchase = await useCase.ExecuteAsync(
+            ShopPurchaseRequestId.New(),
+            offer.Id,
+            identityId,
+            TestToken);
+
+        Assert.True(await new ShopOfferStore(factory).ExecuteAsync(
+            offer.Id,
+            current => current.ChangePrice(99),
+            TestToken));
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        var row = await connection.QuerySingleAsync<PurchaseRow>(
+            new CommandDefinition(
+                """
+                SELECT
+                    id AS Id,
+                    shop_offer_id AS ShopOfferId,
+                    community_identity_id AS CommunityIdentityId,
+                    purchased_inventory_item_definition_id AS ItemDefinitionId,
+                    price_paid AS PricePaid,
+                    purchased_at AS PurchasedAt
+                FROM shop_purchases
+                WHERE id = @Id;
+                """,
+                new { Id = purchase.Id.Value },
+                cancellationToken: TestToken));
+
+        Assert.Equal(25, row.PricePaid);
+        Assert.Equal(itemDefinitionId.Value, row.ItemDefinitionId);
+        Assert.Equal(PurchaseTime, row.PurchasedAt);
+        Assert.Equal(99, (await new ShopOfferStore(factory).GetAsync(offer.Id, TestToken))!.Price.Value);
     }
 
     [Fact]
@@ -290,17 +488,23 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
 
     private static PurchaseShopOffer CreateUseCase(
         PostgreSqlConnectionFactory factory,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        IIntegrationEventPublisher? publisher = null)
     {
         var clock = new FixedClock(now);
-        var registry = new IntegrationEventTypeRegistry();
-        registry.Register<ShopPurchaseCompletedIntegrationEvent>(
-            ShopPurchaseCompletedIntegrationEvent.MessageType,
-            ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
 
-        var publisher = new PostgreSqlOutboxPublisher(
-            new IntegrationEventJsonSerializer(registry),
-            clock);
+        if (publisher is null)
+        {
+            var registry = new IntegrationEventTypeRegistry();
+            registry.Register<ShopPurchaseCompletedIntegrationEvent>(
+                ShopPurchaseCompletedIntegrationEvent.MessageType,
+                ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
+
+            publisher = new PostgreSqlOutboxPublisher(
+                new IntegrationEventJsonSerializer(registry),
+                clock);
+        }
+
         var executor = new PostgreSqlShopPurchaseExecutor(
             factory,
             new CommunityIdentityExistence(),
@@ -401,6 +605,15 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
                 new { IdentityId = identityId.Value },
                 cancellationToken: TestToken));
 
+    private static Task<long?> ReadBalanceOrNullAsync(
+        System.Data.Common.DbConnection connection,
+        CommunityIdentityId identityId) =>
+        connection.QuerySingleOrDefaultAsync<long?>(
+            new CommandDefinition(
+                "SELECT balance FROM community_economies WHERE community_identity_id = @IdentityId;",
+                new { IdentityId = identityId.Value },
+                cancellationToken: TestToken));
+
     private static Task<long> ReadQuantityAsync(
         System.Data.Common.DbConnection connection,
         CommunityIdentityId identityId,
@@ -477,6 +690,17 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
     private sealed class FixedClock(DateTimeOffset utcNow) : IClock
     {
         public DateTimeOffset UtcNow { get; } = utcNow;
+    }
+
+    private sealed class ThrowingIntegrationEventPublisher : IIntegrationEventPublisher
+    {
+        public Task EnqueueAsync(
+            PostgreSqlTransaction transaction,
+            IntegrationEventEnvelope envelope,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("Absichtlicher Outbox-Fehler für den Rollback-Test.");
+        }
     }
 
     private sealed record PurchaseAttempt(ShopPurchase? Purchase, Exception? Error);
