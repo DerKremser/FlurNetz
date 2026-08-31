@@ -37,6 +37,14 @@ public sealed class ShopArchitectureTests
     }
 
     [Fact]
+    public void ShopContractsReferenceNoFlurNetzAssemblies()
+    {
+        var references = GetReferencedAssemblyNames(ShopContractsAssembly);
+
+        Assert.Empty(references);
+    }
+
+    [Fact]
     public void ShopContractsContainOnlyShopOfferId()
     {
         var exportedTypes = ShopContractsAssembly.GetExportedTypes();

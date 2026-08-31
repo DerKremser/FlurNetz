@@ -38,6 +38,14 @@ public sealed class InventoryArchitectureTests
     }
 
     [Fact]
+    public void InventoryContractsReferenceNoFlurNetzAssemblies()
+    {
+        var references = GetReferencedAssemblyNames(InventoryContractsAssembly);
+
+        Assert.Empty(references);
+    }
+
+    [Fact]
     public void InventoryContractsContainOnlyTheRequiredPublicItemDefinitionId()
     {
         var exportedTypes = InventoryContractsAssembly.GetExportedTypes();

@@ -134,6 +134,22 @@ public sealed class AvailabilityWindowTests
     }
 
     [Fact]
+    public void Create_UsesAbsoluteInstantsForDifferentOffsets()
+    {
+        var from = new DateTimeOffset(2026, 1, 1, 14, 0, 0, TimeSpan.FromHours(2));
+        var until = new DateTimeOffset(2026, 1, 1, 13, 0, 0, TimeSpan.Zero);
+
+        var window = AvailabilityWindow.Create(from, until);
+
+        Assert.True(window.IsAvailableAt(
+            new DateTimeOffset(2026, 1, 1, 7, 0, 0, TimeSpan.FromHours(-5))));
+        Assert.True(window.IsAvailableAt(
+            new DateTimeOffset(2026, 1, 1, 7, 59, 59, TimeSpan.FromHours(-5))));
+        Assert.False(window.IsAvailableAt(
+            new DateTimeOffset(2026, 1, 1, 8, 0, 0, TimeSpan.FromHours(-5))));
+    }
+
+    [Fact]
     public void Create_RejectsEqualStartAndEnd()
     {
         Assert.Throws<ArgumentException>(() => AvailabilityWindow.Create(From, From));
@@ -260,6 +276,35 @@ public sealed class ShopOfferTests
     }
 
     [Fact]
+    public void Create_TrimsUnicodeWhitespaceBeforeApplyingDisplayNameLimit()
+    {
+        var offer = ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "\u2003" + new string('a', ShopOffer.MaxDisplayNameLength) + "\u3000");
+
+        Assert.Equal(new string('a', ShopOffer.MaxDisplayNameLength), offer.DisplayName);
+    }
+
+    [Fact]
+    public void Create_RejectsDisplayNameThatRemainsTooLongAfterUnicodeTrim()
+    {
+        Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "\u2003" + new string('a', ShopOffer.MaxDisplayNameLength + 1) + "\u3000"));
+    }
+
+    [Fact]
+    public void Create_RejectsUnicodeWhitespaceOnlyDisplayName()
+    {
+        Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "\u2003\u00a0\u202f\u3000"));
+    }
+
+    [Fact]
     public void Create_AllowsNullDescription()
     {
         var offer = CreateOffer(description: null);
@@ -295,6 +340,35 @@ public sealed class ShopOfferTests
             ItemDefinitionId.New(),
             "Angebot",
             new string('b', ShopOffer.MaxDescriptionLength + 1)));
+    }
+
+    [Fact]
+    public void Create_TrimsUnicodeWhitespaceBeforeApplyingDescriptionLimit()
+    {
+        var offer = CreateOffer(
+            description: "\u2003" + new string('b', ShopOffer.MaxDescriptionLength) + "\u3000");
+
+        Assert.Equal(new string('b', ShopOffer.MaxDescriptionLength), offer.Description);
+    }
+
+    [Fact]
+    public void Create_RejectsDescriptionThatRemainsTooLongAfterUnicodeTrim()
+    {
+        Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Angebot",
+            "\u2003" + new string('b', ShopOffer.MaxDescriptionLength + 1) + "\u3000"));
+    }
+
+    [Fact]
+    public void Create_RejectsUnicodeWhitespaceOnlyDescription()
+    {
+        Assert.Throws<ArgumentException>(() => ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Angebot",
+            "\u2003\u00a0\u202f\u3000"));
     }
 
     [Theory]
@@ -344,12 +418,40 @@ public sealed class ShopOfferTests
     }
 
     [Fact]
+    public void Rename_TrimsUnicodeWhitespaceBeforeApplyingDisplayNameLimit()
+    {
+        var offer = CreateOffer();
+
+        Assert.True(offer.Rename(
+            "\u2003" + new string('n', ShopOffer.MaxDisplayNameLength) + "\u3000"));
+        Assert.Equal(new string('n', ShopOffer.MaxDisplayNameLength), offer.DisplayName);
+    }
+
+    [Fact]
+    public void Rename_RejectsDisplayNameThatRemainsTooLongAfterUnicodeTrim()
+    {
+        var offer = CreateOffer();
+
+        Assert.Throws<ArgumentException>(() => offer.Rename(
+            "\u2003" + new string('n', ShopOffer.MaxDisplayNameLength + 1) + "\u3000"));
+    }
+
+    [Fact]
     public void ChangeDisplayName_DelegatesToRename()
     {
         var offer = CreateOffer();
 
         Assert.True(offer.ChangeDisplayName("Neu"));
         Assert.Equal("Neu", offer.DisplayName);
+    }
+
+    [Fact]
+    public void ChangeDisplayName_RejectsUnicodeWhitespaceOnlyName()
+    {
+        var offer = CreateOffer();
+
+        Assert.Throws<ArgumentException>(() => offer.ChangeDisplayName("\u2003\u00a0\u202f\u3000"));
+        Assert.Equal("Angebot", offer.DisplayName);
     }
 
     [Fact]
@@ -362,6 +464,35 @@ public sealed class ShopOfferTests
         Assert.True(offer.ChangeDescription(null));
         Assert.Null(offer.Description);
         Assert.False(offer.ChangeDescription(null));
+    }
+
+    [Fact]
+    public void ChangeDescription_TrimsUnicodeWhitespaceBeforeApplyingDescriptionLimit()
+    {
+        var offer = CreateOffer();
+
+        Assert.True(offer.ChangeDescription(
+            "\u2003" + new string('d', ShopOffer.MaxDescriptionLength) + "\u3000"));
+        Assert.Equal(new string('d', ShopOffer.MaxDescriptionLength), offer.Description);
+    }
+
+    [Fact]
+    public void ChangeDescription_RejectsDescriptionThatRemainsTooLongAfterUnicodeTrim()
+    {
+        var offer = CreateOffer();
+
+        Assert.Throws<ArgumentException>(() => offer.ChangeDescription(
+            "\u2003" + new string('d', ShopOffer.MaxDescriptionLength + 1) + "\u3000"));
+        Assert.Equal("Beschreibung", offer.Description);
+    }
+
+    [Fact]
+    public void ChangeDescription_RejectsUnicodeWhitespaceOnlyWithoutChangingState()
+    {
+        var offer = CreateOffer();
+
+        Assert.Throws<ArgumentException>(() => offer.ChangeDescription("\u2003\u00a0\u202f\u3000"));
+        Assert.Equal("Beschreibung", offer.Description);
     }
 
     [Fact]
@@ -445,6 +576,41 @@ public sealed class ShopOfferTests
         Assert.Null(shopOfferId!.GetSetMethod());
         Assert.NotNull(itemDefinitionId);
         Assert.Null(itemDefinitionId!.GetSetMethod());
+
+        var allowedPublicInstanceMethodNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(ShopOffer.IsAvailableAt),
+            nameof(ShopOffer.Rename),
+            nameof(ShopOffer.ChangeDisplayName),
+            nameof(ShopOffer.ChangeDescription),
+            nameof(ShopOffer.ChangePrice),
+            nameof(ShopOffer.ChangeAvailability),
+            nameof(ShopOffer.ChangePurchaseLimit),
+            nameof(ShopOffer.Enable),
+            nameof(ShopOffer.Disable)
+        };
+
+        var unexpectedPublicInstanceMethods = typeof(ShopOffer)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(method => !method.IsSpecialName)
+            .Where(method => !allowedPublicInstanceMethodNames.Contains(method.Name))
+            .Select(method => method.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(unexpectedPublicInstanceMethods);
+
+        var targetTypes = new[] { typeof(ShopOfferId), typeof(ItemDefinitionId) };
+        var publicMethodsWithTargetParameters = typeof(ShopOffer)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(method => !method.IsSpecialName)
+            .Where(method => method.GetParameters().Any(parameter =>
+                targetTypes.Contains(parameter.ParameterType)))
+            .Select(method => method.Name)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Empty(publicMethodsWithTargetParameters);
     }
 
     [Fact]
