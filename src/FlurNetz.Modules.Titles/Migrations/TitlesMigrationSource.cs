@@ -49,11 +49,46 @@ public sealed class TitlesMigrationSource : IMigrationSource
         );
         """;
 
+    private const string TitleDefinitionsMigrationSql = """
+        CREATE TABLE IF NOT EXISTS title_definitions
+        (
+            id uuid NOT NULL,
+            display_name varchar(100) NOT NULL,
+            description varchar(500) NULL,
+
+            CONSTRAINT pk_title_definitions
+                PRIMARY KEY (id),
+
+            CONSTRAINT ck_title_definitions_display_name_not_blank
+                CHECK (btrim(display_name) <> ''),
+
+            CONSTRAINT ck_title_definitions_display_name_trimmed
+                CHECK (display_name = btrim(display_name)),
+
+            CONSTRAINT ck_title_definitions_description_not_blank
+                CHECK (
+                    description IS NULL
+                    OR btrim(description) <> ''
+                ),
+
+            CONSTRAINT ck_title_definitions_description_trimmed
+                CHECK (
+                    description IS NULL
+                    OR description = btrim(description)
+                )
+        );
+        """;
+
     /// <summary>
-    /// Gibt die erste Titles-Migration zurück.
+    /// Gibt die unveränderte Community-State-Migration und den Katalog an.
     /// </summary>
     public IEnumerable<Migration> GetMigrations()
     {
         yield return new Migration("Titles", 1, "CreateCommunityTitles", MigrationSql);
+        yield return new Migration(
+            "Titles",
+            2,
+            "CreateTitleDefinitions",
+            TitleDefinitionsMigrationSql);
     }
 }

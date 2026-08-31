@@ -61,7 +61,8 @@ public sealed class TitlesArchitectureTests
         {
             "FlurNetz.Modules.Titles.Domain.TitleDefinitionId",
             "FlurNetz.Modules.Titles.Domain.TitleNotUnlockedException",
-            "FlurNetz.Modules.Titles.Domain.CommunityTitles"
+            "FlurNetz.Modules.Titles.Domain.CommunityTitles",
+            "FlurNetz.Modules.Titles.Domain.TitleDefinition"
         };
 
         foreach (var typeName in expectedTypeNames)
@@ -81,7 +82,15 @@ public sealed class TitlesArchitectureTests
             typeof(LockCommunityTitle),
             typeof(SetCurrentCommunityTitle),
             typeof(ClearCurrentCommunityTitle),
+            typeof(ITitleDefinitionStore),
+            typeof(TitleDefinitionNotFoundException),
+            typeof(CreateTitleDefinition),
+            typeof(RenameTitleDefinition),
+            typeof(ChangeTitleDescription),
+            typeof(GetTitleDefinition),
+            typeof(ListTitleDefinitions),
             typeof(CommunityTitlesStore),
+            typeof(TitleDefinitionStore),
             typeof(TitlesMigrationSource),
             typeof(TitlesModule)
         };
@@ -107,9 +116,10 @@ public sealed class TitlesArchitectureTests
     }
 
     [Fact]
-    public void TitlesContainsNoPrematureCatalogOrIntegrationTypes()
+    public void TitlesContainsCatalogDefinitionButNoPrematureIntegrationTypes()
     {
-        Assert.Null(TitlesImplementationAssembly.GetType("FlurNetz.Modules.Titles.Domain.TitleDefinition"));
+        Assert.NotNull(TitlesImplementationAssembly.GetType("FlurNetz.Modules.Titles.Domain.TitleDefinition"));
+        Assert.Null(TitlesContractsAssembly.GetType("FlurNetz.Modules.Titles.Domain.TitleDefinition"));
 
         var forbiddenNameParts = new[]
         {
@@ -158,9 +168,11 @@ public sealed class TitlesArchitectureTests
     }
 
     [Fact]
-    public void TitlesMigrationOwnsExactlyItsThreeTablesAndOnlyInternalForeignKeys()
+    public void TitlesMigrationV1OwnsExactlyItsThreeTablesAndOnlyInternalForeignKeys()
     {
-        var migration = Assert.Single(new TitlesMigrationSource().GetMigrations());
+        var migrations = new TitlesMigrationSource().GetMigrations().ToArray();
+        Assert.Equal(2, migrations.Length);
+        var migration = migrations.Single(item => item.Version == 1);
         var ownTables = new[]
         {
             "community_titles",
@@ -201,6 +213,34 @@ public sealed class TitlesArchitectureTests
     }
 
     [Fact]
+    public void TitlesMigrationV2OwnsOnlyTheDefinitionTableAndItsTextConstraints()
+    {
+        var migrations = new TitlesMigrationSource().GetMigrations().ToArray();
+        Assert.Equal(2, migrations.Length);
+        var migration = migrations.Single(item => item.Version == 2);
+
+        Assert.Equal("Titles", migration.Owner);
+        Assert.Equal(2L, migration.Version);
+        Assert.Equal("CreateTitleDefinitions", migration.Name);
+        Assert.Equal(
+            1,
+            migration.Sql.Split(
+                "CREATE TABLE IF NOT EXISTS",
+                StringSplitOptions.None).Length - 1);
+        Assert.Contains("title_definitions", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("community_titles", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("community_title_unlocks", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("community_title_selections", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REFERENCES", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("display_name varchar(100) NOT NULL", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("description varchar(500) NULL", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ck_title_definitions_display_name_not_blank", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ck_title_definitions_display_name_trimmed", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ck_title_definitions_description_not_blank", migration.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ck_title_definitions_description_trimmed", migration.Sql, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void TitlesModuleRegistersOnlyItsOwnSliceComponents()
     {
         var services = new ServiceCollection();
@@ -213,6 +253,12 @@ public sealed class TitlesArchitectureTests
         AssertService(services, typeof(LockCommunityTitle), typeof(LockCommunityTitle), ServiceLifetime.Scoped);
         AssertService(services, typeof(SetCurrentCommunityTitle), typeof(SetCurrentCommunityTitle), ServiceLifetime.Scoped);
         AssertService(services, typeof(ClearCurrentCommunityTitle), typeof(ClearCurrentCommunityTitle), ServiceLifetime.Scoped);
+        AssertService(services, typeof(ITitleDefinitionStore), typeof(TitleDefinitionStore), ServiceLifetime.Scoped);
+        AssertService(services, typeof(CreateTitleDefinition), typeof(CreateTitleDefinition), ServiceLifetime.Scoped);
+        AssertService(services, typeof(RenameTitleDefinition), typeof(RenameTitleDefinition), ServiceLifetime.Scoped);
+        AssertService(services, typeof(ChangeTitleDescription), typeof(ChangeTitleDescription), ServiceLifetime.Scoped);
+        AssertService(services, typeof(GetTitleDefinition), typeof(GetTitleDefinition), ServiceLifetime.Scoped);
+        AssertService(services, typeof(ListTitleDefinitions), typeof(ListTitleDefinitions), ServiceLifetime.Scoped);
         AssertService(services, typeof(IMigrationSource), typeof(TitlesMigrationSource), ServiceLifetime.Singleton);
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName is not null &&

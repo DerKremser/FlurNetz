@@ -11,6 +11,10 @@
 - Titles-eigene PostgreSQL-Migration mit drei modul-owned Tabellen und einer Datenbankinvariante von Current zu Unlock über interne Foreign Keys.
 - PostgreSQL-Root-Row-Locking pro `CommunityIdentityId` zum Schutz vor verlorenen Änderungen bei konkurrierenden Titles-Operationen.
 - Echte Titles-PostgreSQL-Integrationstests für Migration, Constraints, Rehydration, Rollback, Isolation und Nebenläufigkeit.
+- Ersten persistierten Titles-Definitionskatalog mit `TitleDefinition`, normalisiertem Anzeigenamen und optionaler Beschreibung.
+- Interne Katalog-Use-Cases für Create, Rename, Description-Änderung, Get und List mit `TitleDefinitionStore`.
+- Neue Migration `Titles:2:CreateTitleDefinitions` mit kanonischen PostgreSQL-Text-Constraints; die bestehende Titles-V1-Migration bleibt unverändert.
+- PostgreSQL-Row-Locking mit `SELECT FOR UPDATE` schützt Katalogmutationen derselben Definition vor Lost Updates; echte Katalog- und Concurrency-Integrationstests ergänzen die Titles-Testabdeckung.
 - Erster persistierter Inventory-Vertical-Slice mit atomaren Add-/Remove-Operationen.
 - Inventory-eigene PostgreSQL-Migration mit Composite Primary Key und Nichtnegativ-Check.
 - Sparse Inventory-Persistenz: Bestände bei null werden gelöscht und fehlende Removes legen keine Zeile an.

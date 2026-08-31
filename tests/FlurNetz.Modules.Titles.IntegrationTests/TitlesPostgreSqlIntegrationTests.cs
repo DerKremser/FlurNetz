@@ -17,7 +17,7 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
     : IClassFixture<TitlesPostgreSqlFixture>
 {
     [Fact]
-    public async Task TitlesMigrationCreatesExactlyThreeTablesWithInternalForeignKeysAndIsIdempotent()
+    public async Task TitlesMigrationsCreateCommunityStateAndCatalogTablesWithConstraintsAndAreIdempotent()
     {
         SkipIfDatabaseIsUnavailable();
         await using var factory = CreateFactory();
@@ -28,8 +28,8 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
         var firstRun = await runner.RunAsync(TestToken);
         var secondRun = await runner.RunAsync(TestToken);
 
-        Assert.Equal(new MigrationRunResult(1, 0), firstRun);
-        Assert.Equal(new MigrationRunResult(0, 1), secondRun);
+        Assert.Equal(new MigrationRunResult(2, 0), firstRun);
+        Assert.Equal(new MigrationRunResult(0, 2), secondRun);
 
         await using var connection = await factory.OpenConnectionAsync(TestToken);
         var tableNames = (await connection.QueryAsync<string>(
@@ -38,7 +38,12 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
                     SELECT table_name
                     FROM information_schema.tables
                     WHERE table_schema = 'public'
-                      AND table_name LIKE 'community_title%'
+                      AND table_name IN (
+                          'community_titles',
+                          'community_title_unlocks',
+                          'community_title_selections',
+                          'title_definitions'
+                      )
                     ORDER BY table_name;
                     """,
                     cancellationToken: TestToken)))
@@ -47,6 +52,7 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
         var rootColumns = await ReadColumnsAsync(connection, "community_titles");
         var unlockColumns = await ReadColumnsAsync(connection, "community_title_unlocks");
         var selectionColumns = await ReadColumnsAsync(connection, "community_title_selections");
+        var definitionColumns = await ReadColumnsAsync(connection, "title_definitions");
         var foreignKeys = (await connection.QueryAsync<ForeignKeyInfo>(
                 new CommandDefinition(
                     """
@@ -59,23 +65,40 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
                     JOIN pg_class target_table ON target_table.oid = constraint_row.confrelid
                     WHERE constraint_row.contype = 'f'
                       AND source_table.relnamespace = 'public'::regnamespace
-                      AND source_table.relname LIKE 'community_title%'
+                      AND source_table.relname IN (
+                          'community_titles',
+                          'community_title_unlocks',
+                          'community_title_selections',
+                          'title_definitions'
+                      )
                     ORDER BY constraint_row.conname;
                     """,
                     cancellationToken: TestToken)))
             .ToArray();
-        var migration = Assert.Single(migrationSource.GetMigrations());
-        var history = await connection.QuerySingleAsync<MigrationHistory>(
-            new CommandDefinition(
-                $"""
+        var migrations = migrationSource.GetMigrations().ToArray();
+        var versionOne = migrations.Single(migration => migration.Version == 1);
+        var versionTwo = migrations.Single(migration => migration.Version == 2);
+        var histories = (await connection.QueryAsync<MigrationHistory>(
+                new CommandDefinition(
+                    $"""
                 SELECT owner AS Owner, version AS Version, name AS Name, checksum AS Checksum
                 FROM {MigrationRunner.MigrationHistoryTableName}
-                WHERE owner = 'Titles' AND version = 1;
+                WHERE owner = 'Titles' AND version IN (1, 2)
+                ORDER BY version;
                 """,
-                cancellationToken: TestToken));
+                cancellationToken: TestToken)))
+            .ToArray();
+        var checkConstraints = await ReadCheckConstraintNamesAsync(
+            connection,
+            "title_definitions");
 
         Assert.Equal(
-            ["community_title_selections", "community_title_unlocks", "community_titles"],
+            [
+                "community_title_selections",
+                "community_title_unlocks",
+                "community_titles",
+                "title_definitions"
+            ],
             tableNames);
         Assert.Equal(["community_identity_id"], rootColumns.Select(column => column.ColumnName).ToArray());
         Assert.Equal(
@@ -84,6 +107,9 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
         Assert.Equal(
             ["community_identity_id", "title_definition_id"],
             selectionColumns.Select(column => column.ColumnName).ToArray());
+        Assert.Equal(
+            ["id", "display_name", "description"],
+            definitionColumns.Select(column => column.ColumnName).ToArray());
         Assert.All(
             rootColumns.Concat(unlockColumns).Concat(selectionColumns),
             column =>
@@ -91,11 +117,20 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
                 Assert.Equal("uuid", column.DataType);
                 Assert.Equal("NO", column.IsNullable);
             });
+        Assert.Equal("uuid", definitionColumns[0].DataType);
+        Assert.Equal("NO", definitionColumns[0].IsNullable);
+        Assert.Equal("character varying", definitionColumns[1].DataType);
+        Assert.Equal(100, definitionColumns[1].CharacterMaximumLength);
+        Assert.Equal("NO", definitionColumns[1].IsNullable);
+        Assert.Equal("character varying", definitionColumns[2].DataType);
+        Assert.Equal(500, definitionColumns[2].CharacterMaximumLength);
+        Assert.Equal("YES", definitionColumns[2].IsNullable);
         Assert.Equal("community_identity_id", await ReadPrimaryKeyAsync(connection, "community_titles"));
         Assert.Equal(
             "community_identity_id,title_definition_id",
             await ReadPrimaryKeyAsync(connection, "community_title_unlocks"));
         Assert.Equal("community_identity_id", await ReadPrimaryKeyAsync(connection, "community_title_selections"));
+        Assert.Equal("id", await ReadPrimaryKeyAsync(connection, "title_definitions"));
         Assert.Equal(3, foreignKeys.Length);
         Assert.Equal(
             [
@@ -112,10 +147,45 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
         Assert.Equal(
             "community_title_unlocks",
             foreignKeys.Single(key => key.ConstraintName == "fk_community_title_selections_unlock").ReferencedTable);
-        Assert.Equal("Titles", history.Owner);
-        Assert.Equal(1L, history.Version);
-        Assert.Equal("CreateCommunityTitles", history.Name);
-        Assert.Equal(MigrationChecksum.Compute(migration.Sql), history.Checksum);
+        Assert.DoesNotContain(foreignKeys, key => key.TableName == "title_definitions");
+        Assert.Equal(
+            [
+                "ck_title_definitions_description_not_blank",
+                "ck_title_definitions_description_trimmed",
+                "ck_title_definitions_display_name_not_blank",
+                "ck_title_definitions_display_name_trimmed"
+            ],
+            checkConstraints);
+        Assert.Equal(2, histories.Length);
+        Assert.Equal("Titles", histories[0].Owner);
+        Assert.Equal(1L, histories[0].Version);
+        Assert.Equal("CreateCommunityTitles", histories[0].Name);
+        Assert.Equal(MigrationChecksum.Compute(versionOne.Sql), histories[0].Checksum);
+        Assert.Equal("Titles", histories[1].Owner);
+        Assert.Equal(2L, histories[1].Version);
+        Assert.Equal("CreateTitleDefinitions", histories[1].Name);
+        Assert.Equal(MigrationChecksum.Compute(versionTwo.Sql), histories[1].Checksum);
+    }
+
+    [Fact]
+    public async Task AlreadyAppliedV1KeepsItsChecksumWhenV2IsApplied()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await ResetTitlesMigrationAsync(factory);
+
+        var migrations = new TitlesMigrationSource().GetMigrations().ToArray();
+        var firstRun = await new MigrationRunner(
+                factory,
+                new FixedMigrationSource(migrations[0]))
+            .RunAsync(TestToken);
+        var secondRun = await new MigrationRunner(
+                factory,
+                new TitlesMigrationSource())
+            .RunAsync(TestToken);
+
+        Assert.Equal(new MigrationRunResult(1, 0), firstRun);
+        Assert.Equal(new MigrationRunResult(1, 1), secondRun);
     }
 
     [Fact]
@@ -521,6 +591,274 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
         Assert.Equal(1, await ReadSelectionCountAsync(factory, communityIdentityId));
     }
 
+    [Fact]
+    public async Task CreatePersistsCanonicalDefinitionWithoutCreatingCommunityState()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        var communityIdentityId = CommunityIdentityId.New();
+
+        var titleDefinitionId = await new CreateTitleDefinition(
+                new TitleDefinitionStore(factory))
+            .ExecuteAsync("  Veteran  ", "  Beschreibung  ", TestToken);
+
+        var definition = await new GetTitleDefinition(
+                new TitleDefinitionStore(factory))
+            .ExecuteAsync(titleDefinitionId, TestToken);
+
+        Assert.NotNull(definition);
+        Assert.Equal(titleDefinitionId, definition!.Id);
+        Assert.Equal("Veteran", definition.DisplayName);
+        Assert.Equal("Beschreibung", definition.Description);
+        Assert.Equal(1, await ReadDefinitionCountAsync(factory, titleDefinitionId));
+        Assert.Equal(0, await ReadRootCountAsync(factory, communityIdentityId));
+        Assert.Equal(0, await ReadUnlockCountAsync(factory, communityIdentityId));
+        Assert.Equal(0, await ReadSelectionCountAsync(factory, communityIdentityId));
+    }
+
+    [Fact]
+    public async Task DuplicateDefinitionIdFailsWithoutCreatingADuplicate()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        var titleDefinitionId = TitleDefinitionId.New();
+        var definition = TitleDefinition.Create(titleDefinitionId, "Veteran", null);
+        var store = new TitleDefinitionStore(factory);
+
+        await store.AddAsync(definition, TestToken);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => store.AddAsync(definition, TestToken));
+
+        Assert.Equal(1, await ReadDefinitionCountAsync(factory, titleDefinitionId));
+    }
+
+    [Fact]
+    public async Task GetAndListReturnRehydratedDefinitionsInIdOrder()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        var firstId = TitleDefinitionId.Create(Guid.Parse("00000000-0000-0000-0000-000000000001"));
+        var secondId = TitleDefinitionId.Create(Guid.Parse("00000000-0000-0000-0000-000000000002"));
+        var store = new TitleDefinitionStore(factory);
+
+        Assert.Empty(await store.ListAsync(TestToken));
+        await store.AddAsync(TitleDefinition.Create(secondId, "B", null), TestToken);
+        await store.AddAsync(TitleDefinition.Create(firstId, "A", "Beschreibung"), TestToken);
+
+        var list = await store.ListAsync(TestToken);
+        var loaded = await store.GetAsync(firstId, TestToken);
+        var unknown = await store.GetAsync(TitleDefinitionId.New(), TestToken);
+
+        Assert.Equal([firstId, secondId], list.Select(definition => definition.Id).ToArray());
+        Assert.Equal("A", loaded!.DisplayName);
+        Assert.Equal("Beschreibung", loaded.Description);
+        Assert.Null(unknown);
+    }
+
+    [Fact]
+    public async Task RenameAndDescriptionChangesPersistAndCanonicalNoOpsAvoidWrites()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        var titleDefinitionId = TitleDefinitionId.New();
+        var store = new TitleDefinitionStore(factory);
+        await store.AddAsync(
+            TitleDefinition.Create(titleDefinitionId, "A", "Old"),
+            TestToken);
+
+        Assert.True(await new RenameTitleDefinition(store)
+            .ExecuteAsync(titleDefinitionId, "  B  ", TestToken));
+        Assert.False(await new RenameTitleDefinition(store)
+            .ExecuteAsync(titleDefinitionId, "B", TestToken));
+        Assert.True(await new ChangeTitleDescription(store)
+            .ExecuteAsync(titleDefinitionId, "  New  ", TestToken));
+        Assert.False(await new ChangeTitleDescription(store)
+            .ExecuteAsync(titleDefinitionId, "New", TestToken));
+        Assert.True(await new ChangeTitleDescription(store)
+            .ExecuteAsync(titleDefinitionId, "   ", TestToken));
+
+        var definition = await store.GetAsync(titleDefinitionId, TestToken);
+
+        Assert.Equal("B", definition!.DisplayName);
+        Assert.Null(definition.Description);
+    }
+
+    [Fact]
+    public async Task UnknownDefinitionMutationRollsBackAndLeavesCatalogUnchanged()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        var existingId = TitleDefinitionId.New();
+        var unknownId = TitleDefinitionId.New();
+        var store = new TitleDefinitionStore(factory);
+        await store.AddAsync(
+            TitleDefinition.Create(existingId, "Existing", null),
+            TestToken);
+
+        var exception = await Assert.ThrowsAsync<TitleDefinitionNotFoundException>(() =>
+            new RenameTitleDefinition(store).ExecuteAsync(
+                unknownId,
+                "Changed",
+                TestToken));
+
+        Assert.Equal(unknownId, exception.TitleDefinitionId);
+        Assert.Equal(0, await ReadDefinitionCountAsync(factory, unknownId));
+        Assert.Equal("Existing", (await store.GetAsync(existingId, TestToken))!.DisplayName);
+    }
+
+    [Fact]
+    public async Task DatabaseConstraintsRejectNonCanonicalDefinitionValues()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        const string sql = """
+            INSERT INTO title_definitions (id, display_name, description)
+            VALUES (@Id, @DisplayName, @Description);
+            """;
+
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = "   ",
+                Description = (string?)null
+            },
+            cancellationToken: TestToken)));
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = " Veteran ",
+                Description = (string?)null
+            },
+            cancellationToken: TestToken)));
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = new string('x', 101),
+                Description = (string?)null
+            },
+            cancellationToken: TestToken)));
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = "Veteran",
+                Description = "   "
+            },
+            cancellationToken: TestToken)));
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = "Veteran",
+                Description = " Old "
+            },
+            cancellationToken: TestToken)));
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                Id = Guid.NewGuid(),
+                DisplayName = "Veteran",
+                Description = new string('x', 501)
+            },
+            cancellationToken: TestToken)));
+    }
+
+    [Fact]
+    public async Task ConcurrentRenameAndDescriptionChangePreserveBothFields()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await using var renameFactory = CreateFactory();
+        await using var descriptionFactory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        var titleDefinitionId = TitleDefinitionId.New();
+        await new TitleDefinitionStore(factory).AddAsync(
+            TitleDefinition.Create(titleDefinitionId, "A", "Old"),
+            TestToken);
+
+        await Task.WhenAll(
+            new RenameTitleDefinition(new TitleDefinitionStore(renameFactory))
+                .ExecuteAsync(titleDefinitionId, "B", TestToken),
+            new ChangeTitleDescription(new TitleDefinitionStore(descriptionFactory))
+                .ExecuteAsync(titleDefinitionId, "New", TestToken));
+
+        var definition = await new TitleDefinitionStore(factory)
+            .GetAsync(titleDefinitionId, TestToken);
+
+        Assert.Equal("B", definition!.DisplayName);
+        Assert.Equal("New", definition.Description);
+    }
+
+    [Fact]
+    public async Task ConcurrentRenamesOfOneDefinitionLeaveOneValidWinner()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await using var firstFactory = CreateFactory();
+        await using var secondFactory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        var titleDefinitionId = TitleDefinitionId.New();
+        await new TitleDefinitionStore(factory).AddAsync(
+            TitleDefinition.Create(titleDefinitionId, "A", null),
+            TestToken);
+
+        await Task.WhenAll(
+            new RenameTitleDefinition(new TitleDefinitionStore(firstFactory))
+                .ExecuteAsync(titleDefinitionId, "B", TestToken),
+            new RenameTitleDefinition(new TitleDefinitionStore(secondFactory))
+                .ExecuteAsync(titleDefinitionId, "C", TestToken));
+
+        var definition = await new TitleDefinitionStore(factory)
+            .GetAsync(titleDefinitionId, TestToken);
+
+        Assert.Contains(definition!.DisplayName, new[] { "B", "C" });
+        Assert.Equal(1, await ReadDefinitionCountAsync(factory, titleDefinitionId));
+    }
+
+    [Fact]
+    public async Task ConcurrentChangesToDifferentDefinitionsPreserveBothChanges()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await using var firstFactory = CreateFactory();
+        await using var secondFactory = CreateFactory();
+        await PrepareTitlesAsync(factory);
+        var firstId = TitleDefinitionId.New();
+        var secondId = TitleDefinitionId.New();
+        await new TitleDefinitionStore(factory).AddAsync(
+            TitleDefinition.Create(firstId, "A", null),
+            TestToken);
+        await new TitleDefinitionStore(factory).AddAsync(
+            TitleDefinition.Create(secondId, "B", null),
+            TestToken);
+
+        await Task.WhenAll(
+            new RenameTitleDefinition(new TitleDefinitionStore(firstFactory))
+                .ExecuteAsync(firstId, "A changed", TestToken),
+            new RenameTitleDefinition(new TitleDefinitionStore(secondFactory))
+                .ExecuteAsync(secondId, "B changed", TestToken));
+
+        var store = new TitleDefinitionStore(factory);
+        Assert.Equal("A changed", (await store.GetAsync(firstId, TestToken))!.DisplayName);
+        Assert.Equal("B changed", (await store.GetAsync(secondId, TestToken))!.DisplayName);
+    }
+
     private PostgreSqlConnectionFactory CreateFactory() =>
         new(new PostgreSqlOptions(database.ConnectionString));
 
@@ -560,8 +898,9 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
                 DROP TABLE IF EXISTS community_title_selections;
                 DROP TABLE IF EXISTS community_title_unlocks;
                 DROP TABLE IF EXISTS community_titles;
+                DROP TABLE IF EXISTS title_definitions;
                 DELETE FROM {MigrationRunner.MigrationHistoryTableName}
-                WHERE owner = 'Titles' AND version = 1;
+                WHERE owner = 'Titles' AND version IN (1, 2);
                 """,
                 cancellationToken: TestToken));
     }
@@ -575,7 +914,8 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
                     """
                     SELECT column_name AS ColumnName,
                            data_type AS DataType,
-                           is_nullable AS IsNullable
+                           is_nullable AS IsNullable,
+                           character_maximum_length AS CharacterMaximumLength
                     FROM information_schema.columns
                     WHERE table_schema = 'public' AND table_name = @TableName
                     ORDER BY ordinal_position;
@@ -583,6 +923,36 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
                     new { TableName = tableName },
                     cancellationToken: TestToken)))
             .ToArray();
+    }
+
+    private static async Task<string[]> ReadCheckConstraintNamesAsync(
+        System.Data.Common.DbConnection connection,
+        string tableName)
+    {
+        return (await connection.QueryAsync<string>(
+                new CommandDefinition(
+                    """
+                    SELECT constraint_row.conname
+                    FROM pg_constraint constraint_row
+                    WHERE constraint_row.conrelid = to_regclass(@TableName)
+                      AND constraint_row.contype = 'c'
+                    ORDER BY constraint_row.conname;
+                    """,
+                    new { TableName = tableName },
+                    cancellationToken: TestToken)))
+            .ToArray();
+    }
+
+    private static async Task<int> ReadDefinitionCountAsync(
+        PostgreSqlConnectionFactory factory,
+        TitleDefinitionId titleDefinitionId)
+    {
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        return await connection.QuerySingleAsync<int>(
+            new CommandDefinition(
+                "SELECT COUNT(*) FROM title_definitions WHERE id = @Id;",
+                new { Id = titleDefinitionId.Value },
+                cancellationToken: TestToken));
     }
 
     private static Task<string> ReadPrimaryKeyAsync(
@@ -693,6 +1063,8 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
         public string DataType { get; set; } = string.Empty;
 
         public string IsNullable { get; set; } = string.Empty;
+
+        public int? CharacterMaximumLength { get; set; }
     }
 
     private sealed class ForeignKeyInfo
@@ -720,5 +1092,20 @@ public sealed class TitlesPostgreSqlIntegrationTests(TitlesPostgreSqlFixture dat
         public string Name { get; set; } = string.Empty;
 
         public string Checksum { get; set; } = string.Empty;
+    }
+
+    private sealed class FixedMigrationSource : IMigrationSource
+    {
+        private readonly Migration migration;
+
+        public FixedMigrationSource(Migration migration)
+        {
+            this.migration = migration;
+        }
+
+        public IEnumerable<Migration> GetMigrations()
+        {
+            yield return migration;
+        }
     }
 }

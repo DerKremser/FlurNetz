@@ -117,18 +117,19 @@ stehen in [docs/architecture/inventory.md](docs/architecture/inventory.md).
 
 ## Titles Vertical Slice
 
-`FlurNetz.Modules.Titles` besitzt nun neben der Domain-Grundlage einen ersten persistierten
-Vertical Slice für freigeschaltete und aktuell ausgewählte Community-Titel. `TitleDefinitionId`
-ist eine stabile fachliche Kennung; `CommunityTitles` ordnet Freischaltungen genau einer
-`CommunityIdentityId` zu. `Rehydrate` lädt den gespeicherten Zustand, während die internen
-Use Cases `Unlock`, `Lock`, `SetCurrent` und `ClearCurrent` über einen atomaren PostgreSQL-
-Store persistieren. Eine Root-Zeilensperre mit `SELECT FOR UPDATE` serialisiert Operationen
-pro Community und schützt vor Lost Updates. Die Datenbank sichert zusätzlich mit einem
-internen Foreign Key, dass eine aktuelle Auswahl freigeschaltet ist.
+`FlurNetz.Modules.Titles` besitzt nun neben der Domain-Grundlage einen persistierten
+Community-State und einen implementation-eigenen Definitionskatalog. `TitleDefinition`
+persistiert eine stabile `TitleDefinitionId`, einen kanonischen Anzeigenamen und eine
+optionale Beschreibung. Die internen Use Cases unterstützen Create, Get, List, Rename und
+Description-Änderung; `TitleDefinitionStore` schützt Mutationen derselben Definition mit
+PostgreSQL-Row-Locking und `SELECT FOR UPDATE` vor Lost Updates.
 
-`FlurNetz.Modules.Titles.Contracts` bleibt bewusst leer. Es gibt weiterhin keinen
-Titelkatalog, keine API, kein Admin UI und keine Reward-Integration; Messaging, Achievements,
-Shop und Worker sind nicht an Titles angebunden. Die echten Tests liegen in
+Der Community-Slice verwendet weiterhin `CommunityTitles.Rehydrate` sowie die atomaren
+Use Cases `Unlock`, `Lock`, `SetCurrent` und `ClearCurrent`. Eine Root-Zeilensperre
+serialisiert Operationen pro `CommunityIdentityId`; ein interner Foreign Key schützt die
+Current→Unlock-Invariante. `Titles.Contracts` bleibt bewusst leer. Es gibt keine API, kein
+Admin UI und keine Reward-, Achievement- oder Shop-Integration; Messaging und Worker sind
+nicht an Titles angebunden. Die echten Tests liegen in
 `FlurNetz.Modules.Titles.IntegrationTests`. Details stehen in
 [docs/architecture/titles.md](docs/architecture/titles.md).
 
@@ -138,11 +139,11 @@ Shop und Worker sind nicht an Titles angebunden. Die echten Tests liegen in
 
 `FlurNetz.Persistence.IntegrationTests` testet Verbindungen, Commit/Rollback und den Migration Runner gegen PostgreSQL. Für den automatischen Testlauf wird Docker für Testcontainers benötigt. Alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` auf eine isolierte PostgreSQL-Testdatenbank zeigen.
 
-Identity, Engagement, Progression, Economy, Rewards, Inventory und Titles besitzen jeweils eigene fachliche Tabellen und gezielte Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression, Economy, Rewards, Inventory und Titles verwenden für konkurrierende beziehungsweise verpflichtende Mutationen atomare Transaktionen und gezielte Zeilensperren; Rewards und Economy koordinieren ihre Writes über eine gemeinsame Connection/Transaction und erzeugen keine Cross-Module-Foreign-Keys. Inventory und Titles bleiben ebenfalls frei von Cross-Module-Foreign-Keys. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; Rewards, Inventory und Titles sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert, Rewards, Inventory und Titles besitzen weder API noch Worker-Trigger. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Identity, Engagement, Progression, Economy, Rewards, Inventory und Titles besitzen jeweils eigene fachliche Tabellen und gezielte Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression, Economy, Rewards, Inventory und Titles verwenden für konkurrierende beziehungsweise verpflichtende Mutationen atomare Transaktionen und gezielte Zeilensperren; Rewards und Economy koordinieren ihre Writes über eine gemeinsame Connection/Transaction und erzeugen keine Cross-Module-Foreign-Keys. Inventory und Titles bleiben ebenfalls frei von Cross-Module-Foreign-Keys. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; Rewards, Inventory und Titles sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert, Rewards, Inventory und Titles besitzen weder API noch Worker-Trigger. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store, eigener Migration und Sparse-Zero-Lifecycle und bleibt ohne Messaging sowie Rewards-/Shop-Anbindung. Titles ergänzt nun Rehydration, interne Use Cases, atomaren PostgreSQL-Store, eigene Migration, Modulregistrierung und echte Integrationstests für idempotente Freischaltungen und höchstens eine aktuelle Auswahl; Contracts, Messaging, Rewards, Achievements, Shop, API und Worker bleiben ausgeschlossen. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store, eigener Migration und Sparse-Zero-Lifecycle und bleibt ohne Messaging sowie Rewards-/Shop-Anbindung. Titles ergänzt nun zusätzlich zu Rehydration und Community-State einen persistierten Definitionskatalog mit `TitleDefinition`, internen Create/Get/List/Rename/Description-Use-Cases, `Titles:2:CreateTitleDefinitions`, Row-Locking und echten Katalog-Concurrency-Tests; Contracts, Messaging, Rewards, Achievements, Shop, API und Worker bleiben ausgeschlossen. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 

@@ -141,29 +141,37 @@ Details stehen in [inventory.md](inventory.md).
 
 ## Aktueller Stand des Titles-Moduls
 
-Titles besitzt jetzt neben seiner Domain-Foundation den ersten persistierten Vertical Slice
-für community-bezogene Titel. `TitleDefinitionId` ist eine stabile, nicht leere
-Guid-Fachkennung. `CommunityTitles` gehört genau einer `CommunityIdentityId`, startet ohne
-Freischaltungen und ohne aktuelle Auswahl und kann beliebig viele unterschiedliche Titel
-idempotent freischalten.
+Titles besitzt jetzt neben seiner Domain-Foundation einen persistierten Community-State und
+einen separaten persistierten Definitionskatalog. `TitleDefinitionId` ist eine stabile,
+nicht leere Guid-Fachkennung. `TitleDefinition` speichert im Katalog ausschließlich die ID,
+einen kanonischen Anzeigenamen und eine optionale Beschreibung.
 
 `CommunityTitles.Rehydrate` rekonstruiert gespeicherte Unlocks und die optionale aktuelle
-Auswahl, ohne beschädigte Zustände zu reparieren. Die interne Application-Schicht enthält
+Auswahl, ohne beschädigte Zustände zu reparieren. Die Community-Application-Schicht enthält
 `UnlockCommunityTitle`, `LockCommunityTitle`, `SetCurrentCommunityTitle` und
 `ClearCurrentCommunityTitle`; die Use Cases delegieren an den synchronen
 `ICommunityTitlesStore`. `CommunityTitlesStore` persistiert über PostgreSQL und Dapper in
 atomaren Read/Modify/Write-Transaktionen mit Root-Zeilensperre.
 
-Titles besitzt die Migration `Titles:1:CreateCommunityTitles`, die ausschließlich
-`community_titles`, `community_title_unlocks` und `community_title_selections` mit internen
-Foreign Keys anlegt. Ein aktueller Titel muss dadurch auch in der Datenbank freigeschaltet
-sein. `community_identity_id` bleibt ein fachlicher Identifier ohne Cross-Module-Foreign-Key.
-`TitlesModule` registriert Store, Use Cases und Migration; es gibt noch keine Host-Verdrahtung.
+Der Katalog bietet die internen Use Cases Create, Get, List, Rename und
+ChangeDescription. `TitleDefinitionStore` verwendet bei Mutationen `SELECT FOR UPDATE`
+und persistiert nur tatsächliche Änderungen. Unbekannte Definitionen führen bei Mutationen
+zu `TitleDefinitionNotFoundException`, während Get `null` liefert.
 
-`FlurNetz.Modules.Titles.Contracts` bleibt leer. Titelkatalog, Messaging, Rewards-,
-Achievement- und Shop-Anbindung, API, Admin UI, Worker und Overlay bleiben bewusst außerhalb
-dieses Slices. Echte PostgreSQL-Integrationstests prüfen Migration, Constraints, Rollback,
-Rehydration und Nebenläufigkeit. Details stehen in [titles.md](titles.md).
+Titles besitzt die unveränderte Migration `Titles:1:CreateCommunityTitles` für
+`community_titles`, `community_title_unlocks` und `community_title_selections` sowie
+`Titles:2:CreateTitleDefinitions` für `title_definitions`. Die Community-Tabellen besitzen
+interne Foreign Keys; `title_definitions` besitzt keine Foreign Keys. Es gibt ausdrücklich
+keinen Unlock→Definition-Foreign-Key und keine Katalog-Existenzprüfung beim Unlock.
+`community_identity_id` bleibt ein fachlicher Identifier ohne Cross-Module-Foreign-Key.
+`TitlesModule` registriert beide Stores, alle internen Use Cases und beide Migrationen;
+es gibt noch keine Host-Verdrahtung.
+
+`FlurNetz.Modules.Titles.Contracts` bleibt leer. Messaging, Rewards-, Achievement- und
+Shop-Anbindung, API, Admin UI, Worker und Overlay bleiben bewusst außerhalb dieses Slices.
+Echte PostgreSQL-Integrationstests prüfen Migration, Katalog-Constraints, Create/Get/List,
+Rename, Description-Änderung, Rollback, Rehydration und Nebenläufigkeit. Details stehen in
+[titles.md](titles.md).
 
 ## Contracts und Implementierung
 
@@ -177,7 +185,7 @@ einen internen Vertical Slice, benötigt aber weiterhin keinen öffentlichen Con
 mit Domain, Application, Persistence-Adapter, Migration und Registrierung ebenfalls einen internen
 Vertical Slice sowie den neutralen Credit-Capability-Contract für atomare Komposition. Rewards besitzt
 mit Domain, Application, Katalog, Grant-Executor, Migration und Registrierung den ersten persistierten
-ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt Domain, interne Use Cases, atomaren Store, Migration und Registrierung; auch sein Contracts-Projekt bleibt leer. Titles besitzt Domain, Rehydration, interne Application-Use-Cases, atomaren PostgreSQL-Store, Migration, Modulregistrierung und echte Integrationstests; sein Contracts-Projekt bleibt ebenfalls leer.
+ausführbaren Rewards-Slice; sein eigenes Contracts-Projekt bleibt leer. Inventory besitzt Domain, interne Use Cases, atomaren Store, Migration und Registrierung; auch sein Contracts-Projekt bleibt leer. Titles besitzt Domain, Rehydration, `TitleDefinition`, interne Application-Use-Cases, getrennte Community- und Katalog-Stores, zwei Migrationen, Modulregistrierung und echte Integrationstests; sein Contracts-Projekt bleibt ebenfalls leer.
 
 Die Implementierungs-Assembly ist der Ort für Domain, Application, interne
 Persistence-Adapter, interne Event Handler und die Modulregistrierung. Identity nutzt davon
@@ -189,7 +197,7 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
 und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
 Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Titles nutzt Domain, Rehydration, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; auch dieser Slice ist noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; auch dieser Slice ist noch nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen

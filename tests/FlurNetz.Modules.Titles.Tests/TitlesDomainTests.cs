@@ -499,3 +499,283 @@ public sealed class CommunityTitlesTests
     private static CommunityTitles CreateTitles() =>
         CommunityTitles.Create(CommunityIdentityId.New());
 }
+
+public sealed class TitleDefinitionTests
+{
+    [Fact]
+    public void Create_PreservesIdAndCanonicalizesValues()
+    {
+        var id = TitleDefinitionId.New();
+
+        var definition = TitleDefinition.Create(
+            id,
+            "  Veteran  ",
+            "  Eine Beschreibung  ");
+
+        Assert.Equal(id, definition.Id);
+        Assert.Equal("Veteran", definition.DisplayName);
+        Assert.Equal("Eine Beschreibung", definition.Description);
+    }
+
+    [Fact]
+    public void Create_RejectsNullDisplayName()
+    {
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            null!,
+            null));
+    }
+
+    [Fact]
+    public void Create_RejectsEmptyDisplayName()
+    {
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            string.Empty,
+            null));
+    }
+
+    [Fact]
+    public void Create_RejectsWhitespaceDisplayName()
+    {
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "   ",
+            null));
+    }
+
+    [Fact]
+    public void Create_AllowsDisplayNameAtMaximumLength()
+    {
+        var displayName = new string('x', TitleDefinition.MaxDisplayNameLength);
+
+        var definition = TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            displayName,
+            null);
+
+        Assert.Equal(displayName, definition.DisplayName);
+    }
+
+    [Fact]
+    public void Create_RejectsDisplayNameAboveMaximumLength()
+    {
+        var displayName = new string('x', TitleDefinition.MaxDisplayNameLength + 1);
+
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            displayName,
+            null));
+    }
+
+    [Fact]
+    public void Create_AllowsNullDescription()
+    {
+        var definition = TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "Veteran",
+            null);
+
+        Assert.Null(definition.Description);
+    }
+
+    [Fact]
+    public void Create_CanonicalizesEmptyDescriptionToNull()
+    {
+        var definition = TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "Veteran",
+            string.Empty);
+
+        Assert.Null(definition.Description);
+    }
+
+    [Fact]
+    public void Create_CanonicalizesWhitespaceDescriptionToNull()
+    {
+        var definition = TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "Veteran",
+            "   ");
+
+        Assert.Null(definition.Description);
+    }
+
+    [Fact]
+    public void Create_AllowsDescriptionAtMaximumLength()
+    {
+        var description = new string('x', TitleDefinition.MaxDescriptionLength);
+
+        var definition = TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "Veteran",
+            description);
+
+        Assert.Equal(description, definition.Description);
+    }
+
+    [Fact]
+    public void Create_RejectsDescriptionAboveMaximumLength()
+    {
+        var description = new string('x', TitleDefinition.MaxDescriptionLength + 1);
+
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Create(
+            TitleDefinitionId.New(),
+            "Veteran",
+            description));
+    }
+
+    [Fact]
+    public void Create_RejectsDefaultId()
+    {
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Create(
+            default,
+            "Veteran",
+            null));
+    }
+
+    [Fact]
+    public void Rehydrate_RestoresValidCanonicalState()
+    {
+        var id = TitleDefinitionId.New();
+
+        var definition = TitleDefinition.Rehydrate(
+            id,
+            "  Veteran  ",
+            "  Beschreibung  ");
+
+        Assert.Equal(id, definition.Id);
+        Assert.Equal("Veteran", definition.DisplayName);
+        Assert.Equal("Beschreibung", definition.Description);
+    }
+
+    [Fact]
+    public void Rehydrate_UsesTheSameValidationRulesAsCreate()
+    {
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Rehydrate(
+            TitleDefinitionId.New(),
+            "   ",
+            null));
+        Assert.Throws<ArgumentException>(() => TitleDefinition.Rehydrate(
+            TitleDefinitionId.New(),
+            "Veteran",
+            new string('x', TitleDefinition.MaxDescriptionLength + 1)));
+    }
+
+    [Fact]
+    public void Rename_ChangesNameAndPreservesOtherState()
+    {
+        var definition = CreateDefinition();
+
+        var changed = definition.Rename("  Champion  ");
+
+        Assert.True(changed);
+        Assert.Equal("Champion", definition.DisplayName);
+        Assert.Equal("Beschreibung", definition.Description);
+        Assert.Equal(CreateDefinitionId, definition.Id);
+    }
+
+    [Fact]
+    public void Rename_ReturnsFalseForTheSameCanonicalName()
+    {
+        var definition = CreateDefinition();
+
+        var changed = definition.Rename("  Veteran  ");
+
+        Assert.False(changed);
+        Assert.Equal("Veteran", definition.DisplayName);
+    }
+
+    [Fact]
+    public void Rename_TrimsTheNewName()
+    {
+        var definition = CreateDefinition();
+
+        definition.Rename("  Champion  ");
+
+        Assert.Equal("Champion", definition.DisplayName);
+    }
+
+    [Fact]
+    public void Rename_RejectsInvalidNameWithoutChangingState()
+    {
+        var definition = CreateDefinition();
+
+        Assert.Throws<ArgumentException>(() => definition.Rename("   "));
+
+        Assert.Equal("Veteran", definition.DisplayName);
+        Assert.Equal("Beschreibung", definition.Description);
+    }
+
+    [Fact]
+    public void Rename_RejectsNameAboveMaximumLengthWithoutChangingState()
+    {
+        var definition = CreateDefinition();
+
+        Assert.Throws<ArgumentException>(() => definition.Rename(
+            new string('x', TitleDefinition.MaxDisplayNameLength + 1)));
+
+        Assert.Equal("Veteran", definition.DisplayName);
+    }
+
+    [Fact]
+    public void ChangeDescription_SetsAndChangesDescription()
+    {
+        var definition = CreateDefinition();
+
+        Assert.True(definition.ChangeDescription("  Neu  "));
+        Assert.Equal("Neu", definition.Description);
+        Assert.True(definition.ChangeDescription("Anders"));
+        Assert.Equal("Anders", definition.Description);
+    }
+
+    [Fact]
+    public void ChangeDescription_RemovesDescriptionWithNull()
+    {
+        var definition = CreateDefinition();
+
+        var changed = definition.ChangeDescription(null);
+
+        Assert.True(changed);
+        Assert.Null(definition.Description);
+    }
+
+    [Fact]
+    public void ChangeDescription_RemovesDescriptionWithWhitespace()
+    {
+        var definition = CreateDefinition();
+
+        var changed = definition.ChangeDescription("   ");
+
+        Assert.True(changed);
+        Assert.Null(definition.Description);
+    }
+
+    [Fact]
+    public void ChangeDescription_ReturnsFalseForTheSameCanonicalValue()
+    {
+        var definition = CreateDefinition();
+
+        var changed = definition.ChangeDescription("  Beschreibung  ");
+
+        Assert.False(changed);
+        Assert.Equal("Beschreibung", definition.Description);
+    }
+
+    [Fact]
+    public void ChangeDescription_RejectsTooLongValueWithoutChangingState()
+    {
+        var definition = CreateDefinition();
+
+        Assert.Throws<ArgumentException>(() => definition.ChangeDescription(
+            new string('x', TitleDefinition.MaxDescriptionLength + 1)));
+
+        Assert.Equal("Beschreibung", definition.Description);
+        Assert.Equal("Veteran", definition.DisplayName);
+    }
+
+    private static TitleDefinitionId CreateDefinitionId { get; } = TitleDefinitionId.New();
+
+    private static TitleDefinition CreateDefinition() =>
+        TitleDefinition.Create(CreateDefinitionId, "Veteran", "Beschreibung");
+}

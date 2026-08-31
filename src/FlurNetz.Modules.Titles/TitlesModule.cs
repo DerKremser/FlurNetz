@@ -11,13 +11,13 @@ namespace FlurNetz.Modules.Titles;
 /// </summary>
 /// <remarks>
 /// Die technische PostgreSQL-Verbindungsfabrik bleibt Verantwortung des Composition Roots.
-/// Titles registriert nur den eigenen Store, die vier internen Use Cases und seine Migration;
+/// Titles registriert nur die eigenen Stores, internen Use Cases und seine Migration;
 /// Host-, API-, Messaging- und Cross-Module-Komposition sind nicht enthalten.
 /// </remarks>
 public static class TitlesModule
 {
     /// <summary>
-    /// Registriert Store, Use Cases und Titles-Migration.
+    /// Registriert Stores, Use Cases und Titles-Migration.
     /// </summary>
     /// <param name="services">Der Dependency-Injection-Container des Composition Roots.</param>
     /// <returns>Die übergebene Service-Sammlung für weitere Registrierungen.</returns>
@@ -31,6 +31,12 @@ public static class TitlesModule
         services.AddScoped<LockCommunityTitle>();
         services.AddScoped<SetCurrentCommunityTitle>();
         services.AddScoped<ClearCurrentCommunityTitle>();
+        services.AddScoped<ITitleDefinitionStore, TitleDefinitionStore>();
+        services.AddScoped<CreateTitleDefinition>();
+        services.AddScoped<RenameTitleDefinition>();
+        services.AddScoped<ChangeTitleDescription>();
+        services.AddScoped<GetTitleDefinition>();
+        services.AddScoped<ListTitleDefinitions>();
         services.AddSingleton<IMigrationSource, TitlesMigrationSource>();
 
         return services;
