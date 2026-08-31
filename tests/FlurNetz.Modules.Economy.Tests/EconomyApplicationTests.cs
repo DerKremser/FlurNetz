@@ -15,10 +15,7 @@ public sealed class CreditEconomyBalanceTests
         var communityIdentityId = CommunityIdentityId.New();
         using var cancellationSource = new CancellationTokenSource();
 
-        var result = await useCase.ExecuteAsync(
-            communityIdentityId,
-            7,
-            cancellationSource.Token);
+        var result = await useCase.ExecuteAsync(communityIdentityId, 7, cancellationSource.Token);
 
         Assert.Equal(EconomyBalance.Create(12), result);
         Assert.Equal(communityIdentityId, store.CommunityIdentityId);
@@ -38,10 +35,7 @@ public sealed class DebitEconomyBalanceTests
         var communityIdentityId = CommunityIdentityId.New();
         using var cancellationSource = new CancellationTokenSource();
 
-        var result = await useCase.ExecuteAsync(
-            communityIdentityId,
-            3,
-            cancellationSource.Token);
+        var result = await useCase.ExecuteAsync(communityIdentityId, 3, cancellationSource.Token);
 
         Assert.Equal(EconomyBalance.Create(5), result);
         Assert.Equal(communityIdentityId, store.CommunityIdentityId);
@@ -112,7 +106,19 @@ internal sealed class RecordingEconomyStore(EconomyBalance result) : ICommunityE
         CancellationToken cancellationToken = default)
     {
         Record(StoreOperation.Debit, communityIdentityId, amount, cancellationToken);
+        return DebitException is null
+            ? Task.FromResult(result)
+            : Task.FromException<EconomyBalance>(DebitException);
+    }
 
+    public Task<EconomyBalance> DebitAsync(
+        CommunityIdentityId communityIdentityId,
+        long amount,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        Record(StoreOperation.Debit, communityIdentityId, amount, cancellationToken);
         return DebitException is null
             ? Task.FromResult(result)
             : Task.FromException<EconomyBalance>(DebitException);
@@ -120,10 +126,8 @@ internal sealed class RecordingEconomyStore(EconomyBalance result) : ICommunityE
 
     public Task<CommunityEconomy?> GetByCommunityIdentityIdAsync(
         CommunityIdentityId communityIdentityId,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult<CommunityEconomy?>(null);
-    }
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<CommunityEconomy?>(null);
 
     private void Record(
         StoreOperation operation,
