@@ -1,13 +1,8 @@
-namespace FlurNetz.Modules.Inventory.Domain;
+namespace FlurNetz.Modules.Inventory.Contracts;
 
 /// <summary>
-/// Identifiziert eine fachliche Item-Definition innerhalb des Inventory-Moduls.
+/// Identifiziert eine fachliche Item-Definition innerhalb von FlurNetz.
 /// </summary>
-/// <remarks>
-/// Die Kennung trennt den Typ eines inventarisierbaren Gegenstands von seinem Bestand bei einer
-/// Community-Identität. Namen, Darstellung, Kategorie und weitere Katalogmetadaten gehören noch
-/// nicht in diese Foundation.
-/// </remarks>
 public readonly record struct ItemDefinitionId
 {
     private readonly Guid _value;

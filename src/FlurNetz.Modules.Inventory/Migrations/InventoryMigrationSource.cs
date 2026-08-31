@@ -8,8 +8,8 @@ namespace FlurNetz.Modules.Inventory.Migrations;
 /// <remarks>
 /// Inventory bleibt Eigentümer seiner Tabelle. Die CommunityIdentityId ist ein fachlicher
 /// Cross-Module-Identifier und besitzt deshalb keinen Foreign Key auf Identity. Die
-/// ItemDefinitionId gehört zur Inventory-Domain; ein Item-Katalog wird in diesem Slice
-/// bewusst nicht eingeführt.
+/// ItemDefinitionId gehört zum öffentlichen Inventory-Contract; ein Item-Katalog wird in diesem
+/// Slice bewusst nicht eingeführt.
 /// </remarks>
 public sealed class InventoryMigrationSource : IMigrationSource
 {

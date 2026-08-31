@@ -1,6 +1,6 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger, Titles-API, Achievement-Runtime-Trigger und externe Integrationen sind noch nicht implementiert.
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice, die `Shop Foundation` für fachliche Angebote sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger, Titles-API, Achievement-Runtime-Trigger, Shop-Persistenz und externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -27,7 +27,7 @@ Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](
 
 `FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards, die minimale `IClock`-Abstraktion und deren neutrale `SystemClock`-Implementierung.
 
-Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Modules.Progression.IntegrationTests`, `FlurNetz.Modules.Economy.Tests`, `FlurNetz.Modules.Economy.IntegrationTests`, `FlurNetz.Modules.Rewards.Tests`, `FlurNetz.Modules.Rewards.IntegrationTests`, `FlurNetz.Modules.Inventory.Tests`, `FlurNetz.Modules.Inventory.IntegrationTests`, `FlurNetz.Modules.Titles.Tests`, `FlurNetz.Modules.Titles.IntegrationTests`, `FlurNetz.Modules.Achievements.Tests`, `FlurNetz.Modules.Achievements.IntegrationTests`, `FlurNetz.Workflows.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den Rewards-Katalog und die atomare Rewards-Ausführung, die persistierten Inventory-, Progression-, Economy-, Titles- und Achievements-Slices einschließlich Nebenläufigkeit, den Ende-zu-Ende-Workflow gegen PostgreSQL, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
+Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Modules.Progression.IntegrationTests`, `FlurNetz.Modules.Economy.Tests`, `FlurNetz.Modules.Economy.IntegrationTests`, `FlurNetz.Modules.Rewards.Tests`, `FlurNetz.Modules.Rewards.IntegrationTests`, `FlurNetz.Modules.Inventory.Tests`, `FlurNetz.Modules.Inventory.IntegrationTests`, `FlurNetz.Modules.Titles.Tests`, `FlurNetz.Modules.Titles.IntegrationTests`, `FlurNetz.Modules.Achievements.Tests`, `FlurNetz.Modules.Achievements.IntegrationTests`, `FlurNetz.Modules.Shop.Tests`, `FlurNetz.Workflows.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den Rewards-Katalog und die atomare Rewards-Ausführung, die persistierten Inventory-, Progression-, Economy-, Titles- und Achievements-Slices einschließlich Nebenläufigkeit, das Shop-Angebotsfundament, den Ende-zu-Ende-Workflow gegen PostgreSQL, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
 
 ## Identity Foundation und erster Vertical Slice
 
@@ -111,9 +111,10 @@ wird die Zeile gelöscht; Remove auf einer fehlenden Position erzeugt keine Null
 `Inventory:1:CreateCommunityInventoryEntries` erzwingt zusätzlich `quantity >= 0` und besitzt
 keinen Cross-Module-Foreign-Key.
 
-`FlurNetz.Modules.Inventory.Contracts` bleibt bewusst leer. Messaging, Rewards-/Shop-Anbindung,
-Item-Katalog, API, Admin UI und Worker sind weiterhin nicht Bestandteil dieses Slices. Details
-stehen in [docs/architecture/inventory.md](docs/architecture/inventory.md).
+`FlurNetz.Modules.Inventory.Contracts` enthält ausschließlich den gemeinsam verwendeten,
+stabilen Fachtyp `ItemDefinitionId`. Messaging, Rewards-/Shop-Anbindung, Item-Katalog, API,
+Admin UI und Worker sind weiterhin nicht Bestandteil dieses Slices. Details stehen in
+[docs/architecture/inventory.md](docs/architecture/inventory.md).
 
 ## Titles Vertical Slice
 
@@ -149,6 +150,20 @@ erfolgreiche Write gewinnt; ein Duplicate überschreibt den ursprünglichen Zeit
 Rewards-, Economy-, Inventory-, Titles-, Shop-, API- oder Worker-Anbindung. Details stehen in
 [docs/architecture/achievements.md](docs/architecture/achievements.md).
 
+## Shop Foundation
+
+`FlurNetz.Modules.Shop` enthält das fachliche Angebotsfundament. `ShopOfferId` ist der einzige
+öffentliche Shop-Typ und liegt in `Shop.Contracts`. `ShopOffer` verwendet die gemeinsame
+`ItemDefinitionId` aus `Inventory.Contracts`, einen `ShopPrice`, einen kanonischen Anzeigenamen,
+eine optionale Beschreibung, ein halboffenes `AvailabilityWindow`, ein optionales positives
+Kauflimit pro Identität und einen Aktivierungszustand. Neue Angebote starten deaktiviert;
+Ziel-IDs bleiben unveränderlich, Änderungen erfolgen über gezielte Domainmethoden.
+
+Shop referenziert ausschließlich `Shop.Contracts` und `Inventory.Contracts`. Persistenz,
+Migrationen, Käufe, Economy-/Coin-Anbindung, Inventory Grant, transaction-aware Inventory-
+Capabilities, Messaging, Events, API, Administration und weitere Angebotsfunktionen sind noch
+nicht Bestandteil. Details stehen in [docs/architecture/shop.md](docs/architecture/shop.md).
+
 ## Persistence Foundation
 
 `FlurNetz.Persistence` verwendet PostgreSQL, Npgsql und Dapper ohne ORM und ohne Generic Repository. Migrationen werden als explizite SQL-Texte von ihren jeweiligen Besitzern bereitgestellt, deterministisch ausgeführt und in `flurnetz_persistence.migration_history` nachverfolgt. Bereits angewendete Migrationen sind unveränderlich; eine abweichende SQL-Checksum führt zu einem Fehler.
@@ -159,7 +174,7 @@ Identity, Engagement, Progression, Economy, Rewards, Inventory, Titles und Achie
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store, eigener Migration und Sparse-Zero-Lifecycle und bleibt ohne Messaging sowie Rewards-/Shop-Anbindung. Titles ergänzt nun zusätzlich zu Rehydration und Community-State einen persistierten Definitionskatalog mit `TitleDefinition`, internen Create/Get/List/Rename/Description-Use-Cases, `Titles:2:CreateTitleDefinitions`, Row-Locking und echten Katalog-Concurrency-Tests. Achievements ergänzt einen persistierten Definitionskatalog und permanente, atomare, idempotente Community-Unlocks mit eigener Migration und Concurrency-Tests; Runtime-Trigger, Contracts, Messaging, Rewards, Shop, API und Worker bleiben ausgeschlossen. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store, eigener Migration und Sparse-Zero-Lifecycle und bleibt ohne Messaging sowie Rewards-/Shop-Anbindung. Titles ergänzt nun zusätzlich zu Rehydration und Community-State einen persistierten Definitionskatalog mit `TitleDefinition`, internen Create/Get/List/Rename/Description-Use-Cases, `Titles:2:CreateTitleDefinitions`, Row-Locking und echten Katalog-Concurrency-Tests. Achievements ergänzt einen persistierten Definitionskatalog und permanente, atomare, idempotente Community-Unlocks mit eigener Migration und Concurrency-Tests. Shop ergänzt die `Shop Foundation` mit `ShopOfferId`, `ShopOffer`, `ShopPrice` und `AvailabilityWindow`; Persistenz, Käufe, Economy, Inventory Grant, Messaging, API und Worker bleiben ausgeschlossen. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 

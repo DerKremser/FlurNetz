@@ -13,9 +13,11 @@ atomare PostgreSQL-Persistenz.
 
 ## Domain
 
-`ItemDefinitionId` ist ein unveränderlicher, Guid-basierter Fachtyp. Leere GUIDs werden abgelehnt.
-Die Kennung identifiziert den Typ eines inventarisierbaren Gegenstands. Ein Item-Katalog mit Name,
-Beschreibung, Icon, Kategorie, Seltenheit oder Status wird nicht vorweggenommen.
+`ItemDefinitionId` ist ein unveränderlicher, Guid-basierter Fachtyp im öffentlichen
+`FlurNetz.Modules.Inventory.Contracts`. Leere GUIDs werden abgelehnt. Die Kennung identifiziert
+den Typ eines inventarisierbaren Gegenstands. Ein Item-Katalog mit Name, Beschreibung, Icon,
+Kategorie, Seltenheit oder Status wird nicht vorweggenommen. Shop verwendet genau diesen Typ und
+führt keine zweite Item-ID ein.
 
 `InventoryQuantity` ist ein unveränderlicher Werttyp auf Basis von `long`. Die Menge ist immer
 nicht-negativ. `Add(long)` und `Remove(long)` akzeptieren ausschließlich positive Änderungen,
@@ -69,9 +71,10 @@ Persistenzgrenze.
 Delete liegen in derselben Transaktion. Dadurch werden Lost Updates bei parallelen Änderungen an
 derselben Bestandsposition verhindert.
 
-Es gibt bewusst keinen transaction-aware öffentlichen Inventory-Contract und keinen Overload für
-fremde Modultransaktionen. Eine solche Grenze wird erst eingeführt, wenn ein realer Caller wie
-Rewards oder Shop sie tatsächlich benötigt.
+Es gibt weiterhin bewusst keinen transaction-aware öffentlichen Inventory-Contract und keinen
+Overload für fremde Modultransaktionen. `ItemDefinitionId` ist ausschließlich der gemeinsame
+fachliche Identifier; eine Grant-Capability wird erst eingeführt, wenn ein späterer Slice sie
+tatsächlich benötigt.
 
 ## Migration und Registrierung
 
@@ -84,9 +87,10 @@ Runtime-Trigger bleiben unberührt.
 
 ## Contracts und bewusste Ausschlüsse
 
-`FlurNetz.Modules.Inventory.Contracts` bleibt leer. Der persistierte Slice benötigt noch keinen
-öffentlichen Cross-Module-Vertrag. Die Inventory-Implementierung darf ausschließlich den eigenen
-Contract, `Identity.Contracts` und die technische `FlurNetz.Persistence`-Assembly referenzieren.
+`FlurNetz.Modules.Inventory.Contracts` enthält in diesem Slice ausschließlich
+`ItemDefinitionId`. Bestandsoperationen, Stores, Domainobjekte und Persistence bleiben intern.
+Die Inventory-Implementierung darf ausschließlich den eigenen Contract, `Identity.Contracts` und
+die technische `FlurNetz.Persistence`-Assembly referenzieren.
 
 Weiterhin nicht enthalten sind:
 
@@ -97,7 +101,7 @@ Weiterhin nicht enthalten sind:
 - Item-Katalog, Namen, Beschreibungen, Icons, Kategorien oder Seltenheiten
 - Stack-Limits, einzigartige Item-Instanzen oder Instanzzustände
 - Ausrüstung, Verbrauch, Handel, Transfer, Ablaufzeiten oder Ownership-Historie
-- öffentliche transaction-aware Inventory-Capabilities
+- öffentliche transaction-aware Inventory-Capabilities oder Inventory-Grant-Funktionen
 
 ## Tests
 
@@ -105,5 +109,5 @@ Die Unit Tests prüfen Domain-Rehydration, Mengeninvarianten, Immutability und d
 Use Cases. Das eigene PostgreSQL-Integrationstestprojekt prüft Migration und Check-Constraint,
 Composite Key, Lazy-Add, Sparse-Zero-Lifecycle, Laden, Rollback, Isolation verschiedener
 Identitäten und Item-Definitionen sowie konkurrierende Adds und Removes mit echten
-PostgreSQL-Zeilensperren. Architekturtests sichern Contracts-Leere, Typ-Ownership und die
-verbotenen Messaging-, Rewards- und Shop-Abhängigkeiten ab.
+PostgreSQL-Zeilensperren. Architekturtests sichern Assembly-Referenzen, Typ-Ownership, die
+minimale Contracts-Assembly und die verbotenen Messaging-, Rewards- und Shop-Abhängigkeiten ab.
