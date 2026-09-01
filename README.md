@@ -274,10 +274,12 @@ Purchase-Request enthält nur `requestId` und `communityIdentityId`; der bestehe
 `ShopPurchaseResponse` wird mit `201 Created` und Purchase-Location geliefert. Die
 `ShopPurchaseRequestId` bildet die globale Idempotenzgrenze. Der API-Host ist Producer für
 `shop.purchase-completed` v1 und verarbeitet die Outbox nicht selbst. Der Worker kennt das
-Shop-Event über `Shop.Contracts`, registriert aber keinen fachlichen Consumer. Das
-Administration-Frontend
-Die interne Katalogverwaltung ist über die separate `/api/admin/shop/offers`-Management-Grenze
-erreichbar. Der erste
+Shop-Event über `Shop.Contracts`, registriert aber keinen fachlichen Consumer. Slice 8 stellt
+die HTTP-Katalogverwaltung für den Shop über die separate
+`/api/admin/shop/offers`-Management-Grenze bereit. Ein Administration-Frontend ist weiterhin
+nicht Bestandteil des aktuellen Stands. Die Management-Routen besitzen weiterhin noch keine
+Authentication/Authorization und dürfen vor einem separaten Security-Slice nicht extern
+produktiv exponiert werden. Der erste
 Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist
 kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
