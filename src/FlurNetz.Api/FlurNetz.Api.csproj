@@ -12,6 +12,7 @@
     <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Identity\FlurNetz.Modules.Identity.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Inventory\FlurNetz.Modules.Inventory.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Inventory.Contracts\FlurNetz.Modules.Inventory.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Shop\FlurNetz.Modules.Shop.csproj" />
     <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />

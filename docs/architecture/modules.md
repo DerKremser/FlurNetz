@@ -164,8 +164,15 @@ einen Kauf.
 
 Shop referenziert dabei ausschließlich fremde Contracts, niemals fremde
 Implementierungsassemblies oder Tabellen. `FlurNetz.Api` registriert `AddShopModule()` und
-stellt Storefront-, History- und `POST /api/shop/offers/{offerId}/purchases` bereit; interne
-Katalogmutationen und Admin UI erhalten keine HTTP-Endpunkte. Der separate Worker referenziert
+stellt Storefront-, History-, Purchase- und eine getrennte
+`/api/admin/shop/offers`-Management-Grenze bereit. Die Management-Grenze verwendet die
+vorhandenen Katalog-Use-Cases und eigene API-Verträge; sie sieht den vollständigen internen
+Katalog, während die Storefront weiterhin nur aktivierte und aktuell verfügbare Angebote zeigt.
+Der HTTP-Adapter führt dafür keine neue Migration oder fachliche Shop-Änderung ein; es gibt
+keine neuen Events und keinen Shop-Consumer. Die Management-Routen besitzen bewusst noch keine
+Authentication/Authorization und benötigen vor externem Produktivbetrieb einen separaten
+Security-/Host-Slice.
+Der separate Worker referenziert
 für `shop.purchase-completed` v1 nur `Shop.Contracts`, kennt den Eventtyp explizit und
 registriert bewusst keinen fachlichen Consumer. Shop-Implementierung und Shop-Migrationen werden
 dort nicht geladen. Warenkorb, Stock, Discounts und Refunds bleiben ebenfalls außerhalb dieses
@@ -300,8 +307,8 @@ verdrahtet ausschließlich die schmale Grant-Capability innerhalb des Shop-Purch
 keine Inventory-HTTP-Endpunkte. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`,
 die Purchase-History-Stores, zwei unveränderte Migrationen sowie `ShopModule` mit Read-Basis;
 der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt. Der API-Host verdrahtet
-`AddShopModule()`, mappt aber nur Storefront-, History- und Purchase-Endpunkte; interne
-Katalogmutationen erhalten keine HTTP-Routen. Der Worker kennt `shop.purchase-completed` v1 über
+`AddShopModule()`, mappt Storefront-, History-, Purchase- und die getrennte Management-
+Endpoint-Gruppe auf die vorhandenen Use-Cases. Der Worker kennt `shop.purchase-completed` v1 über
 `Shop.Contracts`, registriert aber keinen fachlichen Consumer und lädt weder die Shop-
 Implementierung noch ihre Migrationen. Titles nutzt Domain, Rehydration, Application, getrennte
 Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt

@@ -6,7 +6,8 @@
 Root und HTTP-Adapter. Er konfiguriert den ASP.NET-Core-Host, liest die PostgreSQL-
 Konfiguration, registriert die technische Persistence Foundation, bindet das Identity-Modul,
 den vollständigen Shop-Purchase-Slice sowie die schmalen Economy-/Inventory-Capabilities ein,
-führt die Startmigrationen aus und ordnet HTTP-Endpunkte zu. Der unabhängige
+führt die Startmigrationen aus und ordnet Storefront-, Purchase- und Shop-Management-
+HTTP-Endpunkte zu. Der unabhängige
 `FlurNetz.Worker` ist der separate Runtime-Host für Messaging und wird vom API-Host weder
 referenziert noch gestartet.
 
@@ -24,6 +25,8 @@ Der API-Host referenziert für diesen Slice:
 - `FlurNetz.Modules.Identity` für `AddIdentityModule()` und den bestehenden Identity-Slice
 - `FlurNetz.Modules.Identity.Contracts` für die explizite HTTP-Grenze
 - `FlurNetz.Modules.Inventory` für `AddInventoryGrantCapability()`
+- `FlurNetz.Modules.Inventory.Contracts` für die fachliche `ItemDefinitionId`-Abbildung beim
+  Management-Create
 - `FlurNetz.Modules.Shop` für `AddShopModule()` und die bestehenden Shop-Use-Cases
 - `FlurNetz.Modules.Shop.Contracts` für die Shop-Identifier
 
@@ -135,6 +138,39 @@ Der separate Worker kennt `shop.purchase-completed` v1 weiterhin über
 Der API-Host ist nur Producer: Er kann die Outbox beschreiben, startet aber keinen
 `OutboxProcessor`, keinen Messaging-Worker und keinen Inbox-Consumer.
 
+### Shop-Katalogverwaltung
+
+Die getrennte Management-Grenze für den internen Angebotskatalog lautet:
+
+```text
+GET  /api/admin/shop/offers
+GET  /api/admin/shop/offers/{offerId}
+POST /api/admin/shop/offers
+PUT  /api/admin/shop/offers/{offerId}/display-name
+PUT  /api/admin/shop/offers/{offerId}/description
+PUT  /api/admin/shop/offers/{offerId}/price
+PUT  /api/admin/shop/offers/{offerId}/availability
+PUT  /api/admin/shop/offers/{offerId}/purchase-limit
+POST /api/admin/shop/offers/{offerId}/enable
+POST /api/admin/shop/offers/{offerId}/disable
+```
+
+Create bildet `itemDefinitionId`, `displayName`, die optionale `description`, `price`,
+optionale Availability-Grenzen und das optionale `purchaseLimitPerIdentity` ab. Die Offer-ID
+wird durch `CreateShopOffer` serverseitig erzeugt; neue Angebote bleiben deaktiviert. Für
+Leseantworten verwendet die Management-Grenze ein eigenes API-DTO einschließlich `IsEnabled`.
+Sie ruft `GetShopOffer` und `ListShopOffers` auf und sieht daher auch deaktivierte, zukünftige
+und abgelaufene Angebote. Die Mutationsrouten rufen jeweils genau den passenden vorhandenen
+Use-Case auf und antworten bei Erfolg mit `204 No Content`.
+
+Der Adapter greift weder auf `IShopOfferStore` noch auf Dapper, Npgsql oder Tabellen zu und
+öffnet keine eigene Transaktion. Unbekannte gültige Offer-IDs liefern `404 Not Found`,
+ungültige IDs, malformed JSON und bekannte fachliche Eingabefehler `400 Bad Request`; alle
+bekannten Fehlerantworten sind `ProblemDetails`. Ein erneutes Enable oder Disable bleibt ein
+fachlicher No-op und wird nicht als Conflict behandelt. Die Storefront-Routen bleiben
+semantisch unverändert und zeigen weiterhin ausschließlich aktivierte und aktuell verfügbare
+Offers.
+
 ## Messaging-Producer-Runtime
 
 Die API registriert explizit genau `ShopPurchaseCompletedIntegrationEvent` mit
@@ -157,7 +193,9 @@ Aktuell gibt es bewusst:
 - kein JWT, Cookie, OAuth oder Identity Framework
 - kein Messaging Runtime Processing, keine Outbox-Loop, kein Inbox-Consumer und keinen Worker im API-Prozess
 - keine Twitch-, Streamer.bot-, Discord-, YouTube- oder Kick-Integration
-- keine HTTP-Endpunkte für Economy, Inventory oder Shop-Katalogmutationen
+- keine HTTP-Endpunkte für Economy oder Inventory
+- kein Admin-Frontend und keine Authentication/Authorization für die Shop-Management-Grenze;
+  vor externem Produktivbetrieb ist dafür ein separater Security-/Host-Slice erforderlich
 - keinen Cart-, Stock-, Discount-, Coupon-, Refund- oder Cancellation-Flow
 
 ## Tests
@@ -183,6 +221,10 @@ Die Tests prüfen:
 - unbekannte oder nicht kaufbare Offers, unbekannte Identity, Kauflimit und unzureichenden Saldo
   mit gezieltem Status und vollständigem Rollback
 - ungültige Route-/Request-Identifier und malformed JSON mit `400 Bad Request`
+- die getrennte Shop-Management-Grenze mit Create, vollständiger Katalogsicht, allen gezielten
+  Mutationen, Enable/Disable, No-op-Stabilität, 404/400-ProblemDetails und serverseitiger ID
+- unveränderte Storefront-/Purchase-Semantik nach Management-Mutationen einschließlich
+  Preis-Snapshot, Availability und Kauflimit
 - Producer-only-Verhalten: pending Outbox, kein API-Processing und kein Inbox-Eintrag
 - Startup-Abbruch bei nicht erreichbarer PostgreSQL-Datenbank
 

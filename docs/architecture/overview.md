@@ -72,9 +72,13 @@ Identische Requests erzeugen exakt einen Effekt; Fehler rollen alle Teilwirkunge
 zurück. Shop verwendet dafür ausschließlich `Identity.Contracts`, `Economy.Contracts`,
 `Inventory.Contracts`, Messaging, Persistence und BuildingBlocks, niemals fremde
 Implementierungen oder Tabellen. Die API stellt Storefront-, History- und
-`POST /api/shop/offers/{offerId}/purchases` bereit, verwendet dafür `AddShopModule()` sowie
-schmale Economy-/Inventory-Capabilities und bietet keine Katalogmutations- oder
-Administrations-Endpunkte. Der API-Host produziert `shop.purchase-completed` v1 in die Outbox;
+`POST /api/shop/offers/{offerId}/purchases` sowie die getrennte
+`/api/admin/shop/offers`-Management-Grenze bereit, verwendet dafür `AddShopModule()` sowie
+schmale Economy-/Inventory-Capabilities. Die Management-Grenze verwendet die bestehenden
+Shop-Use-Cases, führt keine neue Migration oder Events ein und verändert den Worker nicht.
+Authentication/Authorization ist im API-Host bewusst noch nicht vorhanden und bleibt ein
+separater Security-/Host-Scope vor externem Produktivbetrieb. Der API-Host produziert
+`shop.purchase-completed` v1 in die Outbox;
 der separate Worker kennt das Event über `Shop.Contracts`, registriert aber
 bewusst keinen fachlichen Consumer; Shop-Implementierung und Shop-Migrationen werden dort nicht
 geladen. Warenkorb, Stock, Discounts und Refunds bleiben ebenfalls außerhalb dieses Slices.

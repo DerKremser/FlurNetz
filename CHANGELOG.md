@@ -4,6 +4,20 @@
 
 ### Hinzugefügt
 
+- Getrennte HTTP-Management-Grenze für den vollständigen Shop-Angebotskatalog unter
+  `/api/admin/shop/offers` mit Create, Get, List, gezielten Feldmutationen sowie Enable und
+  Disable ergänzt.
+- Die Management-Grenze verwendet die vorhandenen Shop-Application-Use-Cases und deren
+  `SELECT FOR UPDATE`-Transaktionsgrenze. Sie besitzt eigene API-Request-/Response-Verträge,
+  lässt die Storefront-Semantik unverändert und bildet bekannte Eingabe- und NotFound-Fehler
+  als ProblemDetails ab.
+- Echte PostgreSQL-/WebApplicationFactory-Tests für serverseitige Offer-ID, Create-Felder,
+  vollständige interne Katalogsicht, alle Mutationen, No-ops, Fehlerfälle sowie die
+  Auswirkungen auf Storefront, Purchase-Preis, Availability und Kauflimit ergänzt.
+- Dokumentiert, dass für diesen HTTP-Adapter keine neue Migration, kein neues Event, kein
+  Shop-Consumer und keine Worker-Änderung erforderlich ist. Authentication/Authorization der
+  Management-Routen bleibt ein bewusst separater späterer Security-/Host-Scope.
+
 - HTTP-Purchase-Endpunkt `POST /api/shop/offers/{offerId}/purchases` im bestehenden
   `ShopEndpoints`-Vertical-Slice ergänzt. Der API-eigene Request enthält nur `requestId` und
   `communityIdentityId`; bei Erfolg wird der vollständige bestehende `ShopPurchaseResponse`
@@ -52,8 +66,8 @@
 - API-eigene DTOs sowie ein versionierter, opaker UTF-8-JSON-/Base64Url-Keyset-Cursor für die
   Purchase-History ergänzt; Slice 7 erweitert diese HTTP-Grenze um den Purchase-POST.
 - Die interne `AddShopReadOnlyModule()`-Basis bleibt für Storefront-Hosts erhalten; der API-Host
-  verwendet für den vollständigen Purchase-Slice nun `AddShopModule()` und erzeugt weiterhin
-  keine Katalogmutations-Endpunkte.
+  verwendet für den vollständigen Purchase-Slice nun `AddShopModule()`. In dieser damaligen
+  Slice-Stufe bestanden noch keine HTTP-Routen für Katalogmutationen.
 - API-Startup führt neben Identity und den beiden Shop-Migrationen nun auch die bestehenden
   Economy-, Inventory- und Messaging-Migrationen aus. Keine neue Migration wurde eingeführt;
   alle bestehenden Migrationen und ihre SQL-Checksums bleiben unverändert.
@@ -102,8 +116,9 @@
 - Interne Shop-Katalog-Use-Cases für Create, Get, List, Rename, Description-, Preis-, Availability- und Kauflimitänderungen sowie Enable/Disable und den gezielten `ShopOfferStore` ergänzt.
 - Kontrollierte `ShopOffer.Rehydrate`-Domainlösung sowie atomare Row-Lock-Mutationen über `SELECT FOR UPDATE` ergänzt.
 - Echte Shop-PostgreSQL-Integrationstests für Migration, exaktes Schema, DB-Constraints, Roundtrips und Nebenläufigkeit ergänzt.
-- Administration, Katalogmutations-Endpunkte und ein fachlicher Shop-Event-Consumer bleiben
-  bewusst ausgeschlossen; der API-Producer und das separate Worker-Wiring sind vorhanden.
+- Administration, HTTP-Routen für Katalogmutationen und ein fachlicher Shop-Event-Consumer
+  blieben in dieser damaligen Foundation-Stufe bewusst ausgeschlossen; der API-Producer und das
+  separate Worker-Wiring waren vorhanden.
 - Ersten Shop-Foundation-Slice mit `ShopOffer`, `ShopPrice`, `AvailabilityWindow` und gezielten Domainmutationen für fachliche Shop-Angebote hinzugefügt.
 - Stabilen öffentlichen `ShopOfferId`-Contract und die gemeinsame Verwendung von `Inventory.Contracts.ItemDefinitionId` im Shop ergänzt.
 - Shop-Unit- und Architekturtests für Angebotsinvarianten, Zeitfenster, Aktivierung, Kauflimits und Modulgrenzen ergänzt.

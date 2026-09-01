@@ -2,10 +2,10 @@
 
 FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice, den persistierten Shop-Angebotskatalog,
 den ersten atomaren Shop-Inventory-Kauf, die persistierte Shop-Kaufhistorie, die Shop-HTTP-API
-mit read-only Storefront und HTTP-Purchase sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist
+mit read-only Storefront, HTTP-Purchase und HTTP-Katalogverwaltung sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist
 Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet
 werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger,
-Titles-API, Achievement-Runtime-Trigger, Shop-Administration, fachliche Shop-Event-Consumer und
+Titles-API, Achievement-Runtime-Trigger, ein Shop-Admin-Frontend, fachliche Shop-Event-Consumer und
 externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
@@ -226,12 +226,24 @@ weiterhin über `Shop.Contracts`, verarbeitet ihn ohne fachlichen Shop-Consumer 
 keinen Inbox-Eintrag. Ein späterer Consumer und ein eventueller historischer Backfill sind separate
 Anforderungen.
 
+Die interne Katalogverwaltung ist zusätzlich als klar getrennte HTTP-Management-Grenze unter
+`/api/admin/shop/offers` verfügbar. Sie verwendet ausschließlich die vorhandenen
+`CreateShopOffer`, `GetShopOffer`, `ListShopOffers`, `RenameShopOffer`,
+`ChangeShopOfferDescription`, `ChangeShopOfferPrice`, `ChangeShopOfferAvailability`,
+`ChangeShopOfferPurchaseLimit`, `EnableShopOffer` und `DisableShopOffer`-Use-Cases.
+Die Management-Sicht enthält auch deaktivierte, zukünftige und abgelaufene Angebote; die
+öffentliche Storefront bleibt unverändert auf aktivierte und aktuell verfügbare Angebote
+beschränkt. Die API führt dafür keine eigene Transaktion ein, erzeugt keine neue Migration,
+keine Events und keinen Consumer. Die Management-Routen besitzen aktuell bewusst noch keine
+Authentication/Authorization und müssen vor externem Produktivbetrieb durch einen separaten
+Security-/Host-Slice geschützt werden.
+
 Echte PostgreSQL-Integrationstests prüfen zusätzlich erfolgreichen gemeinsamen Commit,
 Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und vollständigen
 Rollback bei unzureichendem Saldo sowie Lookup, Identity-Isolation, newest-first-Reihenfolge
 und mehrseitige History-Pagination ohne Duplikate oder ausgelassene Käufe. Die API-Integration
 prüft zusätzlich Storefront-Filterung, DTO-Abbildung, Cursor-Roundtrip und Fehlerfälle.
-Administration, Katalogmutations-Endpunkte, Warenkorb, variable Purchase-Menge, Stock, Discounts,
+Administration-Frontend, Warenkorb, variable Purchase-Menge, Stock, Discounts,
 Coupons, Refunds und Purchase-Cancellation bleiben außerhalb dieses Slices. Details
 stehen in
 [docs/architecture/shop.md](docs/architecture/shop.md).
@@ -262,8 +274,10 @@ Purchase-Request enthält nur `requestId` und `communityIdentityId`; der bestehe
 `ShopPurchaseResponse` wird mit `201 Created` und Purchase-Location geliefert. Die
 `ShopPurchaseRequestId` bildet die globale Idempotenzgrenze. Der API-Host ist Producer für
 `shop.purchase-completed` v1 und verarbeitet die Outbox nicht selbst. Der Worker kennt das
-Shop-Event über `Shop.Contracts`, registriert aber keinen fachlichen Consumer. Administration,
-Katalogmutations-Endpunkte bleiben ausgeschlossen. Der erste
+Shop-Event über `Shop.Contracts`, registriert aber keinen fachlichen Consumer. Das
+Administration-Frontend
+Die interne Katalogverwaltung ist über die separate `/api/admin/shop/offers`-Management-Grenze
+erreichbar. Der erste
 Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist
 kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 

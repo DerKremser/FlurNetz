@@ -1,4 +1,4 @@
-# Shop – Katalog, atomarer Purchase, read-only Kaufhistorie und HTTP-API
+# Shop – Katalog, HTTP-Management, atomarer Purchase, read-only Kaufhistorie und HTTP-API
 
 ## Verantwortung
 
@@ -124,11 +124,12 @@ Requests dürfen neue Käufe committed werden. Eine unbekannte oder historisch l
 Identity liefert eine leere Seite und wird nicht über `ICommunityIdentityExistence`
 geprüft.
 
-## Storefront- und Purchase-API
+## Storefront-, Management- und Purchase-API
 
 Der Shop ist über `FlurNetz.Api` per HTTP erreichbar. Die API registriert dafür das vollständige
 `AddShopModule()`: Dadurch sind der bestehende atomare Purchase-Use-Case und seine Persistence-
-Abhängigkeiten verfügbar, ohne dass daraus HTTP-Endpunkte für interne Katalogmutationen entstehen.
+Abhängigkeiten verfügbar; die Katalogverwaltung wird über eine eigene Endpoint-Gruppe klar von
+der öffentlichen Storefront getrennt.
 Die Storefront-Reads verwenden weiterhin die bestehenden Read-Use-Cases und Stores:
 
 - `GET /api/shop/offers` listet ausschließlich aktivierte Angebote, die zum einmal ermittelten
@@ -162,9 +163,47 @@ Ungültige Route-/Request-Identifier und malformed JSON liefern `400 Bad Request
 Offer oder unbekannte Identity `404 Not Found`, nicht kaufbares Offer, Kauflimit,
 Idempotenzkonflikt und unzureichender Saldo `409 Conflict`; alle bekannten Antworten sind
 ProblemDetails. Sonstige, insbesondere technische `InvalidOperationException`-Fälle, bleiben
-`500 Internal Server Error`. Katalogmutations-Endpunkte entstehen nicht. Der separate Worker
+`500 Internal Server Error`. Der separate Worker
 kennt `shop.purchase-completed` v1 über `FlurNetz.Modules.Shop.Contracts`, registriert aber
 weiterhin bewusst keinen fachlichen Shop-Consumer.
+
+### HTTP-Management-Grenze für den Angebotskatalog
+
+Die Katalogverwaltung verwendet ausschließlich die bereits registrierten Application-Use-Cases
+`CreateShopOffer`, `GetShopOffer`, `ListShopOffers`, `RenameShopOffer`,
+`ChangeShopOfferDescription`, `ChangeShopOfferPrice`, `ChangeShopOfferAvailability`,
+`ChangeShopOfferPurchaseLimit`, `EnableShopOffer` und `DisableShopOffer`:
+
+```text
+GET  /api/admin/shop/offers
+GET  /api/admin/shop/offers/{offerId}
+POST /api/admin/shop/offers
+PUT  /api/admin/shop/offers/{offerId}/display-name
+PUT  /api/admin/shop/offers/{offerId}/description
+PUT  /api/admin/shop/offers/{offerId}/price
+PUT  /api/admin/shop/offers/{offerId}/availability
+PUT  /api/admin/shop/offers/{offerId}/purchase-limit
+POST /api/admin/shop/offers/{offerId}/enable
+POST /api/admin/shop/offers/{offerId}/disable
+```
+
+Der Create-Request enthält die bestehenden fachlichen Werte `itemDefinitionId`, `displayName`,
+optionale `description`, `price`, optionale Availability-Grenzen und ein optionales
+`purchaseLimitPerIdentity`; die ID vergibt der Use-Case serverseitig. Ein neues Angebot bleibt
+deaktiviert. Die Management-Lesesicht besitzt ein eigenes API-Response-DTO inklusive
+`IsEnabled` und verwendet nicht den Storefront-Vertrag. Deshalb kann sie den vollständigen
+internen Katalog einschließlich deaktivierter, zukünftiger und abgelaufener Angebote sehen.
+
+Der HTTP-Adapter öffnet keine eigene Transaktion und greift nicht direkt auf Store, Dapper,
+Npgsql oder Tabellen zu. Die vorhandene `ShopOfferStore.ExecuteAsync`-Grenze mit
+`SELECT FOR UPDATE` bleibt unverändert. Erfolgreiche Mutationen liefern `204 No Content`;
+unbekannte Offer-IDs `404 Not Found`, bekannte ungültige Werte und malformed JSON `400 Bad
+Request`, jeweils als ProblemDetails. Wiederholtes Enable oder Disable bleibt ein No-op.
+Die Storefront bleibt ausschließlich auf aktivierte und aktuell verfügbare Offers beschränkt.
+Die API verfügt derzeit bewusst noch über keine Authentication/Authorization; vor externem
+Produktivbetrieb muss ein separater Security-/Host-Slice diese Management-Routen schützen. Der
+Adapter führt keine neue Migration ein, veröffentlicht keine Management-Events und registriert
+keinen Shop-Consumer; der Worker bleibt unverändert.
 
 ## Minimale Cross-Module-Capabilities
 
@@ -330,8 +369,8 @@ Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory
 Worker-Komposition bleiben außerhalb des Shop-Moduls. Der API-Host bindet `AddShopModule()`
 zusammen mit der Identity- sowie den schmalen Economy-/Inventory-Capabilities ein und führt
 dadurch die sechs bereits vorhandenen Identity-, Economy-, Inventory-, Shop- und Messaging-
-Migrationen aus. Die internen Katalogmutationen sind registriert, erhalten aber keine HTTP-
-Endpunkte.
+Migrationen aus. Die internen Katalogmutationen sind registriert und werden vom API-Host über
+die getrennte Management-Endpoint-Gruppe auf die bestehenden Use-Cases abgebildet.
 Der Worker referenziert für das Contract-Wiring ausschließlich `Shop.Contracts`; er registriert
 keine `ShopMigrationSource` und führt keine Shop-Migration aus.
 
@@ -382,12 +421,18 @@ Die PostgreSQL-Integrationstests prüfen zusätzlich:
 - ungültige Route-IDs, Page Sizes und malformed, ungültige oder Identity-fremde API-Cursor;
 - einen zwischen Seiten neu persistierten, zeitlich neueren Kauf ohne Rückwärtsbewegung
   des bereits ausgegebenen Cursors.
+- den echten API-Host mit serverseitigem Management-Create, vollständiger interner
+  Kataloglesesicht, allen gezielten Katalogmutationen, No-op-Enable/Disable und gezielter
+  ProblemDetails-Abbildung;
+- die unveränderte Trennung der Management-Lesesicht von der Storefront sowie spätere
+  Purchase-Wirkungen von Preis-, Availability- und Kauflimit-Mutationen.
 
 Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Roundtrip von
 `shop.purchase-completed` v1 über die bestehende explizite Messaging-Registry.
 
 Die Worker-Integration prüft zusätzlich die Verarbeitung des bekannten Events durch den echten
-Worker ohne fachlichen Consumer und ohne Inbox-Eintrag. Nicht enthalten sind Admin API/UI,
+Worker ohne fachlichen Consumer und ohne Inbox-Eintrag. Nicht enthalten sind ein Admin-Frontend
+und produktive Authentication/Authorization,
 fachlicher Shop-Event-Consumer, Warenkorb, variable Purchase-Menge, Stock,
 Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
 Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische Repositories,

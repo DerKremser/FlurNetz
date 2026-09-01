@@ -108,6 +108,7 @@ public sealed class Program
 
         app.MapIdentityEndpoints();
         app.MapShopEndpoints();
+        app.MapShopManagementEndpoints();
         await app.RunAsync();
     }
 }

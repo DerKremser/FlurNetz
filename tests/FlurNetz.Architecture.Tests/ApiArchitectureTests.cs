@@ -1,8 +1,10 @@
 using System.Reflection;
 using FlurNetz.Api;
+using FlurNetz.Api.Contracts;
 using FlurNetz.BuildingBlocks.Results;
 using FlurNetz.Messaging.Integration;
 using FlurNetz.Modules.Identity.Contracts;
+using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Persistence.Configuration;
 
 namespace FlurNetz.Architecture.Tests;
@@ -20,6 +22,7 @@ public sealed class ApiArchitectureTests
         "FlurNetz.Modules.Identity",
         "FlurNetz.Modules.Identity.Contracts",
         "FlurNetz.Modules.Inventory",
+        "FlurNetz.Modules.Inventory.Contracts",
         "FlurNetz.Modules.Shop",
         "FlurNetz.Modules.Shop.Contracts"
     ];
@@ -37,6 +40,7 @@ public sealed class ApiArchitectureTests
         Assert.Contains("FlurNetz.Modules.Identity", references);
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
         Assert.Contains("FlurNetz.Modules.Inventory", references);
+        Assert.Contains("FlurNetz.Modules.Inventory.Contracts", references);
         Assert.Contains("FlurNetz.Modules.Shop", references);
         Assert.Contains("FlurNetz.Modules.Shop.Contracts", references);
         Assert.DoesNotContain("FlurNetz.Worker", references);
@@ -98,6 +102,27 @@ public sealed class ApiArchitectureTests
             .ToArray();
 
         Assert.Empty(invalidTypes);
+    }
+
+    [Fact]
+    public void ShopManagementHttpContractsRemainOwnedByTheApi()
+    {
+        var managementContracts = new[]
+        {
+            typeof(CreateShopOfferRequest),
+            typeof(RenameShopOfferRequest),
+            typeof(ChangeShopOfferDescriptionRequest),
+            typeof(ChangeShopOfferPriceRequest),
+            typeof(ChangeShopOfferAvailabilityRequest),
+            typeof(ChangeShopOfferPurchaseLimitRequest),
+            typeof(ShopOfferManagementResponse),
+            typeof(ShopOfferManagementListResponse)
+        };
+
+        Assert.All(managementContracts, type => Assert.Same(ApiAssembly, type.Assembly));
+        Assert.DoesNotContain(
+            typeof(ShopOfferId).Assembly.GetExportedTypes(),
+            type => type.Name.Contains("Management", StringComparison.Ordinal));
     }
 
     private static string[] GetReferencedAssemblyNames(Assembly assembly) => assembly
