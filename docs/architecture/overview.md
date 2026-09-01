@@ -70,8 +70,11 @@ transaction-aware Economy-Debit, Inventory-Grant um exakt eins, Purchase-Write u
 Identische Requests erzeugen exakt einen Effekt; Fehler rollen alle Teilwirkungen gemeinsam
 zurück. Shop verwendet dafür ausschließlich `Identity.Contracts`, `Economy.Contracts`,
 `Inventory.Contracts`, Messaging, Persistence und BuildingBlocks, niemals fremde
-Implementierungen oder Tabellen. API, Administration, Shop-Event-Consumer, Worker-Wiring,
-Warenkorb, Stock, Discounts und Refunds bleiben außerhalb dieses Slices. Details stehen in
+Implementierungen oder Tabellen. API und Administration bleiben außerhalb dieses Slices. Der
+separate Worker kennt `shop.purchase-completed` v1 über `Shop.Contracts`, registriert aber
+bewusst keinen fachlichen Consumer; Shop-Implementierung und Shop-Migrationen werden dort nicht
+geladen. Warenkorb, Stock, Discounts und Refunds bleiben ebenfalls außerhalb dieses Slices.
+Details stehen in
 [shop.md](shop.md).
 
 Streamer.bot wird später als externer Adapter behandelt und lädt keine internen FlurNetz-Assemblies. Interne FlurNetz-Projekte verwenden .NET 10. PostgreSQL ist die primäre relationale Datenbank; die technische Grundlage dafür liegt in `FlurNetz.Persistence` mit Npgsql und Dapper.
@@ -90,4 +93,4 @@ Die Fachmodule verwenden jeweils das Muster `FlurNetz.Modules.<Module>.Contracts
 nur über `IInventoryQuantityGrant`. Shop verwendet `Shop.Contracts`,
 `Identity.Contracts`, `Economy.Contracts`, `Inventory.Contracts`, BuildingBlocks,
 Messaging und Persistence; fremde Modulimplementierungen, Administration, API und Worker bleiben
-ausgeschlossen. Titles verwendet den eigenen Contract, `Identity.Contracts` und Persistence; Messaging, Rewards, Achievements, Shop, API und Worker bleiben ausgeschlossen. Fremde Modulimplementierungen sind ausgeschlossen. Identity bleibt das erste Referenzmodul; Engagement veröffentlicht jetzt die erste fachliche Integration-Nachricht und Progression ist der erste Consumer. Der E2E-Workflow ist implementiert, getestet und wird durch den unabhängigen Worker-Host dauerhaft betrieben. Die vollständige Modul-Liste und Umsetzungsreihenfolge stehen in [modules.md](modules.md).
+ausgeschlossen. Titles verwendet den eigenen Contract, `Identity.Contracts` und Persistence; Messaging, Rewards, Achievements, Shop, API und Worker bleiben ausgeschlossen. Fremde Modulimplementierungen sind ausgeschlossen. Identity bleibt das erste Referenzmodul; Engagement veröffentlicht jetzt die erste fachliche Integration-Nachricht und Progression ist der erste Consumer. Der E2E-Workflow ist implementiert, getestet und wird durch den unabhängigen Worker-Host dauerhaft betrieben. Der Worker kennt zusätzlich `shop.purchase-completed` v1 über `Shop.Contracts`, verarbeitet es aktuell ohne fachlichen Consumer erfolgreich ohne Inbox-Eintrag. Die vollständige Modul-Liste und Umsetzungsreihenfolge stehen in [modules.md](modules.md).

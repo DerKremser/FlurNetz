@@ -5,6 +5,7 @@ using FlurNetz.Messaging.Serialization;
 using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Progression;
 using FlurNetz.Modules.Progression.Application;
+using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Migrations;
@@ -56,7 +57,7 @@ public sealed class Program
     private static void ConfigureServices(IConfiguration configuration, IServiceCollection services)
     {
         // Der Worker ist die äußerste Kompositionsgrenze. Er verdrahtet ausschließlich die
-        // technischen Grundlagen und den einen bereits vorhandenen Runtime-Consumer.
+        // technischen Grundlagen, die bekannten Event-Contracts und den vorhandenen Runtime-Consumer.
         services.AddSingleton<PostgreSqlOptions>(serviceProvider =>
         {
             var connectionString = configuration
@@ -78,6 +79,9 @@ public sealed class Program
             registry.Register<MessageEngagementRecordedIntegrationEvent>(
                 MessageEngagementRecordedIntegrationEvent.MessageType,
                 MessageEngagementRecordedIntegrationEvent.SchemaVersion);
+            registry.Register<ShopPurchaseCompletedIntegrationEvent>(
+                ShopPurchaseCompletedIntegrationEvent.MessageType,
+                ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
             return registry;
         });
         services.AddSingleton<IIntegrationEventTypeRegistry>(serviceProvider =>
@@ -144,7 +148,8 @@ public sealed class Program
 
                 ValidateComposition();
                 logger.LogInformation(
-                    "Worker-Komposition validiert: Registry, Progression-Consumer und OutboxProcessor sind bereit.");
+                    "Worker-Komposition validiert: Registry für Engagement- und Shop-Event, Progression-Consumer und OutboxProcessor sind bereit; für {ShopMessageType} ist aktuell kein Consumer registriert.",
+                    ShopPurchaseCompletedIntegrationEvent.MessageType);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -173,6 +178,15 @@ public sealed class Program
                     "The registered engagement message does not resolve to its expected contract type.");
             }
 
+            var shopDescriptor = registry.Resolve(
+                ShopPurchaseCompletedIntegrationEvent.MessageType,
+                ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
+            if (shopDescriptor.ClrType != typeof(ShopPurchaseCompletedIntegrationEvent))
+            {
+                throw new InvalidOperationException(
+                    "The registered shop purchase message does not resolve to its expected contract type.");
+            }
+
             using var scope = scopeFactory.CreateScope();
             var registrations = scope.ServiceProvider
                 .GetServices<IIntegrationEventHandlerRegistration>()
@@ -182,7 +196,14 @@ public sealed class Program
                     && registration.ConsumerName == MessageEngagementRecordedIntegrationEventHandler.ConsumerName))
             {
                 throw new InvalidOperationException(
-                    "The Progression consumer registration for engagement.message-recorded is missing.");
+                    $"The Progression consumer registration for {MessageEngagementRecordedIntegrationEvent.MessageType} is missing.");
+            }
+
+            if (registrations.Any(registration =>
+                    registration.EventType == typeof(ShopPurchaseCompletedIntegrationEvent)))
+            {
+                throw new InvalidOperationException(
+                    $"A consumer for {ShopPurchaseCompletedIntegrationEvent.MessageType} must not be registered yet.");
             }
 
             _ = scope.ServiceProvider.GetRequiredService<OutboxProcessor>();

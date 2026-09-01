@@ -12,6 +12,7 @@
     <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Progression\FlurNetz.Modules.Progression.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Engagement.Contracts\FlurNetz.Modules.Engagement.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

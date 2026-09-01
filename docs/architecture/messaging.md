@@ -42,6 +42,17 @@ Der `OutboxProcessor` ist host-unabhängig und führt mit `ProcessBatchAsync` ge
 
 Offene Outbox-Nachrichten werden in einer kurzen PostgreSQL-Transaktion mit `FOR UPDATE SKIP LOCKED` ausgewählt und über `locked_until_utc` geleast. Dabei wird der Versuchszähler atomar erhöht. Ein abgestürzter Processor blockiert eine Nachricht nur bis zum Ablauf des Leases; ein weiterer Lauf kann sie danach erneut übernehmen.
 
+Ein bekannter und erfolgreich deserialisierter Eventtyp gilt auch ohne passenden registrierten
+Consumer als erfolgreich verarbeitet. In diesem Fall wird kein Handler ausgeführt, kein
+Inbox-Eintrag geschrieben und die Outbox-Nachricht anschließend als `processed` markiert. Der
+Fall erzeugt weder ein Retry noch eine Poison-/Failed-Nachricht. Unbekannte Message Types oder
+Schema-Versionen bleiben dagegen normale Verarbeitungsfehler und durchlaufen weiterhin die
+Retry-/Poison-Regeln.
+
+Die Outbox liefert an die zum Verarbeitungszeitpunkt registrierten Consumer. Sie ist kein Event
+Store und kein dauerhaftes Replay-Log für Consumer, die erst später hinzukommen; historische
+Backfills sind eine separate Anforderung.
+
 ## Inbox und transactional Inbox
 
 `flurnetz_messaging.inbox_messages` besitzt den Schlüssel aus stabiler `consumer_name`-Identität und `message_id`. Ein Consumer wird ausdrücklich benannt und nicht dauerhaft über seinen CLR-Klassennamen identifiziert.
@@ -62,7 +73,11 @@ Die Messaging Foundation definiert nur die technischen Outbox-/Inbox- und Proces
 Verträge. Sie startet keinen Prozess und kennt weder Progression noch andere Fachmodule.
 `FlurNetz.Worker` ist der erste separate Runtime-Host: Er registriert die benötigten
 Contracts und Consumer explizit, führt die Messaging- und Progression-Migrationen beim
-Startup aus und ruft danach `OutboxProcessor.ProcessBatchAsync` kontinuierlich auf.
+Startup aus und ruft danach `OutboxProcessor.ProcessBatchAsync` kontinuierlich auf. Seine
+Registry enthält `engagement.message-recorded` v1 und `shop.purchase-completed` v1; dafür
+referenziert er `FlurNetz.Modules.Shop.Contracts`, nicht die Shop-Implementierung. Für das
+Shop-Event ist aktuell bewusst kein Consumer registriert, sodass die oben beschriebene
+consumerlose Erfolgssemantik greift.
 Die Worker-spezifischen Idle-/Failure-Delays und der Scope pro Batch gehören zum Host, nicht
 zur Foundation. Message-Level-Retry und Lease-Semantik bleiben beim Processor.
 
@@ -70,7 +85,7 @@ zur Foundation. Message-Level-Retry und Lease-Semantik bleiben beim Processor.
 
 `MessagingMigrationSource` registriert die technischen Tabellen unter dem eindeutigen Migration-Owner `Messaging` beim vorhandenen SQL-first `MigrationRunner`. Es gibt keine fachlichen Migrationen.
 
-Die Unit Tests prüfen Domain-Dispatcher, Registry und Serialisierung. Architecture Tests sichern Namespace, Abhängigkeitsrichtung, fachliche Neutralität und das Fehlen generischer Repositories. Die PostgreSQL-Integrationstests verwenden Testcontainers und prüfen Migration/Idempotenz, atomaren Commit und Rollback, Processor, Inbox-Deduplizierung, transactional Inbox, Retry, Poison, unbekannte Typen, Duplicate Redelivery und paralleles Claiming. Die Worker-Integrationstests prüfen zusätzlich die echte Host-Schleife, Startup-Migrationen, Verarbeitung nach dem Hoststart und Graceful Shutdown. SQLite und In-Memory-Datenbanken werden nicht verwendet.
+Die Unit Tests prüfen Domain-Dispatcher, Registry und Serialisierung. Architecture Tests sichern Namespace, Abhängigkeitsrichtung, fachliche Neutralität und das Fehlen generischer Repositories. Die PostgreSQL-Integrationstests verwenden Testcontainers und prüfen Migration/Idempotenz, atomaren Commit und Rollback, Processor, Inbox-Deduplizierung, transactional Inbox, Retry, Poison, unbekannte Typen, Duplicate Redelivery, bekannte Eventtypen ohne Consumer und paralleles Claiming. Die Worker-Integrationstests prüfen zusätzlich die echte Host-Schleife, Startup-Migrationen, Verarbeitung von Engagement nach dem Hoststart, die consumerlose Verarbeitung von `shop.purchase-completed` ohne Inbox-Eintrag und Graceful Shutdown. SQLite und In-Memory-Datenbanken werden nicht verwendet.
 
 ## Erster fachlicher Workflow
 
@@ -109,7 +124,9 @@ Die `ShopPurchaseRequestId` gehört nicht in die Event-Payload; sie wird als tec
 `CorrelationId` des Envelopes verwendet. Die fachliche Payload enthält ausschließlich den
 unveränderlichen Kauf-Snapshot.
 
-Slice 3 ergänzt bewusst keinen Consumer für dieses Event. Der bestehende Worker registriert
-`shop.purchase-completed` noch nicht und wird nicht verändert. Ein späterer Consumer muss
-seinen Eventtyp und seine stabile Consumer-Identity ausdrücklich registrieren und kann dann
-die vorhandene Inbox-/Retry-Infrastruktur verwenden.
+Slice 6 macht den Eventtyp im Worker explizit bekannt, ergänzt aber bewusst keinen Consumer.
+Der Worker verarbeitet eine gültige `shop.purchase-completed`-Nachricht deshalb erfolgreich
+ohne Inbox-Eintrag. Ein späterer echter Consumer muss seinen Eventtyp und seine stabile
+Consumer-Identity ausdrücklich registrieren und kann dann die vorhandene Inbox-/Retry-
+Infrastruktur verwenden; bereits verarbeitete Outbox-Nachrichten werden dadurch nicht
+rückwirkend replaybar.

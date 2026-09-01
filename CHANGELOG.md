@@ -4,6 +4,21 @@
 
 ### Hinzugefügt
 
+- Shop-Runtime-Wiring im separaten Worker ergänzt: `shop.purchase-completed` v1 wird über
+  `FlurNetz.Modules.Shop.Contracts` explizit registriert, ohne Referenz auf die Shop-
+  Implementierung oder die Shop-Migrationen.
+- Worker-Startup-Validierung für die Engagement- und Shop-Event-Zuordnung erweitert. Die
+  vorhandene Progression-Consumer-Registration und die Auflösbarkeit des `OutboxProcessor`
+  bleiben geprüft; ein fachlicher Shop-Consumer wird weiterhin bewusst nicht registriert.
+- Echte PostgreSQL-Worker-Integration für ein nach dem Startup eingereihtes
+  `shop.purchase-completed` ergänzt: Der Event wird durch den kontinuierlichen Worker als
+  `processed` abgeschlossen, erzeugt ohne Consumer keinen Inbox-Eintrag und bleibt weder
+  Retry- noch Failed-Nachricht. Der Migrationstest stellt zusätzlich das Ausbleiben aller
+  Shop-Fachtabellen sicher.
+- Gezielten Messaging-Integrationstest für bekannte Eventtypen ohne registrierten Consumer
+  ergänzt. Der Fall bleibt erfolgreich, ohne Inbox-Write und ohne Retry-/Poison-Behandlung;
+  die Outbox-Semantik ist kein späteres Replay-Log.
+
 - Read-only Shop-HTTP-API im echten `FlurNetz.Api` ergänzt:
   `GET /api/shop/offers`, `GET /api/shop/offers/{offerId}`,
   `GET /api/shop/purchases/{purchaseId}` und die identity-isolierte Purchase-History.

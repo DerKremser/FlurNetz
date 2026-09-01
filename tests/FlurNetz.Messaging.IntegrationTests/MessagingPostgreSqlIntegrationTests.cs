@@ -147,6 +147,55 @@ public sealed class MessagingPostgreSqlIntegrationTests(PostgreSqlFixture databa
     }
 
     [Fact]
+    public async Task KnownMessageWithoutConsumerIsProcessedWithoutRetryOrInboxEntry()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareMessagingAsync(factory);
+        var clock = new FixedClock(TestNow);
+        var (registry, serializer) = CreateSerializer();
+        var processor = new OutboxProcessor(
+            factory,
+            serializer,
+            registry,
+            [],
+            new OutboxProcessingOptions
+            {
+                BatchSize = 100,
+                MaxAttempts = 2,
+                RetryDelay = TimeSpan.Zero,
+                LeaseDuration = TimeSpan.FromMinutes(5)
+            },
+            clock);
+        var publisher = new PostgreSqlOutboxPublisher(serializer, clock);
+        var messageId = Guid.NewGuid();
+
+        await EnqueueAsync(factory, publisher, CreateEnvelope(messageId, "no-consumer"));
+
+        var result = await processor.ProcessBatchAsync(TestToken);
+
+        Assert.Equal(1, result.ClaimedCount);
+        Assert.Equal(1, result.ProcessedCount);
+        Assert.Equal(0, result.RetriedCount);
+        Assert.Equal(0, result.FailedCount);
+        Assert.Equal(
+            "processed",
+            await ReadStringAsync(
+                factory,
+                "SELECT status FROM flurnetz_messaging.outbox_messages WHERE message_id = @message_id;",
+                TestToken,
+                ("message_id", messageId)));
+        Assert.Equal(
+            0,
+            await CountAsync(
+                factory,
+                "flurnetz_messaging.inbox_messages",
+                TestToken,
+                "message_id = @message_id",
+                ("message_id", messageId)));
+    }
+
+    [Fact]
     public async Task DuplicateRedeliveryIsDeduplicatedByConsumerIdentity()
     {
         SkipIfDatabaseIsUnavailable();

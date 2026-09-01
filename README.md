@@ -5,8 +5,8 @@ den ersten atomaren Shop-Inventory-Kauf, die read-only persistierte Shop-Kaufhis
 read-only Shop-HTTP-API sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist
 Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet
 werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger,
-Titles-API, Achievement-Runtime-Trigger, Shop-Administration, Shop-Event-Consumer und externe
-Integrationen sind noch nicht implementiert.
+Titles-API, Achievement-Runtime-Trigger, Shop-Administration, fachliche Shop-Event-Consumer und
+externe Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -26,6 +26,12 @@ Die Persistence Foundation stellt asynchrone PostgreSQL-Verbindungen und technis
 `FlurNetz.Messaging` trennt interne Domain Events von serialisierbaren Integration Events. Domain Events werden sequenziell und deterministisch im Prozess verteilt. Integration Events besitzen einen Envelope mit `MessageId`, logischem Nachrichtentyp, Schema-Version und UTC-Zeitpunkt; eine explizite Registry ordnet Typ und Version sicher einem CLR-Payload-Typ zu und `System.Text.Json` übernimmt die UTF-8-Serialisierung.
 
 Die PostgreSQL-Outbox wird über dieselbe `PostgreSqlTransaction` wie ein fachlicher Datenbank-Write befüllt. Dadurch sind Business Write und Outbox Insert gemeinsam commit- oder rollbackfähig. Ein aufrufbarer Outbox Processor verwendet PostgreSQL-Leases, Inbox-Deduplizierung pro stabiler Consumer Identity, Retry und einen isolierten Failed/Poison-Status. `FlurNetz.Worker` ruft diesen Processor als erster dauerhaft laufender Runtime-Host kontinuierlich auf; es gibt keinen externen Broker.
+
+Der Worker registriert `engagement.message-recorded` v1 und `shop.purchase-completed` v1
+explizit über ihre Contracts. Für den bekannten Shop-Event ist aktuell bewusst kein fachlicher
+Consumer registriert: Nach erfolgreicher Deserialisierung wird die Outbox-Nachricht ohne Handler
+und ohne Inbox-Eintrag als `processed` markiert. Die Outbox ist deshalb kein Event Store und kein
+Replay-Log für Consumer, die erst später registriert werden.
 
 Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](docs/architecture/messaging.md). Die Tests in `FlurNetz.Messaging.IntegrationTests` verwenden echtes PostgreSQL über Testcontainers; Docker oder alternativ `FLURNETZ_TEST_CONNECTION_STRING` ist dafür erforderlich.
 
@@ -207,15 +213,18 @@ Offers und Purchases in eigene DTOs ab; `GET /api/shop/purchases/{purchaseId}` s
 `GET /api/shop/identities/{communityIdentityId}/purchases` machen den vollständigen Purchase-
 Snapshot und die identitätsisolierte History lesbar. Die History verwendet dafür einen
 versionierten, API-eigenen opaken Base64Url-Keyset-Cursor. Es gibt weiterhin keinen
-HTTP-Purchase-Endpunkt. Der interne Shop-Purchase bleibt vorhanden, `shop.purchase-completed`
-bleibt ohne Worker-Consumer und die Messaging-/Worker-Integration folgt separat.
+HTTP-Purchase-Endpunkt. Der interne Shop-Purchase bleibt vorhanden. Der Worker kennt
+`shop.purchase-completed` v1 ausschließlich über `Shop.Contracts`, verarbeitet den bekannten
+Eventtyp aktuell aber ohne fachlichen Consumer; dabei entsteht kein Inbox-Eintrag. Ein späterer
+Consumer und ein eventueller historischer Backfill sind separate Anforderungen. Ein HTTP-Purchase
+folgt erst in einem separaten späteren Slice.
 
 Echte PostgreSQL-Integrationstests prüfen zusätzlich erfolgreichen gemeinsamen Commit,
 Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und vollständigen
 Rollback bei unzureichendem Saldo sowie Lookup, Identity-Isolation, newest-first-Reihenfolge
 und mehrseitige History-Pagination ohne Duplikate oder ausgelassene Käufe. Die API-Integration
 prüft zusätzlich Storefront-Filterung, DTO-Abbildung, Cursor-Roundtrip und Fehlerfälle.
-Administration, Shop-Event-Consumer, Worker-Wiring, HTTP-Purchase, Warenkorb, variable Purchase-Menge, Stock,
+Administration, fachlicher Shop-Event-Consumer, HTTP-Purchase, Warenkorb, variable Purchase-Menge, Stock,
 Discounts, Coupons, Refunds und Purchase-Cancellation bleiben außerhalb dieses Slices. Details
 stehen in
 [docs/architecture/shop.md](docs/architecture/shop.md).
@@ -241,8 +250,9 @@ caller-neutrale `IInventoryQuantityGrant`-Capability für gemeinsame Transaktion
 `Shop:2:CreateShopPurchases` den ersten atomaren Inventory-Purchase inklusive Idempotenz,
 Kauflimit, Economy-Debit, Inventory-Grant, Purchase-Persistenz, Outbox und gezielten
 read-only History-Queries mit Keyset-Pagination. Der Shop ist über die API read-only für
-Storefront-Angebote und Purchase-History erreichbar; HTTP-Purchase, Administration,
-Event-Consumer und Worker-Wiring für das Shop-Event bleiben ausgeschlossen. Der erste
+Storefront-Angebote und Purchase-History erreichbar; HTTP-Purchase und Administration bleiben
+ausgeschlossen. Der Worker kennt das Shop-Event über `Shop.Contracts`, registriert aber keinen
+fachlichen Consumer. Der erste
 Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist
 kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
@@ -276,9 +286,14 @@ Der Entwicklungsstand enthält noch kein Authentifizierungssystem und keine Twit
 Der unabhängige Worker-Host verwendet dieselbe Konfigurationskonvention
 ConnectionStrings:FlurNetz und benötigt eine erreichbare PostgreSQL-Datenbank. Beim Start führt
 er ausschließlich die Messaging- und Progression-Migrationen aus, validiert die explizite
-Registry-/Consumer-Komposition und verarbeitet die Outbox danach kontinuierlich.
+Registry-/Consumer-Komposition und verarbeitet die Outbox danach kontinuierlich. Die Registry
+enthält zusätzlich `shop.purchase-completed` v1 aus `FlurNetz.Modules.Shop.Contracts`; die
+Shop-Implementierung und Shop-Migrationen werden nicht referenziert beziehungsweise ausgeführt.
 engagement_activities wird vom Worker nicht angelegt; der Worker referenziert nur den
-Engagement-Contract.
+Engagement- und den Shop-Contract. Für den bekannten Shop-Event gibt es aktuell bewusst keinen
+Consumer. Solche Nachrichten werden nach erfolgreicher Deserialisierung als `processed`
+markiert, ohne Inbox-Eintrag und ohne Retry; die Outbox ist kein Replay- oder Event-Store für
+später hinzukommende Consumer.
 
 Start:
 

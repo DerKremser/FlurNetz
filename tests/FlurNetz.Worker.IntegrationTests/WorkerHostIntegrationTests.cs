@@ -6,6 +6,7 @@ using FlurNetz.Messaging.Persistence;
 using FlurNetz.Messaging.Serialization;
 using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Progression.Application;
+using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Transactions;
@@ -61,6 +62,18 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
                 SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name = 'engagement_activities';
+                """,
+                timeout.Token));
+            Assert.Equal(0, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name IN (
+                      'shop_offers',
+                      'shop_purchases',
+                      'shop_purchase_requests',
+                      'shop_purchase_guards');
                 """,
                 timeout.Token));
             Assert.Equal(
@@ -122,6 +135,45 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
                     WHERE consumer_name = @ConsumerName;
                     """,
                     new { ConsumerName = MessageEngagementRecordedIntegrationEventHandler.ConsumerName },
+                    timeout.Token));
+
+            await StopHostAsync(host, timeout.Token);
+        }
+        finally
+        {
+            await DisposeHostAsync(host);
+        }
+    }
+
+    [Fact]
+    public async Task ShopPurchaseCompletedMessageIsProcessedWithoutConsumerOrInboxEntry()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await ResetDatabaseAsync();
+
+        var host = CreateHost();
+        try
+        {
+            using var timeout = CreateTimeout();
+            await host.StartAsync(timeout.Token);
+
+            var messageId = await EnqueueShopPurchaseCompletedMessageAsync(timeout.Token);
+            await WaitForOutboxProcessedAsync(messageId, timeout.Token);
+
+            var status = await ReadOutboxStatusAsync(messageId, timeout.Token);
+            Assert.Equal("processed", status);
+            Assert.NotEqual("pending", status);
+            Assert.NotEqual("failed", status);
+            Assert.Equal(1, await ReadOutboxAttemptCountAsync(messageId, timeout.Token));
+            Assert.Equal(
+                0,
+                await CountAsync(
+                    """
+                    SELECT COUNT(*)
+                    FROM flurnetz_messaging.inbox_messages
+                    WHERE message_id = @MessageId;
+                    """,
+                    new { MessageId = messageId },
                     timeout.Token));
 
             await StopHostAsync(host, timeout.Token);
@@ -201,6 +253,10 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
             """
             DROP SCHEMA IF EXISTS flurnetz_messaging CASCADE;
             DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
+            DROP TABLE IF EXISTS shop_purchase_requests CASCADE;
+            DROP TABLE IF EXISTS shop_purchase_guards CASCADE;
+            DROP TABLE IF EXISTS shop_purchases CASCADE;
+            DROP TABLE IF EXISTS shop_offers CASCADE;
             DROP TABLE IF EXISTS community_progressions CASCADE;
             DROP TABLE IF EXISTS engagement_activities CASCADE;
             """);
@@ -222,6 +278,40 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
             MessageEngagementRecordedIntegrationEvent.SchemaVersion,
             DateTimeOffset.UtcNow,
             new MessageEngagementRecordedIntegrationEvent(communityIdentityId));
+
+        await using var transaction = await PostgreSqlTransaction
+            .BeginAsync(factory, cancellationToken);
+        await publisher.EnqueueAsync(transaction, envelope, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return messageId;
+    }
+
+    private async Task<Guid> EnqueueShopPurchaseCompletedMessageAsync(CancellationToken cancellationToken)
+    {
+        await using var factory = CreateFactory();
+        var registry = new IntegrationEventTypeRegistry();
+        registry.Register<ShopPurchaseCompletedIntegrationEvent>(
+            ShopPurchaseCompletedIntegrationEvent.MessageType,
+            ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
+        var serializer = new IntegrationEventJsonSerializer(registry);
+        var publisher = new PostgreSqlOutboxPublisher(serializer, new SystemClock());
+        var messageId = Guid.NewGuid();
+        var purchaseRequestId = ShopPurchaseRequestId.New();
+        var occurredAtUtc = new DateTimeOffset(2026, 8, 29, 12, 0, 0, TimeSpan.Zero)
+            .AddTicks(1230);
+        var envelope = new IntegrationEventEnvelope(
+            messageId,
+            ShopPurchaseCompletedIntegrationEvent.MessageType,
+            ShopPurchaseCompletedIntegrationEvent.SchemaVersion,
+            occurredAtUtc,
+            new ShopPurchaseCompletedIntegrationEvent(
+                ShopPurchaseId.New().Value,
+                ShopOfferId.New().Value,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                25,
+                occurredAtUtc),
+            purchaseRequestId.Value.ToString("D"));
 
         await using var transaction = await PostgreSqlTransaction
             .BeginAsync(factory, cancellationToken);
@@ -269,6 +359,52 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
         await using var factory = CreateFactory();
         await using var connection = await factory.OpenConnectionAsync(cancellationToken);
         return await connection.QuerySingleAsync<string>(
+            new CommandDefinition(
+                "SELECT status FROM flurnetz_messaging.outbox_messages WHERE message_id = @MessageId;",
+                new { MessageId = messageId },
+                cancellationToken: cancellationToken));
+    }
+
+    private async Task<int> ReadOutboxAttemptCountAsync(
+        Guid messageId,
+        CancellationToken cancellationToken)
+    {
+        await using var factory = CreateFactory();
+        await using var connection = await factory.OpenConnectionAsync(cancellationToken);
+        return await connection.QuerySingleAsync<int>(
+            new CommandDefinition(
+                "SELECT attempt_count FROM flurnetz_messaging.outbox_messages WHERE message_id = @MessageId;",
+                new { MessageId = messageId },
+                cancellationToken: cancellationToken));
+    }
+
+    private async Task WaitForOutboxProcessedAsync(Guid messageId, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var status = await ReadOutboxStatusOrNullAsync(messageId, cancellationToken);
+            if (status == "processed")
+            {
+                return;
+            }
+
+            if (status == "failed")
+            {
+                throw new InvalidOperationException(
+                    "The shop purchase completed message was marked as failed.");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25), cancellationToken);
+        }
+    }
+
+    private async Task<string?> ReadOutboxStatusOrNullAsync(
+        Guid messageId,
+        CancellationToken cancellationToken)
+    {
+        await using var factory = CreateFactory();
+        await using var connection = await factory.OpenConnectionAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<string?>(
             new CommandDefinition(
                 "SELECT status FROM flurnetz_messaging.outbox_messages WHERE message_id = @MessageId;",
                 new { MessageId = messageId },

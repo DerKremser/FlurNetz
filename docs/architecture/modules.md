@@ -157,9 +157,11 @@ einen Kauf.
 
 Shop referenziert dabei ausschließlich fremde Contracts, niemals fremde
 Implementierungsassemblies oder Tabellen. Der Shop ist nun über `FlurNetz.Api` read-only für
-Storefront-Angebote und Purchase-History erreichbar; HTTP-Purchase, Admin UI, Shop-Event-
-Consumer, Worker-Wiring, Warenkorb, Stock, Discounts und Refunds bleiben außerhalb dieses
-Slices. Details stehen in
+Storefront-Angebote und Purchase-History erreichbar; HTTP-Purchase und Admin UI bleiben
+außerhalb dieses Slices. Der separate Worker referenziert für `shop.purchase-completed` v1 nur
+`Shop.Contracts`, kennt den Eventtyp explizit und registriert bewusst keinen fachlichen
+Consumer. Shop-Implementierung und Shop-Migrationen werden dort nicht geladen. Warenkorb,
+Stock, Discounts und Refunds bleiben ebenfalls außerhalb dieses Slices. Details stehen in
 [shop.md](shop.md).
 
 ## Aktueller Stand des Titles-Moduls
@@ -284,7 +286,7 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
 und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
 Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`, die Purchase-History-Stores, zwei unveränderte Migrationen sowie `ShopModule` mit getrennter Read-only-Registration; der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt. Der API-Host verdrahtet ausschließlich die Read-only-Registration; Worker und Shop-Purchase-Event bleiben unverdrahtet. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; Titles und Achievements sind nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`, die Purchase-History-Stores, zwei unveränderte Migrationen sowie `ShopModule` mit getrennter Read-only-Registration; der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt. Der API-Host verdrahtet ausschließlich die Read-only-Registration. Der Worker kennt `shop.purchase-completed` v1 über `Shop.Contracts`, registriert aber keinen fachlichen Consumer und lädt weder die Shop-Implementierung noch ihre Migrationen. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; Titles und Achievements sind nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen

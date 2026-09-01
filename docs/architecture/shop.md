@@ -148,8 +148,11 @@ unvollständige, unbekannt versionierte oder Identity-fremde Cursor liefern `400
 
 Die API registriert keinen `IShopPurchaseExecutor`, kein `PurchaseShopOffer` und keine
 Katalogmutation. Es existiert weiterhin kein HTTP-Purchase; der interne atomare Purchase bleibt
-unverändert vorhanden. Der Worker kennt `shop.purchase-completed` weiterhin nicht, und die
-Messaging-/Worker-Integration folgt separat.
+unverändert vorhanden. Der API-Host registriert weiterhin ausschließlich
+`AddShopReadOnlyModule()`. Der separate Worker kennt `shop.purchase-completed` v1 über
+`FlurNetz.Modules.Shop.Contracts`, registriert aber aktuell bewusst keinen fachlichen
+Shop-Consumer; dieses Contract-Wiring erzeugt keinen HTTP-Write-Pfad. Ein HTTP-Purchase folgt
+erst in einem separaten späteren Slice.
 
 ## Minimale Cross-Module-Capabilities
 
@@ -284,9 +287,14 @@ Der Shop-Purchase verwendet den vorhandenen `IIntegrationEventPublisher`. Dieser
 eigene Verbindung und committed nicht selbst. Business-Write und Outbox-Eintrag werden deshalb
 durch denselben PostgreSQL-Commit sichtbar.
 
-Slice 3 veröffentlicht das Event ausschließlich. Es existiert noch kein Shop-Event-Consumer und
-keine Worker-Registry für `shop.purchase-completed`. Die bestehende
-Engagement→Progression-Runtime bleibt unverändert.
+Der Shop-Purchase veröffentlicht das Event weiterhin ausschließlich als atomaren Outbox-
+Bestandteil des Kaufs. Slice 6 registriert `shop.purchase-completed` v1 im separaten Worker
+explizit über `Shop.Contracts`, ohne die Shop-Implementierung oder Shop-Migrationen zu
+referenzieren. Es existiert weiterhin kein fachlicher Shop-Event-Consumer. Der bekannte Eventtyp
+wird vom Worker nach erfolgreicher Deserialisierung ohne Handler und ohne Inbox-Eintrag als
+`processed` markiert; er wird weder als Retry/Poison behandelt noch über bereits verarbeitete
+Outbox-Nachrichten später replaybar. Die bestehende Engagement→Progression-Runtime bleibt
+unverändert.
 
 ## Modulregistrierung und Abhängigkeiten
 
@@ -301,6 +309,8 @@ umfasst damit 20 Services.
 Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory, API- und
 Worker-Komposition bleiben außerhalb des Shop-Moduls. Der API-Host bindet die Read-only-
 Registration ein und führt dadurch die Identity- sowie beide vorhandenen Shop-Migrationen aus.
+Der Worker referenziert für das Contract-Wiring ausschließlich `Shop.Contracts`; er registriert
+keine `ShopMigrationSource` und führt keine Shop-Migration aus.
 
 Erlaubte FlurNetz-Abhängigkeiten der Shop-Implementierung sind ausschließlich:
 
@@ -351,7 +361,9 @@ Die PostgreSQL-Integrationstests prüfen zusätzlich:
 Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Roundtrip von
 `shop.purchase-completed` v1 über die bestehende explizite Messaging-Registry.
 
-Nicht enthalten sind HTTP-Purchase, Admin API/UI, Worker-Consumer, Warenkorb, variable Purchase-Menge, Stock,
+Die Worker-Integration prüft zusätzlich die Verarbeitung des bekannten Events durch den echten
+Worker ohne fachlichen Consumer und ohne Inbox-Eintrag. Nicht enthalten sind HTTP-Purchase,
+Admin API/UI, fachlicher Shop-Event-Consumer, Warenkorb, variable Purchase-Menge, Stock,
 Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
 Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische Repositories,
 generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/

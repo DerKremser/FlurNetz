@@ -96,8 +96,11 @@ unbekannt versionierte oder fremde Cursor liefern `400 Bad Request`.
 
 Es gibt bewusst keinen HTTP-Purchase-Endpunkt. Der interne `PurchaseShopOffer` bleibt
 vorhanden, wird durch diese API-Komposition aber nicht runtime-erreichbar gemacht, weil der
-Worker `shop.purchase-completed` weiterhin nicht kennt. Die Messaging-/Worker-Integration
-folgt separat.
+API-Host weiterhin ausschließlich `AddShopReadOnlyModule()` registriert und keinen Write-Pfad
+zuordnet. Der separate Worker kennt `shop.purchase-completed` v1 inzwischen über
+`FlurNetz.Modules.Shop.Contracts`, registriert aber bewusst keinen fachlichen Shop-Consumer;
+dieses Contract-Wiring fügt dem API-Host keinen HTTP-Endpunkt hinzu. Ein HTTP-Purchase folgt
+erst in einem separaten späteren Slice.
 
 ## Fehlerbehandlung und aktueller Umfang
 

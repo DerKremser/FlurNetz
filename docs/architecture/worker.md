@@ -12,11 +12,13 @@ Der Worker referenziert ausschließlich:
 - FlurNetz.Messaging für Registry, Serializer, Migration und OutboxProcessor;
 - FlurNetz.Persistence für PostgreSQL-Konfiguration, Connection Factory und MigrationRunner;
 - FlurNetz.Modules.Progression für den vorhandenen Consumer, Store und die Progression-Migration;
-- FlurNetz.Modules.Engagement.Contracts für den bereits bestehenden Event-Vertrag.
+- FlurNetz.Modules.Engagement.Contracts für den bereits bestehenden Event-Vertrag;
+- FlurNetz.Modules.Shop.Contracts für den bekannten `shop.purchase-completed`-Vertrag.
 
 Die Engagement-Implementierung, Identity-Implementierung, API und alle übrigen Fachmodule
-werden nicht geladen. Der Worker erzeugt keine Engagement-Aktivitäten; Engagement bleibt der
-Besitzer des Events engagement.message-recorded.
+werden nicht geladen. Insbesondere referenziert der Worker nicht `FlurNetz.Modules.Shop` und
+zieht keine Shop-Implementierung oder Shop-Migration nach. Der Worker erzeugt keine
+Engagement-Aktivitäten; Engagement bleibt der Besitzer des Events engagement.message-recorded.
 
 ## PostgreSQL und Startup
 
@@ -34,16 +36,21 @@ Progression-Moduls:
 - Progression:1:CreateCommunityProgressions.
 
 EngagementMigrationSource wird bewusst nicht registriert. Der Worker benötigt
-engagement_activities für das Consuming nicht. Schlägt eine Migration fehl, wird der Fehler
-kritisch geloggt und der Hoststart abgebrochen; es gibt keinen endlosen Migration-Retry im
-BackgroundService.
+engagement_activities für das Consuming nicht. Ebenso werden `Shop:1:CreateShopOffers` und
+`Shop:2:CreateShopPurchases` nicht registriert; `shop_offers`, `shop_purchases`,
+`shop_purchase_requests` und `shop_purchase_guards` gehören nicht zur Worker-Runtime. Schlägt
+eine Migration fehl, wird der Fehler kritisch geloggt und der Hoststart abgebrochen; es gibt
+keinen endlosen Migration-Retry im BackgroundService.
 
 Anschließend validiert der Startup-Service die reale Komposition. Die Registry enthält den
-Event-Typ explizit über MessageEngagementRecordedIntegrationEvent.MessageType und
-MessageEngagementRecordedIntegrationEvent.SchemaVersion. Es gibt kein Assembly Scanning.
-IntegrationEventJsonSerializer verwendet dieselbe Singleton-Registry wie der
-OutboxProcessor. Die Progression-Consumer-Registration und der vollständig auflösbare
-OutboxProcessor werden vor dem Loop geprüft.
+Event-Typ `engagement.message-recorded` v1 explizit über
+`MessageEngagementRecordedIntegrationEvent.MessageType` und
+`MessageEngagementRecordedIntegrationEvent.SchemaVersion` sowie
+`shop.purchase-completed` v1 über `ShopPurchaseCompletedIntegrationEvent.MessageType` und
+`ShopPurchaseCompletedIntegrationEvent.SchemaVersion`. Es gibt kein Assembly Scanning.
+`IntegrationEventJsonSerializer` verwendet dieselbe Singleton-Registry wie der
+`OutboxProcessor`. Die Progression-Consumer-Registration, das bewusste Fehlen eines Shop-
+Consumers und der vollständig auflösbare `OutboxProcessor` werden vor dem Loop geprüft.
 
 ## Runtime-Verarbeitung
 
@@ -73,6 +80,12 @@ Eine Nachricht engagement.message-recorded mit Schema-Version 1 wird vom bestehe
 Progression-Consumer als genau 1 XP interpretiert. Inbox-Eintrag und XP-Write bleiben in der
 vom Processor bereitgestellten PostgreSQL-Transaktion atomar.
 
+Eine gültige `shop.purchase-completed`-Nachricht ist im Worker ebenfalls bekannt. Da aktuell
+kein fachlicher Shop-Consumer registriert ist, wird sie nach erfolgreicher Deserialisierung
+ohne Handler und ohne Inbox-Eintrag als `processed` abgeschlossen. Sie wird dadurch weder
+retrybar noch als Poison-/Failed-Nachricht behandelt. Bereits verarbeitete Outbox-Nachrichten
+werden nicht zu einem späteren Replay-Log für neu hinzukommende Consumer.
+
 ## Shutdown und Betriebsindikatoren
 
 Der Worker prüft das CancellationToken vor jedem neuen Batch, übergibt es an den Processor
@@ -97,6 +110,7 @@ Plattformintegration.
 FlurNetz.Worker.IntegrationTests startet den echten Generic Host gegen PostgreSQL über
 Testcontainers oder FLURNETZ_TEST_CONNECTION_STRING. Die Tests prüfen Startup-Migrationen,
 das Ausbleiben der Engagement-Tabelle, den leeren Queue-Zustand, ein nach dem Startup
-eingereihtes Event ohne direkten ProcessBatchAsync-Aufruf, genau 1 XP, processed Outbox,
-Inbox-Deduplizierung für den Progression-Consumer, kontinuierliches Polling und Graceful
-Shutdown.
+eingereihtes Engagement-Event ohne direkten ProcessBatchAsync-Aufruf, genau 1 XP, processed
+Outbox, Inbox-Deduplizierung für den Progression-Consumer, ein nach dem Startup eingereihtes
+`shop.purchase-completed` ohne Consumer und Inbox-Eintrag, das Ausbleiben aller Shop-
+Fachtabellen, kontinuierliches Polling und Graceful Shutdown.
