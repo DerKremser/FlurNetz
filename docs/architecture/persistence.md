@@ -63,7 +63,10 @@ Bereits angewendete Migrationen werden übersprungen, wenn Identität und Checks
 
 Der ausführbare API-Host stellt die Connection-Konfiguration als Composition Root bereit und
 ruft den bestehenden Runner vor dem Listener-Start auf. Ein Fehler wird geloggt und beendet den
-Startup, damit kein nicht initialisierter Host als betriebsbereit erscheint. Der erste fachliche
+Startup, damit kein nicht initialisierter Host als betriebsbereit erscheint. Der API-Host
+registriert die Identity- und die Shop-Read-only-Migrationsquelle und führt damit die
+vorhandenen Migrationen `Identity:1:CreateCommunityIdentities`,
+`Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases` aus. Der erste fachliche
 Besitzer einer Migration ist Identity: `Identity:1:CreateCommunityIdentities` legt die Tabelle
 `community_identities` mit ausschließlich `id uuid primary key` an. Engagement besitzt nun als
 weiteres Modul die Migration `Engagement:1:CreateEngagementActivities` für seine Tabelle
@@ -108,6 +111,12 @@ Cross-Module-Foreign-Key. Der Purchase-Executor verwendet einen `FOR SHARE`-Lock
 Angebot und einen `FOR UPDATE`-Guard pro Offer/Identity, bevor er die transaction-aware
 Capabilities der fremden Module aufruft.
 
+Die API verwendet für den Shop keine eigene Connection- oder SQL-Infrastruktur. Ihre
+Read-only-Registration greift über die bestehenden Shop-Stores auf die vorhandenen Tabellen
+zu; der API-eigene opaque History-Cursor wird ausschließlich im HTTP-Adapter kodiert. Es gibt
+keine Cursor- oder API-Tabelle, keine neue Shop-Migration und keine Änderung an den SQL-Texten
+oder Checksums von `Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases`.
+
 ## Tests
 
 `FlurNetz.Persistence.IntegrationTests` prüft die Foundation gegen echtes PostgreSQL: Connection und `SELECT 1`, Commit, Rollback, leere Datenbank, History-Erzeugung, Migrationen, Idempotenz, deterministische Reihenfolge, Fehler-Rollback und Checksum-Änderungen. Der Engagement-Slice besitzt dafür ein eigenes Integration-Testprojekt mit Migration, Idempotenz, Message-Recording, Laden, Not-Found, Duplicate-PK, Rollback und unbekanntem Activity-Type. Der Progression-Slice besitzt eigene PostgreSQL-Tests für Migration, lazy Initialisierung, Domain-Rehydration, Rollback, Not-Found und parallele Grants gegen echte Zeilensperren. Der Economy-Slice prüft Migration, Lazy-Lifecycle, Laden, Debit-Fehler, Overflow-Rollback, Datenbank-Check und konkurrierende Credits sowie Debits gegen echte Zeilensperren. Der Rewards-Slice prüft in einem eigenen Testcontainers-Projekt Migration und Idempotenz, Katalogpersistenz, Package-Atomicity, Overflow-Rollback, Partial-State, parallele Duplicate-Grants und die gemeinsame Economy-Transaktion. Der Inventory-Slice besitzt eigene echte PostgreSQL-Tests für Composite Key, Sparse-Lifecycle, Rollback, Isolation mehrerer Bestandspositionen und konkurrierende Adds sowie Removes. Standardmäßig wird dafür eine isolierte PostgreSQL-Testinstanz über Testcontainers (`postgres:15.1`) verwendet. Docker muss für diese Testvariante verfügbar sein; alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` gesetzt werden.
@@ -122,3 +131,8 @@ Docker muss für diese Testvariante verfügbar sein; alternativ kann
 realen Identity-, Economy-, Inventory- und Messaging-Adapter: erfolgreicher gemeinsamer
 Commit, Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und
 vollständiger Rollback bei unzureichendem Saldo.
+`FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, die Identity- und
+beiden Shop-Migrationen, die read-only Offer-Storefront, vollständige DTO-Abbildung, Purchase-
+Lookup sowie identity-isolierte newest-first History mit mehrseitigem API-Keyset-Cursor und
+allen definierten Fehlerfällen. Die Testdaten werden mangels Admin-Write-API kontrolliert direkt
+in der isolierten PostgreSQL-Testdatenbank angelegt.

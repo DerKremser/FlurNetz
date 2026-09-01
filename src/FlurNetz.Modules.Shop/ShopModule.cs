@@ -26,15 +26,9 @@ public static class ShopModule
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddSingleton<IClock, SystemClock>();
-        services.AddScoped<IShopOfferStore, ShopOfferStore>();
-        services.AddScoped<IShopPurchaseHistoryStore, ShopPurchaseHistoryStore>();
+        services.AddShopReadOnlyModule();
         services.AddScoped<IShopPurchaseExecutor, PostgreSqlShopPurchaseExecutor>();
         services.AddScoped<CreateShopOffer>();
-        services.AddScoped<GetShopOffer>();
-        services.AddScoped<ListShopOffers>();
-        services.AddScoped<GetShopPurchase>();
-        services.AddScoped<ListShopPurchasesForIdentity>();
         services.AddScoped<RenameShopOffer>();
         services.AddScoped<ChangeShopOfferDescription>();
         services.AddScoped<ChangeShopOfferPrice>();
@@ -43,6 +37,31 @@ public static class ShopModule
         services.AddScoped<EnableShopOffer>();
         services.AddScoped<DisableShopOffer>();
         services.AddScoped<PurchaseShopOffer>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registriert ausschließlich die read-only Shop-Komponenten für eine Storefront.
+    /// </summary>
+    /// <remarks>
+    /// Der Registration fehlt bewusst jede Purchase-Executor- und Katalogmutations-
+    /// Komponente. Dadurch kann ein Host den Shop lesen, ohne Economy, Inventory oder
+    /// Messaging für einen nicht angebotenen HTTP-Purchase-Pfad verdrahten zu müssen.
+    /// </remarks>
+    public static IServiceCollection AddShopReadOnlyModule(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton<IClock, SystemClock>();
+        services.AddScoped<IShopOfferStore, ShopOfferStore>();
+        services.AddScoped<IShopPurchaseHistoryStore, ShopPurchaseHistoryStore>();
+        services.AddScoped<GetShopOffer>();
+        services.AddScoped<ListShopOffers>();
+        services.AddScoped<GetAvailableShopOffer>();
+        services.AddScoped<ListAvailableShopOffers>();
+        services.AddScoped<GetShopPurchase>();
+        services.AddScoped<ListShopPurchasesForIdentity>();
         services.AddSingleton<IMigrationSource, ShopMigrationSource>();
 
         return services;

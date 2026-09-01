@@ -1,8 +1,12 @@
 # FlurNetz
 
 FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice, den persistierten Shop-Angebotskatalog,
-den ersten atomaren Shop-Inventory-Kauf, die read-only persistierte Shop-Kaufhistorie sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger, Titles-API, Achievement-Runtime-Trigger, Shop-API/Administration,
-Shop-Event-Consumer und externe Integrationen sind noch nicht implementiert.
+den ersten atomaren Shop-Inventory-Kauf, die read-only persistierte Shop-Kaufhistorie, die
+read-only Shop-HTTP-API sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist
+Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet
+werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger,
+Titles-API, Achievement-Runtime-Trigger, Shop-Administration, Shop-Event-Consumer und externe
+Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -196,11 +200,22 @@ Datensätze und rehydriert den vollständigen Snapshot aus `shop_purchases`. Die
 eröffnen keine zusätzliche Transaktion und keine Locks; es gibt keinen Cross-Page-Snapshot.
 Unbekannte oder historisch leere Identities liefern eine leere Seite ohne Cursor.
 
+Der Shop ist erstmals read-only über `FlurNetz.Api` erreichbar. `GET /api/shop/offers` und
+`GET /api/shop/offers/{offerId}` zeigen ausschließlich aktivierte Angebote, deren
+`AvailabilityWindow` zum einmal ermittelten aktuellen Zeitpunkt sichtbar ist. Die API bildet
+Offers und Purchases in eigene DTOs ab; `GET /api/shop/purchases/{purchaseId}` sowie
+`GET /api/shop/identities/{communityIdentityId}/purchases` machen den vollständigen Purchase-
+Snapshot und die identitätsisolierte History lesbar. Die History verwendet dafür einen
+versionierten, API-eigenen opaken Base64Url-Keyset-Cursor. Es gibt weiterhin keinen
+HTTP-Purchase-Endpunkt. Der interne Shop-Purchase bleibt vorhanden, `shop.purchase-completed`
+bleibt ohne Worker-Consumer und die Messaging-/Worker-Integration folgt separat.
+
 Echte PostgreSQL-Integrationstests prüfen zusätzlich erfolgreichen gemeinsamen Commit,
 Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und vollständigen
 Rollback bei unzureichendem Saldo sowie Lookup, Identity-Isolation, newest-first-Reihenfolge
-und mehrseitige History-Pagination ohne Duplikate oder ausgelassene Käufe. API,
-Administration, Shop-Event-Consumer, Worker-Wiring, Warenkorb, variable Purchase-Menge, Stock,
+und mehrseitige History-Pagination ohne Duplikate oder ausgelassene Käufe. Die API-Integration
+prüft zusätzlich Storefront-Filterung, DTO-Abbildung, Cursor-Roundtrip und Fehlerfälle.
+Administration, Shop-Event-Consumer, Worker-Wiring, HTTP-Purchase, Warenkorb, variable Purchase-Menge, Stock,
 Discounts, Coupons, Refunds und Purchase-Cancellation bleiben außerhalb dieses Slices. Details
 stehen in
 [docs/architecture/shop.md](docs/architecture/shop.md).
@@ -225,12 +240,15 @@ eigener Migration und Sparse-Zero-Lifecycle und veröffentlicht jetzt zusätzlic
 caller-neutrale `IInventoryQuantityGrant`-Capability für gemeinsame Transaktionen. Titles ergänzt nun zusätzlich zu Rehydration und Community-State einen persistierten Definitionskatalog mit `TitleDefinition`, internen Create/Get/List/Rename/Description-Use-Cases, `Titles:2:CreateTitleDefinitions`, Row-Locking und echten Katalog-Concurrency-Tests. Achievements ergänzt einen persistierten Definitionskatalog und permanente, atomare, idempotente Community-Unlocks mit eigener Migration und Concurrency-Tests. Shop besitzt mit `Shop:1:CreateShopOffers` den persistierten Angebotskatalog und mit
 `Shop:2:CreateShopPurchases` den ersten atomaren Inventory-Purchase inklusive Idempotenz,
 Kauflimit, Economy-Debit, Inventory-Grant, Purchase-Persistenz, Outbox und gezielten
-read-only History-Queries mit Keyset-Pagination. API,
-Administration, Event-Consumer und Worker-Wiring bleiben ausgeschlossen. Der erste Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
+read-only History-Queries mit Keyset-Pagination. Der Shop ist über die API read-only für
+Storefront-Angebote und Purchase-History erreichbar; HTTP-Purchase, Administration,
+Event-Consumer und Worker-Wiring für das Shop-Event bleiben ausgeschlossen. Der erste
+Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist
+kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 
-Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der Host führt die technische Migration-History und die Identity-Migration beim Start aus. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
+Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die Identity- und beide vorhandenen Shop-Migrationen beim Start aus. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
 
 ```text
 dotnet user-secrets set "ConnectionStrings:FlurNetz" "Host=localhost;Port=5432;Database=<datenbank>;Username=<benutzer>;Password=<passwort>" --project src/FlurNetz.Api

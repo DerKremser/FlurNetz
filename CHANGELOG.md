@@ -4,6 +4,21 @@
 
 ### Hinzugefügt
 
+- Read-only Shop-HTTP-API im echten `FlurNetz.Api` ergänzt:
+  `GET /api/shop/offers`, `GET /api/shop/offers/{offerId}`,
+  `GET /api/shop/purchases/{purchaseId}` und die identity-isolierte Purchase-History.
+  Die Storefront liefert ausschließlich enabled und aktuell verfügbare Angebote.
+- API-eigene DTOs sowie ein versionierter, opaker UTF-8-JSON-/Base64Url-Keyset-Cursor für die
+  Purchase-History ergänzt. Es gibt weiterhin keinen HTTP-Purchase-Endpunkt.
+- Getrennte `AddShopReadOnlyModule()`-Registration ergänzt; der API-Host registriert weder
+  Purchase-Executor noch Katalogmutationen und referenziert weiterhin weder Economy, Inventory,
+  Messaging noch Worker.
+- API-Startup führt zusätzlich zu Identity nun die vorhandenen Shop-Migrationen
+  `Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases` aus. Keine neue Shop-Migration
+  wurde eingeführt; beide bestehenden Migrationen und ihre SQL-Checksums bleiben unverändert.
+- Unit-, Architektur- und echte PostgreSQL-API-Integrationstests für Storefront-Filterung,
+  DTO-Abbildung, Purchase-Lookup, History-Isolation, Keyset-Roundtrip, Cursor-Validierung und
+  API-Komposition ergänzt.
 - Read-only Purchase-History-Queries mit `GetShopPurchase` und
   `ListShopPurchasesForIdentity` ergänzt. Einzelne Käufe werden über `ShopPurchaseId`
   geladen; die identitätsgebundene Historie verwendet newest-first Keyset-Pagination über

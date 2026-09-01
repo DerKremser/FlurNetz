@@ -1,4 +1,4 @@
-# Shop – Katalog, atomarer Inventory-Kauf und read-only Kaufhistorie
+# Shop – Katalog, atomarer Inventory-Kauf, read-only Kaufhistorie und HTTP-Storefront
 
 ## Verantwortung
 
@@ -123,6 +123,33 @@ oder Guard-Tabelle. Es gibt keinen Snapshot über mehrere Pagination-Seiten; zwi
 Requests dürfen neue Käufe committed werden. Eine unbekannte oder historisch leere
 Identity liefert eine leere Seite und wird nicht über `ICommunityIdentityExistence`
 geprüft.
+
+## Read-only Storefront API
+
+Der Shop ist erstmals über `FlurNetz.Api` read-only per HTTP erreichbar. Die API registriert
+gezielt `AddShopReadOnlyModule()` und verwendet deshalb nur die bestehenden Read-Use-Cases und
+Stores:
+
+- `GET /api/shop/offers` listet ausschließlich aktivierte Angebote, die zum einmal ermittelten
+  aktuellen Zeitpunkt in ihrem `AvailabilityWindow` liegen.
+- `GET /api/shop/offers/{offerId}` liefert nur ein existierendes und aktuell sichtbares Angebot;
+  unbekannte, deaktivierte, zukünftige und abgelaufene Angebote liefern `404 Not Found`.
+- `GET /api/shop/purchases/{purchaseId}` liefert den vollständigen historischen Snapshot oder
+  `404 Not Found`.
+- `GET /api/shop/identities/{communityIdentityId}/purchases` liefert die bestehende,
+  identity-isolierte History mit `pageSize` (Default `50`, `1` bis `100`) und Cursor.
+
+Die API verwendet ausschließlich API-eigene DTOs mit JSON-Primitives; Domainobjekte und
+Contract-Value-Types werden nicht direkt serialisiert. Der History-Cursor ist ein API-eigener
+opaque Cursor: UTF-8-JSON mit interner Version `1`, den Feldern `communityIdentityId`,
+`purchasedAtUtc` und `shopPurchaseId`, anschließend Base64Url-kodiert. Der Cursor wird bei jedem
+Request strikt dekodiert, validiert und gegen die Route-Identity gebunden. Fehlerhafte,
+unvollständige, unbekannt versionierte oder Identity-fremde Cursor liefern `400 Bad Request`.
+
+Die API registriert keinen `IShopPurchaseExecutor`, kein `PurchaseShopOffer` und keine
+Katalogmutation. Es existiert weiterhin kein HTTP-Purchase; der interne atomare Purchase bleibt
+unverändert vorhanden. Der Worker kennt `shop.purchase-completed` weiterhin nicht, und die
+Messaging-/Worker-Integration folgt separat.
 
 ## Minimale Cross-Module-Capabilities
 
@@ -263,15 +290,17 @@ Engagement→Progression-Runtime bleibt unverändert.
 
 ## Modulregistrierung und Abhängigkeiten
 
-`ShopModule.AddShopModule(...)` registriert den Katalog-Store, die zehn Katalog-Use-Cases,
-den `IShopPurchaseHistoryStore` mit `ShopPurchaseHistoryStore`, `GetShopPurchase`,
-`ListShopPurchasesForIdentity`, `IShopPurchaseExecutor`, `PurchaseShopOffer`, eine
-neutrale `IClock`-Default-Implementierung per `TryAddSingleton` sowie
-`ShopMigrationSource`. Die drei neuen History-Registrierungen sind scoped; der
-Registrierungsumfang umfasst damit 18 Services.
+`ShopModule.AddShopReadOnlyModule(...)` registriert eine neutrale `IClock`-Default-
+Implementierung per `TryAddSingleton`, beide Stores, die vollständigen Katalog- und History-
+Reads, `GetAvailableShopOffer`, `ListAvailableShopOffers` sowie `ShopMigrationSource`. Diese
+Registration umfasst zehn Services und enthält keinen Purchase-Executor und keine Mutation.
+`ShopModule.AddShopModule(...)` verwendet diese Read-Basis und ergänzt weiterhin alle
+Katalogmutationen, `IShopPurchaseExecutor` und `PurchaseShopOffer`; der vollständige Umfang
+umfasst damit 20 Services.
 
 Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory, API- und
-Worker-Komposition bleiben außerhalb des Shop-Moduls.
+Worker-Komposition bleiben außerhalb des Shop-Moduls. Der API-Host bindet die Read-only-
+Registration ein und führt dadurch die Identity- sowie beide vorhandenen Shop-Migrationen aus.
 
 Erlaubte FlurNetz-Abhängigkeiten der Shop-Implementierung sind ausschließlich:
 
@@ -314,13 +343,15 @@ Die PostgreSQL-Integrationstests prüfen zusätzlich:
 - deterministische Reihenfolge bei identischen `purchased_at`-Zeitpunkten über `id DESC`;
 - mehrseitige Keyset-Pagination ohne Duplikate und ohne ausgelassene Käufe;
 - `NextCursor` auf der letzten Seite und die leere History;
+- den echten API-Host mit Offer-Storefront, DTO-Abbildung, Purchase-Lookup und History-Cursor;
+- ungültige Route-IDs, Page Sizes und malformed, ungültige oder Identity-fremde API-Cursor;
 - einen zwischen Seiten neu persistierten, zeitlich neueren Kauf ohne Rückwärtsbewegung
   des bereits ausgegebenen Cursors.
 
 Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Roundtrip von
 `shop.purchase-completed` v1 über die bestehende explizite Messaging-Registry.
 
-Nicht enthalten sind API, Admin UI, Worker-Consumer, Warenkorb, variable Purchase-Menge, Stock,
+Nicht enthalten sind HTTP-Purchase, Admin API/UI, Worker-Consumer, Warenkorb, variable Purchase-Menge, Stock,
 Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
 Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische Repositories,
 generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/

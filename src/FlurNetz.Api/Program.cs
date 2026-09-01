@@ -1,5 +1,6 @@
 using FlurNetz.Api.Endpoints;
 using FlurNetz.Modules.Identity;
+using FlurNetz.Modules.Shop;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Migrations;
@@ -48,6 +49,7 @@ public sealed class Program
 
         // Das Modul registriert seine eigenen Use Cases, Adapter und Migrationsquelle.
         builder.Services.AddIdentityModule();
+        builder.Services.AddShopReadOnlyModule();
 
         var app = builder.Build();
 
@@ -76,6 +78,7 @@ public sealed class Program
         }
 
         app.MapIdentityEndpoints();
+        app.MapShopEndpoints();
         await app.RunAsync();
     }
 }

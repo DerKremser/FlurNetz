@@ -88,6 +88,8 @@ public sealed class ShopArchitectureTests
             typeof(IShopPurchaseHistoryStore),
             typeof(IShopPurchaseExecutor),
             typeof(PurchaseShopOffer),
+            typeof(GetAvailableShopOffer),
+            typeof(ListAvailableShopOffers),
             typeof(GetShopPurchase),
             typeof(ListShopPurchasesForIdentity),
             typeof(ShopPurchaseHistoryCursor),
@@ -185,7 +187,7 @@ public sealed class ShopArchitectureTests
         var result = services.AddShopModule();
 
         Assert.Same(services, result);
-        Assert.Equal(18, services.Count);
+        Assert.Equal(20, services.Count);
         AssertService<IClock, SystemClock>(services, ServiceLifetime.Singleton);
         AssertService<IShopOfferStore, ShopOfferStore>(services, ServiceLifetime.Scoped);
         AssertService<IShopPurchaseHistoryStore, ShopPurchaseHistoryStore>(services, ServiceLifetime.Scoped);
@@ -194,6 +196,8 @@ public sealed class ShopArchitectureTests
         AssertService<CreateShopOffer, CreateShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<GetShopOffer, GetShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<ListShopOffers, ListShopOffers>(services, ServiceLifetime.Scoped);
+        AssertService<GetAvailableShopOffer, GetAvailableShopOffer>(services, ServiceLifetime.Scoped);
+        AssertService<ListAvailableShopOffers, ListAvailableShopOffers>(services, ServiceLifetime.Scoped);
         AssertService<GetShopPurchase, GetShopPurchase>(services, ServiceLifetime.Scoped);
         AssertService<ListShopPurchasesForIdentity, ListShopPurchasesForIdentity>(services, ServiceLifetime.Scoped);
         AssertService<RenameShopOffer, RenameShopOffer>(services, ServiceLifetime.Scoped);
@@ -206,6 +210,39 @@ public sealed class ShopArchitectureTests
         AssertService<IMigrationSource, ShopMigrationSource>(services, ServiceLifetime.Singleton);
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType == typeof(IIntegrationEventPublisher));
+    }
+
+    [Fact]
+    public void ShopReadOnlyModuleRegistersOnlyReadComponents()
+    {
+        var services = new ServiceCollection();
+
+        var result = services.AddShopReadOnlyModule();
+
+        Assert.Same(services, result);
+        Assert.Equal(10, services.Count);
+        AssertService<IClock, SystemClock>(services, ServiceLifetime.Singleton);
+        AssertService<IShopOfferStore, ShopOfferStore>(services, ServiceLifetime.Scoped);
+        AssertService<IShopPurchaseHistoryStore, ShopPurchaseHistoryStore>(services, ServiceLifetime.Scoped);
+        AssertService<GetShopOffer, GetShopOffer>(services, ServiceLifetime.Scoped);
+        AssertService<ListShopOffers, ListShopOffers>(services, ServiceLifetime.Scoped);
+        AssertService<GetAvailableShopOffer, GetAvailableShopOffer>(services, ServiceLifetime.Scoped);
+        AssertService<ListAvailableShopOffers, ListAvailableShopOffers>(services, ServiceLifetime.Scoped);
+        AssertService<GetShopPurchase, GetShopPurchase>(services, ServiceLifetime.Scoped);
+        AssertService<ListShopPurchasesForIdentity, ListShopPurchasesForIdentity>(services, ServiceLifetime.Scoped);
+        AssertService<IMigrationSource, ShopMigrationSource>(services, ServiceLifetime.Singleton);
+
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType == typeof(IShopPurchaseExecutor)
+                || descriptor.ServiceType == typeof(PurchaseShopOffer)
+                || descriptor.ServiceType == typeof(CreateShopOffer)
+                || descriptor.ServiceType == typeof(RenameShopOffer)
+                || descriptor.ServiceType == typeof(ChangeShopOfferDescription)
+                || descriptor.ServiceType == typeof(ChangeShopOfferPrice)
+                || descriptor.ServiceType == typeof(ChangeShopOfferAvailability)
+                || descriptor.ServiceType == typeof(ChangeShopOfferPurchaseLimit)
+                || descriptor.ServiceType == typeof(EnableShopOffer)
+                || descriptor.ServiceType == typeof(DisableShopOffer));
     }
 
     [Fact]

@@ -16,7 +16,9 @@ public sealed class ApiArchitectureTests
     [
         "FlurNetz.Persistence",
         "FlurNetz.Modules.Identity",
-        "FlurNetz.Modules.Identity.Contracts"
+        "FlurNetz.Modules.Identity.Contracts",
+        "FlurNetz.Modules.Shop",
+        "FlurNetz.Modules.Shop.Contracts"
     ];
 
     private static Assembly ApiAssembly => typeof(Program).Assembly;
@@ -29,6 +31,8 @@ public sealed class ApiArchitectureTests
         Assert.Contains("FlurNetz.Persistence", references);
         Assert.Contains("FlurNetz.Modules.Identity", references);
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
+        Assert.Contains("FlurNetz.Modules.Shop", references);
+        Assert.Contains("FlurNetz.Modules.Shop.Contracts", references);
     }
 
     [Fact]

@@ -62,6 +62,11 @@ public sealed class ShopOffer
     public ItemDefinitionId ItemDefinitionId { get; }
 
     /// <summary>
+    /// Liefert die Ziel-Item-ID als primitive Guid-Projektion für technische Adapter.
+    /// </summary>
+    public Guid ItemDefinitionIdValue => ItemDefinitionId.Value;
+
+    /// <summary>
     /// Liefert den kanonisch getrimmten Anzeigenamen.
     /// </summary>
     public string DisplayName { get; private set; }

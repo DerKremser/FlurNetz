@@ -33,6 +33,11 @@ public sealed class ShopPurchase
 
     public ItemDefinitionId ItemDefinitionId { get; }
 
+    /// <summary>
+    /// Liefert die gespeicherte Ziel-Item-ID als primitive Guid-Projektion für technische Adapter.
+    /// </summary>
+    public Guid ItemDefinitionIdValue => ItemDefinitionId.Value;
+
     public ShopPrice PricePaid { get; }
 
     public DateTimeOffset PurchasedAtUtc { get; }
