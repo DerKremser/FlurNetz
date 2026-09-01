@@ -9,7 +9,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace FlurNetz.Modules.Shop;
 
 /// <summary>
-/// Registriert den persistierten Shop-Katalog und den ersten atomaren Inventory-Purchase-Slice.
+/// Registriert den persistierten Shop-Katalog, die read-only Kaufhistorie und den atomaren
+/// Inventory-Purchase-Slice.
 /// </summary>
 /// <remarks>
 /// Connection Factory, Messaging-Serializer, Event-Registry und Outbox-Publisher bleiben
@@ -18,7 +19,8 @@ namespace FlurNetz.Modules.Shop;
 public static class ShopModule
 {
     /// <summary>
-    /// Registriert Shop-Katalog, Purchase-Use-Case, atomaren Executor und Shop-Migrationen.
+    /// Registriert Shop-Katalog, Purchase-Use-Cases, Kaufhistorie, atomaren Executor und
+    /// Shop-Migrationen.
     /// </summary>
     public static IServiceCollection AddShopModule(this IServiceCollection services)
     {
@@ -26,10 +28,13 @@ public static class ShopModule
 
         services.TryAddSingleton<IClock, SystemClock>();
         services.AddScoped<IShopOfferStore, ShopOfferStore>();
+        services.AddScoped<IShopPurchaseHistoryStore, ShopPurchaseHistoryStore>();
         services.AddScoped<IShopPurchaseExecutor, PostgreSqlShopPurchaseExecutor>();
         services.AddScoped<CreateShopOffer>();
         services.AddScoped<GetShopOffer>();
         services.AddScoped<ListShopOffers>();
+        services.AddScoped<GetShopPurchase>();
+        services.AddScoped<ListShopPurchasesForIdentity>();
         services.AddScoped<RenameShopOffer>();
         services.AddScoped<ChangeShopOfferDescription>();
         services.AddScoped<ChangeShopOfferPrice>();

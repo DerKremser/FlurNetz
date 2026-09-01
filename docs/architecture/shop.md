@@ -1,4 +1,4 @@
-# Shop – Katalog und erster atomarer Inventory-Kauf
+# Shop – Katalog, atomarer Inventory-Kauf und read-only Kaufhistorie
 
 ## Verantwortung
 
@@ -32,6 +32,11 @@ Event-Payload; sie wird als technische Correlation-ID des Outbox-Envelopes verwe
 
 `Shop.Contracts` referenziert ausschließlich `FlurNetz.Messaging`; fremde Domain- oder
 Implementierungsassemblies werden nicht veröffentlicht.
+
+Die Query-Typen `IShopPurchaseHistoryStore`, `GetShopPurchase`,
+`ListShopPurchasesForIdentity`, `ShopPurchaseHistoryCursor` und
+`ShopPurchaseHistoryPage` bleiben vollständig im Shop-Implementation-Assembly. Die
+öffentliche Contract-Oberfläche wird für die read-only Kaufhistorie nicht erweitert.
 
 ## Angebotsdomain und Katalog
 
@@ -83,6 +88,41 @@ Mikrosekundenpräzision und delegiert an `IShopPurchaseExecutor`.
 
 `IShopPurchaseExecutor` ist eine Shop-interne Application-Grenze. Sie enthält keine Dapper-,
 Npgsql-, Connection-, Transaction- oder sonstigen technischen Datenbanktypen.
+
+## Read-only Kaufhistorie
+
+`GetShopPurchase` lädt einen einzelnen persistierten `ShopPurchase` über seine
+`ShopPurchaseId`. Eine unbekannte ID liefert `null`; eine künstliche
+`ShopPurchaseNotFoundException` gibt es für diesen Read nicht.
+
+`ListShopPurchasesForIdentity` liest die Historie ausschließlich für die angefragte
+`CommunityIdentityId`. Die verbindliche Reihenfolge ist
+`purchased_at DESC, id DESC`. Die Application-Grenze verwendet eine Seitengröße von
+`1` bis `100` mit Default `50` und ruft den Store für die gewünschte Seite plus einen
+zusätzlichen Datensatz auf. Der zusätzliche Datensatz wird nicht ausgegeben, sondern
+bestimmt `NextCursor`.
+
+Die Pagination ist stabile Keyset-Pagination ohne Offset und ohne Gesamtzählung. Der
+implementation-eigene `ShopPurchaseHistoryCursor` enthält
+`CommunityIdentityId`, `PurchasedAtUtc` und `ShopPurchaseId`. Er ist an genau diese
+Identity gebunden; ein Cursor einer anderen Identity wird vor dem Store-Zugriff
+abgewiesen. Der Zeitpunkt ist UTC und besitzt exakt PostgreSQL-kompatible
+Mikrosekundenpräzision. Die Seek-Bedingung lautet fachlich:
+
+`purchased_at < cursor.PurchasedAtUtc`
+
+oder bei gleichem Zeitpunkt:
+
+`purchased_at = cursor.PurchasedAtUtc AND id < cursor.ShopPurchaseId`.
+
+Der gezielte `ShopPurchaseHistoryStore` liest ausschließlich `shop_purchases` mit der
+vorhandenen `IPostgreSqlConnectionFactory` und Dapper und rehydriert über
+`ShopPurchase.Rehydrate(...)`. Jede History-Abfrage besteht aus genau einem normalen
+Read ohne zusätzliche PostgreSQL-Transaktion, `FOR UPDATE`, `FOR SHARE`, fachliche Locks
+oder Guard-Tabelle. Es gibt keinen Snapshot über mehrere Pagination-Seiten; zwischen zwei
+Requests dürfen neue Käufe committed werden. Eine unbekannte oder historisch leere
+Identity liefert eine leere Seite und wird nicht über `ICommunityIdentityExistence`
+geprüft.
 
 ## Minimale Cross-Module-Capabilities
 
@@ -206,6 +246,11 @@ Zusätzliche Indizes:
 - `community_identity_id uuid NOT NULL`
 - Composite Primary Key über beide Spalten.
 
+Für die Kaufhistorie wird keine weitere Migration, Tabelle oder Pagination-Struktur
+angelegt. Der vorhandene Index `(community_identity_id, purchased_at)` wird für die
+Keyset-Abfrage weiterverwendet; `Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases`
+bleiben unverändert.
+
 ## Outbox und Runtime
 
 Der Shop-Purchase verwendet den vorhandenen `IIntegrationEventPublisher`. Dieser öffnet keine
@@ -219,8 +264,11 @@ Engagement→Progression-Runtime bleibt unverändert.
 ## Modulregistrierung und Abhängigkeiten
 
 `ShopModule.AddShopModule(...)` registriert den Katalog-Store, die zehn Katalog-Use-Cases,
-`IShopPurchaseExecutor`, `PurchaseShopOffer`, eine neutrale `IClock`-Default-
-Implementierung per `TryAddSingleton` sowie `ShopMigrationSource`.
+den `IShopPurchaseHistoryStore` mit `ShopPurchaseHistoryStore`, `GetShopPurchase`,
+`ListShopPurchasesForIdentity`, `IShopPurchaseExecutor`, `PurchaseShopOffer`, eine
+neutrale `IClock`-Default-Implementierung per `TryAddSingleton` sowie
+`ShopMigrationSource`. Die drei neuen History-Registrierungen sind scoped; der
+Registrierungsumfang umfasst damit 18 Services.
 
 Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory, API- und
 Worker-Komposition bleiben außerhalb des Shop-Moduls.
@@ -238,7 +286,8 @@ Erlaubte FlurNetz-Abhängigkeiten der Shop-Implementierung sind ausschließlich:
 ## Tests und bewusste Nicht-Ziele
 
 Unit- und Architekturtests sichern IDs, Event-Schema, immutable Purchase-Snapshots,
-Zeitkanonisierung, DI-Scope, Reference Graph und die drei Cross-Module-Capabilities.
+Zeitkanonisierung, Purchase-History-Cursor und -Seitengröße, DI-Scope, Reference Graph
+und die drei Cross-Module-Capabilities.
 
 Die PostgreSQL-Integrationstests prüfen zusätzlich:
 
@@ -260,6 +309,13 @@ Die PostgreSQL-Integrationstests prüfen zusätzlich:
 - unveränderliche historische Purchase-Snapshots nach späteren Katalogänderungen;
 - den tatsächlich beobachteten PostgreSQL-Lock-Wait einer Katalogmutation während eines
   laufenden Purchase-Snapshots.
+- den vollständigen Purchase-Lookup einschließlich aller Snapshot-Felder;
+- die isolierte, newest-first Kaufhistorie pro Identity;
+- deterministische Reihenfolge bei identischen `purchased_at`-Zeitpunkten über `id DESC`;
+- mehrseitige Keyset-Pagination ohne Duplikate und ohne ausgelassene Käufe;
+- `NextCursor` auf der letzten Seite und die leere History;
+- einen zwischen Seiten neu persistierten, zeitlich neueren Kauf ohne Rückwärtsbewegung
+  des bereits ausgegebenen Cursors.
 
 Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Roundtrip von
 `shop.purchase-completed` v1 über die bestehende explizite Messaging-Registry.
@@ -267,5 +323,5 @@ Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Rou
 Nicht enthalten sind API, Admin UI, Worker-Consumer, Warenkorb, variable Purchase-Menge, Stock,
 Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
 Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische Repositories,
-Inventory-Item-Instanzen, Titles-/Rewards-/Achievement-Ausführung oder eine generische
-`OfferTarget`-Abstraktion.
+generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/
+Achievement-Ausführung oder eine generische `OfferTarget`-Abstraktion.

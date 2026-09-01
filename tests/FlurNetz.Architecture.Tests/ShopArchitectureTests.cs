@@ -85,10 +85,16 @@ public sealed class ShopArchitectureTests
             typeof(AvailabilityWindow),
             typeof(ShopPurchase),
             typeof(IShopOfferStore),
+            typeof(IShopPurchaseHistoryStore),
             typeof(IShopPurchaseExecutor),
             typeof(PurchaseShopOffer),
+            typeof(GetShopPurchase),
+            typeof(ListShopPurchasesForIdentity),
+            typeof(ShopPurchaseHistoryCursor),
+            typeof(ShopPurchaseHistoryPage),
             typeof(PostgreSqlShopPurchaseExecutor),
             typeof(ShopOfferStore),
+            typeof(ShopPurchaseHistoryStore),
             typeof(ShopMigrationSource),
             typeof(ShopModule)
         };
@@ -125,6 +131,24 @@ public sealed class ShopArchitectureTests
     }
 
     [Fact]
+    public void ShopPurchaseHistoryApplicationBoundaryDoesNotLeakDatabaseTypes()
+    {
+        var methods = typeof(IShopPurchaseHistoryStore).GetMethods();
+
+        Assert.Equal(2, methods.Length);
+        Assert.All(
+            methods.SelectMany(method => method.GetParameters().Select(parameter => parameter.ParameterType)),
+            parameterType =>
+            {
+                Assert.NotEqual(typeof(DbConnection), parameterType);
+                Assert.NotEqual(typeof(DbTransaction), parameterType);
+                Assert.DoesNotContain("Npgsql", parameterType.FullName ?? string.Empty, StringComparison.Ordinal);
+                Assert.DoesNotContain("Dapper", parameterType.FullName ?? string.Empty, StringComparison.Ordinal);
+                Assert.DoesNotContain("FlurNetz.Persistence", parameterType.FullName ?? string.Empty, StringComparison.Ordinal);
+            });
+    }
+
+    [Fact]
     public void ShopMigrationKeepsCatalogV1AndAddsFocusedPurchaseV2()
     {
         var migrations = new ShopMigrationSource().GetMigrations().OrderBy(m => m.Version).ToArray();
@@ -154,21 +178,24 @@ public sealed class ShopArchitectureTests
     }
 
     [Fact]
-    public void ShopModuleRegistersCatalogPurchaseExecutorClockAndMigrationOnly()
+    public void ShopModuleRegistersCatalogPurchaseExecutorHistoryClockAndMigration()
     {
         var services = new ServiceCollection();
 
         var result = services.AddShopModule();
 
         Assert.Same(services, result);
-        Assert.Equal(15, services.Count);
+        Assert.Equal(18, services.Count);
         AssertService<IClock, SystemClock>(services, ServiceLifetime.Singleton);
         AssertService<IShopOfferStore, ShopOfferStore>(services, ServiceLifetime.Scoped);
+        AssertService<IShopPurchaseHistoryStore, ShopPurchaseHistoryStore>(services, ServiceLifetime.Scoped);
         AssertService<IShopPurchaseExecutor, PostgreSqlShopPurchaseExecutor>(services, ServiceLifetime.Scoped);
         AssertService<PurchaseShopOffer, PurchaseShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<CreateShopOffer, CreateShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<GetShopOffer, GetShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<ListShopOffers, ListShopOffers>(services, ServiceLifetime.Scoped);
+        AssertService<GetShopPurchase, GetShopPurchase>(services, ServiceLifetime.Scoped);
+        AssertService<ListShopPurchasesForIdentity, ListShopPurchasesForIdentity>(services, ServiceLifetime.Scoped);
         AssertService<RenameShopOffer, RenameShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<ChangeShopOfferDescription, ChangeShopOfferDescription>(services, ServiceLifetime.Scoped);
         AssertService<ChangeShopOfferPrice, ChangeShopOfferPrice>(services, ServiceLifetime.Scoped);

@@ -4,6 +4,20 @@
 
 ### Hinzugefügt
 
+- Read-only Purchase-History-Queries mit `GetShopPurchase` und
+  `ListShopPurchasesForIdentity` ergänzt. Einzelne Käufe werden über `ShopPurchaseId`
+  geladen; die identitätsgebundene Historie verwendet newest-first Keyset-Pagination über
+  `purchased_at DESC, id DESC` mit Page Size 1–100 und Default 50.
+- Implementation-eigenen `ShopPurchaseHistoryCursor`, `ShopPurchaseHistoryPage` und
+  gezielten `ShopPurchaseHistoryStore` mit Dapper ergänzt. Der Store liest ausschließlich
+  `shop_purchases`, verwendet den vorhandenen Identity-/Zeit-Index, rehydriert vollständige
+  Purchase-Snapshots und eröffnet für die beiden Reads weder zusätzliche Transaktionen noch
+  Locks. Eine weitere Shop-Migration oder Contracts-Erweiterung wurde nicht eingeführt.
+- Unit-, Architektur- und echte PostgreSQL-Integrationstests für Cursor-Validierung,
+  Identity-Bindung, Page Size, Rehydration, Isolation, gleiche Zeitstempel und
+  mehrseitige Keyset-Pagination ergänzt. Ein Cross-Page-Snapshot sowie API, Admin UI,
+  Worker-Consumer, variable Purchase-Menge, Cart, Stock, Discounts, Coupons und Refunds
+  bleiben ausgeschlossen.
 - Ersten atomaren Inventory-Shop-Kauf mit `PurchaseShopOffer`, serverseitiger
   `ShopPurchaseId` und global eindeutiger `ShopPurchaseRequestId` für Idempotenz ergänzt.
 - `Shop:2:CreateShopPurchases` mit `shop_purchases`, `shop_purchase_requests` und
