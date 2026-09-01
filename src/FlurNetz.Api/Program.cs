@@ -1,5 +1,12 @@
 using FlurNetz.Api.Endpoints;
+using FlurNetz.Messaging.Integration;
+using FlurNetz.Messaging.Migrations;
+using FlurNetz.Messaging.Persistence;
+using FlurNetz.Messaging.Serialization;
+using FlurNetz.Modules.Economy;
 using FlurNetz.Modules.Identity;
+using FlurNetz.Modules.Inventory;
+using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Modules.Shop;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
@@ -47,9 +54,31 @@ public sealed class Program
                 serviceProvider.GetRequiredService<IPostgreSqlConnectionFactory>(),
                 serviceProvider.GetServices<IMigrationSource>()));
 
-        // Das Modul registriert seine eigenen Use Cases, Adapter und Migrationsquelle.
+        // Die Module registrieren ihre Use Cases, Adapter und bestehenden Migrationsquellen.
         builder.Services.AddIdentityModule();
-        builder.Services.AddShopReadOnlyModule();
+        builder.Services.AddEconomyDebitCapability();
+        builder.Services.AddInventoryGrantCapability();
+        builder.Services.AddShopModule();
+
+        // Der API-Host ist in diesem Slice ausschließlich Producer. Es werden nur der vom
+        // Shop-Purchase erzeugte Contract und die dafür benötigten Outbox-Komponenten verdrahtet.
+        builder.Services.AddSingleton<IntegrationEventTypeRegistry>(_ =>
+        {
+            var registry = new IntegrationEventTypeRegistry();
+            registry.Register<ShopPurchaseCompletedIntegrationEvent>(
+                ShopPurchaseCompletedIntegrationEvent.MessageType,
+                ShopPurchaseCompletedIntegrationEvent.SchemaVersion);
+            return registry;
+        });
+        builder.Services.AddSingleton<IIntegrationEventTypeRegistry>(serviceProvider =>
+            serviceProvider.GetRequiredService<IntegrationEventTypeRegistry>());
+        builder.Services.AddSingleton<IntegrationEventJsonSerializer>(serviceProvider =>
+            new IntegrationEventJsonSerializer(
+                serviceProvider.GetRequiredService<IIntegrationEventTypeRegistry>()));
+        builder.Services.AddSingleton<IIntegrationEventSerializer>(serviceProvider =>
+            serviceProvider.GetRequiredService<IntegrationEventJsonSerializer>());
+        builder.Services.AddSingleton<IIntegrationEventPublisher, PostgreSqlOutboxPublisher>();
+        builder.Services.AddSingleton<IMigrationSource, MessagingMigrationSource>();
 
         var app = builder.Build();
 

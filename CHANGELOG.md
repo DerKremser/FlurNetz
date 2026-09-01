@@ -4,6 +4,32 @@
 
 ### Hinzugefügt
 
+- HTTP-Purchase-Endpunkt `POST /api/shop/offers/{offerId}/purchases` im bestehenden
+  `ShopEndpoints`-Vertical-Slice ergänzt. Der API-eigene Request enthält nur `requestId` und
+  `communityIdentityId`; bei Erfolg wird der vollständige bestehende `ShopPurchaseResponse`
+  mit `201 Created` und Location `/api/shop/purchases/{purchaseId}` geliefert.
+- Den vorhandenen `PurchaseShopOffer`-Flow als einzige Purchase-Fachlogik über HTTP erreichbar
+  gemacht. `ShopPurchaseRequestId` bleibt die globale Idempotenzgrenze; identische Requests
+  liefern dieselbe Purchase-ID und erzeugen keine zweiten Economy-, Inventory-, Purchase- oder
+  Outbox-Effekte.
+- Gezielte HTTP-ProblemDetails-Abbildung für ungültige Identifier (`400`), unbekanntes Offer oder
+  unbekannte Identity (`404`) sowie nicht kaufbare Offers, Kauflimit, Idempotenzkonflikt und
+  unzureichenden Economy-Saldo (`409`) ergänzt. Unerwartete Fehler bleiben `500`.
+- API-Producer-Runtime mit einer ausschließlich für `shop.purchase-completed` v1 registrierten
+  Integration-Event-Registry, Serializer, `PostgreSqlOutboxPublisher` und
+  `MessagingMigrationSource` verdrahtet. Der API-Host registriert weder OutboxProcessor,
+  Messaging-Worker noch Consumer.
+- `AddEconomyDebitCapability()` und `AddInventoryGrantCapability()` als schmale Runtime-
+  Registrierungen ergänzt; `AddEconomyModule()` und `AddInventoryModule()` behalten ihre
+  vollständige Komposition ohne doppelte Services.
+- API-Startup um die bestehenden Migrationen `Economy:1:CreateCommunityEconomies`,
+  `Inventory:1:CreateCommunityInventoryEntries` und `Messaging:1:CreateOutboxAndInbox`
+  erweitert. Es wurde keine neue Migration angelegt und keine bestehende Migration verändert.
+- Echte API-PostgreSQL-Integrationstests für bezahlte und kostenlose Purchases, Replay,
+  Idempotenzkonflikt, Fehler-Rollback, Kauflimit, Eingabevalidierung, Producer-only-Outbox und
+  vollständige API-Startup-Migrationen ergänzt. Economy-, Inventory-, Messaging- und
+  Migration-State wird zwischen API-Tests zurückgesetzt.
+
 - Shop-Runtime-Wiring im separaten Worker ergänzt: `shop.purchase-completed` v1 wird über
   `FlurNetz.Modules.Shop.Contracts` explizit registriert, ohne Referenz auf die Shop-
   Implementierung oder die Shop-Migrationen.
@@ -24,13 +50,13 @@
   `GET /api/shop/purchases/{purchaseId}` und die identity-isolierte Purchase-History.
   Die Storefront liefert ausschließlich enabled und aktuell verfügbare Angebote.
 - API-eigene DTOs sowie ein versionierter, opaker UTF-8-JSON-/Base64Url-Keyset-Cursor für die
-  Purchase-History ergänzt. Es gibt weiterhin keinen HTTP-Purchase-Endpunkt.
-- Getrennte `AddShopReadOnlyModule()`-Registration ergänzt; der API-Host registriert weder
-  Purchase-Executor noch Katalogmutationen und referenziert weiterhin weder Economy, Inventory,
-  Messaging noch Worker.
-- API-Startup führt zusätzlich zu Identity nun die vorhandenen Shop-Migrationen
-  `Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases` aus. Keine neue Shop-Migration
-  wurde eingeführt; beide bestehenden Migrationen und ihre SQL-Checksums bleiben unverändert.
+  Purchase-History ergänzt; Slice 7 erweitert diese HTTP-Grenze um den Purchase-POST.
+- Die interne `AddShopReadOnlyModule()`-Basis bleibt für Storefront-Hosts erhalten; der API-Host
+  verwendet für den vollständigen Purchase-Slice nun `AddShopModule()` und erzeugt weiterhin
+  keine Katalogmutations-Endpunkte.
+- API-Startup führt neben Identity und den beiden Shop-Migrationen nun auch die bestehenden
+  Economy-, Inventory- und Messaging-Migrationen aus. Keine neue Migration wurde eingeführt;
+  alle bestehenden Migrationen und ihre SQL-Checksums bleiben unverändert.
 - Unit-, Architektur- und echte PostgreSQL-API-Integrationstests für Storefront-Filterung,
   DTO-Abbildung, Purchase-Lookup, History-Isolation, Keyset-Roundtrip, Cursor-Validierung und
   API-Komposition ergänzt.
@@ -76,7 +102,8 @@
 - Interne Shop-Katalog-Use-Cases für Create, Get, List, Rename, Description-, Preis-, Availability- und Kauflimitänderungen sowie Enable/Disable und den gezielten `ShopOfferStore` ergänzt.
 - Kontrollierte `ShopOffer.Rehydrate`-Domainlösung sowie atomare Row-Lock-Mutationen über `SELECT FOR UPDATE` ergänzt.
 - Echte Shop-PostgreSQL-Integrationstests für Migration, exaktes Schema, DB-Constraints, Roundtrips und Nebenläufigkeit ergänzt.
-- API, Administration, Shop-Event-Consumer und Worker-Wiring bleiben im Purchase-Slice bewusst ausgeschlossen.
+- Administration, Katalogmutations-Endpunkte und ein fachlicher Shop-Event-Consumer bleiben
+  bewusst ausgeschlossen; der API-Producer und das separate Worker-Wiring sind vorhanden.
 - Ersten Shop-Foundation-Slice mit `ShopOffer`, `ShopPrice`, `AvailabilityWindow` und gezielten Domainmutationen für fachliche Shop-Angebote hinzugefügt.
 - Stabilen öffentlichen `ShopOfferId`-Contract und die gemeinsame Verwendung von `Inventory.Contracts.ItemDefinitionId` im Shop ergänzt.
 - Shop-Unit- und Architekturtests für Angebotsinvarianten, Zeitfenster, Aktivierung, Kauflimits und Modulgrenzen ergänzt.

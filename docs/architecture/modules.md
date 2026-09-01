@@ -87,8 +87,12 @@ und Debit ohne eigenen Commit. `Economy.Contracts` veröffentlicht ausschließli
 Credit; der Shop-Purchase verwendet Debit. Economy kennt keinen der Aufrufer und behält
 Domain-, Lock- und Tabellenownership vollständig selbst.
 
-Eine konkrete Währungsbezeichnung, Multi-Currency, Transfers, Ledger, Economy-eigenes
-Messaging und API gehören weiterhin nicht zum Slice. Details stehen in [economy.md](economy.md).
+`AddEconomyDebitCapability()` veröffentlicht für gemeinsame atomare Flows nur Store, Debit-
+Capability und die bestehende Migration; Credit und die normalen Application-Use-Cases bleiben
+dabei unregistriert. Der API-Host nutzt diese Capability ausschließlich innerhalb des Shop-
+Purchases und bietet keinen Economy-Endpunkt. Eine konkrete Währungsbezeichnung, Multi-Currency,
+Transfers, Ledger und Economy-eigenes Messaging gehören weiterhin nicht zum Slice. Details stehen
+in [economy.md](economy.md).
 
 ## Aktueller Stand des Rewards-Moduls
 
@@ -130,8 +134,11 @@ keinen Cross-Module-Foreign-Key.
 denselben transaction-aware Add-Kern und bewahrt dadurch Domain-, Row-Lock- und
 Sparse-Lifecycle. Shop ist der erste Aufrufer, Inventory kennt Shop jedoch nicht.
 
-Item-Katalog, Messaging, Rewards-Ausführung, API, Admin UI und Worker bleiben außerhalb des
-Inventory-Moduls. Details stehen in [inventory.md](inventory.md).
+`AddInventoryGrantCapability()` registriert für gemeinsame atomare Flows nur Store, Grant-
+Capability und die bestehende Migration; normale Add-/Remove-Use-Cases werden dabei nicht
+aktiviert. Der API-Host nutzt diese Capability ausschließlich innerhalb des Shop-Purchases und
+bietet keinen Inventory-Endpunkt. Item-Katalog, Messaging, Rewards-Ausführung, Admin UI und
+Worker bleiben außerhalb des Inventory-Moduls. Details stehen in [inventory.md](inventory.md).
 
 ## Aktueller Stand des Shop-Moduls
 
@@ -156,12 +163,13 @@ Ein Fehler rollt sämtliche Effekte gemeinsam zurück; ein identischer Request e
 einen Kauf.
 
 Shop referenziert dabei ausschließlich fremde Contracts, niemals fremde
-Implementierungsassemblies oder Tabellen. Der Shop ist nun über `FlurNetz.Api` read-only für
-Storefront-Angebote und Purchase-History erreichbar; HTTP-Purchase und Admin UI bleiben
-außerhalb dieses Slices. Der separate Worker referenziert für `shop.purchase-completed` v1 nur
-`Shop.Contracts`, kennt den Eventtyp explizit und registriert bewusst keinen fachlichen
-Consumer. Shop-Implementierung und Shop-Migrationen werden dort nicht geladen. Warenkorb,
-Stock, Discounts und Refunds bleiben ebenfalls außerhalb dieses Slices. Details stehen in
+Implementierungsassemblies oder Tabellen. `FlurNetz.Api` registriert `AddShopModule()` und
+stellt Storefront-, History- und `POST /api/shop/offers/{offerId}/purchases` bereit; interne
+Katalogmutationen und Admin UI erhalten keine HTTP-Endpunkte. Der separate Worker referenziert
+für `shop.purchase-completed` v1 nur `Shop.Contracts`, kennt den Eventtyp explizit und
+registriert bewusst keinen fachlichen Consumer. Shop-Implementierung und Shop-Migrationen werden
+dort nicht geladen. Warenkorb, Stock, Discounts und Refunds bleiben ebenfalls außerhalb dieses
+Slices. Details stehen in
 [shop.md](shop.md).
 
 ## Aktueller Stand des Titles-Moduls
@@ -283,10 +291,23 @@ Registrierung der tatsächlich vorhandenen Komponenten. Engagement nutzt dieselb
 für seinen Message-Recording-Slice und registriert Use Case, Repository, Migration und Uhr.
 Progression nutzt Domain, Application, einen atomaren Store, Migration, Consumer und Registrierung;
 der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy nutzt Domain,
-Application, einen atomaren Store, Migration und Registrierung; kein Host verdrahtet den Slice
-und es gibt keine öffentliche API. Rewards nutzt Domain, Application, gezielte Katalog- und
-Grant-Persistence, Migration und Registrierung; kein Host verdrahtet den Slice und es gibt
-keine öffentliche API. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; kein Host verdrahtet den Slice. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`, die Purchase-History-Stores, zwei unveränderte Migrationen sowie `ShopModule` mit getrennter Read-only-Registration; der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt. Der API-Host verdrahtet ausschließlich die Read-only-Registration. Der Worker kennt `shop.purchase-completed` v1 über `Shop.Contracts`, registriert aber keinen fachlichen Consumer und lädt weder die Shop-Implementierung noch ihre Migrationen. Titles nutzt Domain, Rehydration, Application, getrennte Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und Registrierung; Titles und Achievements sind nicht in API oder Worker verdrahtet. Die übrigen Implementierungs-Assemblies bleiben fachlich leer.
+Application, einen atomaren Store, Migration und Registrierung; der API-Host verdrahtet für den
+Shop-Purchase ausschließlich die schmale Debit-Capability, aber keine Economy-HTTP-Endpunkte.
+Rewards nutzt Domain, Application, gezielte Katalog- und Grant-Persistence, Migration und
+Registrierung; kein Host verdrahtet den Slice und es gibt keine öffentliche API. Inventory nutzt
+Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; der API-Host
+verdrahtet ausschließlich die schmale Grant-Capability innerhalb des Shop-Purchases und bietet
+keine Inventory-HTTP-Endpunkte. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`,
+die Purchase-History-Stores, zwei unveränderte Migrationen sowie `ShopModule` mit Read-Basis;
+der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt. Der API-Host verdrahtet
+`AddShopModule()`, mappt aber nur Storefront-, History- und Purchase-Endpunkte; interne
+Katalogmutationen erhalten keine HTTP-Routen. Der Worker kennt `shop.purchase-completed` v1 über
+`Shop.Contracts`, registriert aber keinen fachlichen Consumer und lädt weder die Shop-
+Implementierung noch ihre Migrationen. Titles nutzt Domain, Rehydration, Application, getrennte
+Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt
+Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und
+Registrierung; Titles und Achievements sind nicht in API oder Worker verdrahtet. Die übrigen
+Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
 darf den eigenen Contract, `Identity.Contracts` sowie die ausdrücklich erlaubten technischen
@@ -296,8 +317,9 @@ bleibt verboten. Economy darf `Identity.Contracts` und seinen eigenen öffentlic
 Capability-Contract verwenden; Rewards darf zusätzlich `Identity.Contracts` und
 `Economy.Contracts` verwenden und referenziert keine Economy-Implementierung. Inventory darf
 zusätzlich `Identity.Contracts` und die technische Persistence-Assembly verwenden; Rewards und
-Messaging bleiben verboten. Shop verwendet ausschließlich `Shop.Contracts`,
-`Inventory.Contracts` und die technische `FlurNetz.Persistence`-Assembly. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
+Messaging bleiben verboten. Shop verwendet `Shop.Contracts`, `Identity.Contracts`,
+`Economy.Contracts`, `Inventory.Contracts`, Messaging und die technische
+`FlurNetz.Persistence`-Assembly, aber keine fremde Modulimplementierung. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
 und die technische Persistence-Assembly verwenden; Achievements verwendet außerdem
 `FlurNetz.BuildingBlocks` für `IClock`. Messaging und alle fachlichen Modulimplementierungen bleiben
 verboten.

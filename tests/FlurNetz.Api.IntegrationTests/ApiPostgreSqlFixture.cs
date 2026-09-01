@@ -1,3 +1,4 @@
+using Npgsql;
 using Testcontainers.PostgreSql;
 
 namespace FlurNetz.Api.IntegrationTests;
@@ -30,6 +31,30 @@ public sealed class ApiPostgreSqlFixture : IAsyncLifetime
     /// <exception cref="InvalidOperationException">Wenn keine Testdatenbank verfügbar ist.</exception>
     public string ConnectionString => connectionString
         ?? throw new InvalidOperationException("The PostgreSQL test infrastructure is unavailable.");
+
+    /// <summary>
+    /// Entfernt alle fachlichen und technischen Zustände, die der API-Host in diesem Slice
+    /// beim Startup anlegt.
+    /// </summary>
+    public async Task ResetDatabaseAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = new NpgsqlCommand(
+            """
+            DROP TABLE IF EXISTS public.shop_purchase_requests;
+            DROP TABLE IF EXISTS public.shop_purchase_guards;
+            DROP TABLE IF EXISTS public.shop_purchases;
+            DROP TABLE IF EXISTS public.shop_offers;
+            DROP TABLE IF EXISTS public.community_inventory_entries;
+            DROP TABLE IF EXISTS public.community_economies;
+            DROP TABLE IF EXISTS public.community_identities;
+            DROP SCHEMA IF EXISTS flurnetz_messaging CASCADE;
+            DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
+            """,
+            connection);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     /// <inheritdoc />
     public async ValueTask InitializeAsync()

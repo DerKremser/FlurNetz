@@ -19,10 +19,23 @@ public static class InventoryModule
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddScoped<ICommunityInventoryStore, CommunityInventoryStore>();
-        services.AddScoped<IInventoryQuantityGrant, InventoryQuantityGrant>();
+        services.AddInventoryGrantCapability();
         services.AddScoped<AddInventoryQuantity>();
         services.AddScoped<RemoveInventoryQuantity>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registriert ausschließlich die transaction-aware Inventory-Grant-Fähigkeit und die
+    /// bestehende Inventory-Migrationsquelle.
+    /// </summary>
+    public static IServiceCollection AddInventoryGrantCapability(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddScoped<ICommunityInventoryStore, CommunityInventoryStore>();
+        services.AddScoped<IInventoryQuantityGrant, InventoryQuantityGrant>();
         services.AddSingleton<IMigrationSource, InventoryMigrationSource>();
 
         return services;

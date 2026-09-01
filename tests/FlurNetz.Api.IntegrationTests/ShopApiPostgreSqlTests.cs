@@ -13,7 +13,7 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
     : IClassFixture<ApiPostgreSqlFixture>
 {
     [Fact]
-    public async Task EmptyDatabaseStartupRunsIdentityAndShopMigrations()
+    public async Task EmptyDatabaseStartupRunsAllRegisteredMigrations()
     {
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
@@ -24,29 +24,41 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
             """
             SELECT
                 to_regclass('public.community_identities') IS NOT NULL
+                AND to_regclass('public.community_economies') IS NOT NULL
+                AND to_regclass('public.community_inventory_entries') IS NOT NULL
                 AND to_regclass('public.shop_offers') IS NOT NULL
-                AND to_regclass('public.shop_purchases') IS NOT NULL;
+                AND to_regclass('public.shop_purchases') IS NOT NULL
+                AND to_regclass('flurnetz_messaging.outbox_messages') IS NOT NULL
+                AND to_regclass('flurnetz_messaging.inbox_messages') IS NOT NULL;
             """,
             connection);
         await using var historyCommand = new NpgsqlCommand(
             """
-            SELECT owner, version
+            SELECT owner, version, name
             FROM flurnetz_persistence.migration_history
-            WHERE owner IN ('Identity', 'Shop')
+            WHERE owner IN ('Identity', 'Economy', 'Inventory', 'Messaging', 'Shop')
             ORDER BY owner, version;
             """,
             connection);
 
         Assert.True((bool)(await tableCommand.ExecuteScalarAsync(TestToken))!);
         await using var reader = await historyCommand.ExecuteReaderAsync(TestToken);
-        var history = new List<(string Owner, int Version)>();
+        var history = new List<(string Owner, long Version, string Name)>();
         while (await reader.ReadAsync(TestToken))
         {
-            history.Add((reader.GetString(0), reader.GetInt32(1)));
+            history.Add((reader.GetString(0), reader.GetInt64(1), reader.GetString(2)));
         }
 
         Assert.Equal(
-            new[] { ("Identity", 1), ("Shop", 1), ("Shop", 2) },
+            new[]
+            {
+                ("Economy", 1L, "CreateCommunityEconomies"),
+                ("Identity", 1L, "CreateCommunityIdentities"),
+                ("Inventory", 1L, "CreateCommunityInventoryEntries"),
+                ("Messaging", 1L, "CreateOutboxAndInbox"),
+                ("Shop", 1L, "CreateShopOffers"),
+                ("Shop", 2L, "CreateShopPurchases")
+            },
             history);
     }
 
@@ -479,7 +491,7 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
     }
 
     [Fact]
-    public async Task PurchaseWriteRouteIsNotExposed()
+    public async Task PurchaseWriteRouteRejectsMissingBody()
     {
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
@@ -491,7 +503,7 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
             content: null,
             TestToken);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private async Task<FlurNetzApiFactory> StartHostAsync()
@@ -570,18 +582,7 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
 
     private async Task ResetDatabaseAsync()
     {
-        await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(
-            """
-            DROP TABLE IF EXISTS public.shop_purchase_requests;
-            DROP TABLE IF EXISTS public.shop_purchase_guards;
-            DROP TABLE IF EXISTS public.shop_purchases;
-            DROP TABLE IF EXISTS public.shop_offers;
-            DROP TABLE IF EXISTS public.community_identities;
-            DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
-            """,
-            connection);
-        await command.ExecuteNonQueryAsync(TestToken);
+        await database.ResetDatabaseAsync(TestToken);
     }
 
     private async Task<NpgsqlConnection> OpenConnectionAsync()

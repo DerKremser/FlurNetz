@@ -1,9 +1,14 @@
 using System.Data.Common;
 using System.Reflection;
+using FlurNetz.Modules.Economy;
 using FlurNetz.Modules.Economy.Application;
 using FlurNetz.Modules.Economy.Contracts;
 using FlurNetz.Modules.Economy.Domain;
+using FlurNetz.Modules.Economy.Migrations;
+using FlurNetz.Modules.Economy.Persistence;
 using FlurNetz.Modules.Identity.Contracts;
+using FlurNetz.Persistence.Migrations;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FlurNetz.Architecture.Tests;
 
@@ -107,6 +112,41 @@ public sealed class EconomyArchitectureTests
         Assert.Equal(typeof(Task<EconomyBalance>), method!.ReturnType);
     }
 
+    [Fact]
+    public void EconomyDebitCapabilityRegistersOnlyDebitRuntimeAndMigration()
+    {
+        var services = new ServiceCollection();
+
+        var result = services.AddEconomyDebitCapability();
+
+        Assert.Same(services, result);
+        Assert.Equal(3, services.Count);
+        AssertService<ICommunityEconomyStore, CommunityEconomyStore>(services, ServiceLifetime.Scoped);
+        AssertService<IEconomyBalanceDebit, EconomyBalanceDebit>(services, ServiceLifetime.Scoped);
+        AssertService<IMigrationSource, EconomyMigrationSource>(services, ServiceLifetime.Singleton);
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType == typeof(IEconomyBalanceCredit)
+                || descriptor.ServiceType == typeof(CreditEconomyBalance)
+                || descriptor.ServiceType == typeof(DebitEconomyBalance));
+    }
+
+    [Fact]
+    public void EconomyModuleKeepsItsCompleteRuntimeComposition()
+    {
+        var services = new ServiceCollection();
+
+        var result = services.AddEconomyModule();
+
+        Assert.Same(services, result);
+        Assert.Equal(6, services.Count);
+        AssertService<ICommunityEconomyStore, CommunityEconomyStore>(services, ServiceLifetime.Scoped);
+        AssertService<IEconomyBalanceDebit, EconomyBalanceDebit>(services, ServiceLifetime.Scoped);
+        AssertService<IEconomyBalanceCredit, EconomyBalanceCredit>(services, ServiceLifetime.Scoped);
+        AssertService<CreditEconomyBalance, CreditEconomyBalance>(services, ServiceLifetime.Scoped);
+        AssertService<DebitEconomyBalance, DebitEconomyBalance>(services, ServiceLifetime.Scoped);
+        AssertService<IMigrationSource, EconomyMigrationSource>(services, ServiceLifetime.Singleton);
+    }
+
     private static string[] GetFlurNetzReferences(Assembly assembly) => assembly
         .GetReferencedAssemblies()
         .Select(reference => reference.Name)
@@ -114,4 +154,14 @@ public sealed class EconomyArchitectureTests
         .Select(name => name!)
         .Order(StringComparer.Ordinal)
         .ToArray();
+
+    private static void AssertService<TService, TImplementation>(
+        IServiceCollection services,
+        ServiceLifetime lifetime)
+        where TImplementation : TService
+    {
+        var descriptor = Assert.Single(services, service => service.ServiceType == typeof(TService));
+        Assert.Equal(typeof(TImplementation), descriptor.ImplementationType);
+        Assert.Equal(lifetime, descriptor.Lifetime);
+    }
 }

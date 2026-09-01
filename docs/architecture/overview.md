@@ -41,7 +41,8 @@ exakt auf null reduziert, löscht der Store die Zeile, sodass die Persistenz spa
 `Inventory.Contracts` enthält `ItemDefinitionId` und die schmale transaction-aware
 `IInventoryQuantityGrant`-Capability. Der Shop-Purchase verwendet diese Fähigkeit innerhalb
 seiner eigenen PostgreSQL-Transaktion; Inventory kennt Shop nicht. Messaging, Reward-Ausführung,
-Item-Katalog, API und Worker gehören weiterhin nicht zum Inventory-Slice. Details stehen in
+Item-Katalog und eigene Inventory-HTTP-Endpunkte gehören weiterhin nicht zum Inventory-Slice;
+die API nutzt die Grant-Capability ausschließlich im atomaren Shop-Purchase. Details stehen in
 [inventory.md](inventory.md).
 
 Titles hält mit `CommunityTitles` die freigeschalteten `TitleDefinitionId`-Werte genau einer
@@ -70,8 +71,11 @@ transaction-aware Economy-Debit, Inventory-Grant um exakt eins, Purchase-Write u
 Identische Requests erzeugen exakt einen Effekt; Fehler rollen alle Teilwirkungen gemeinsam
 zurück. Shop verwendet dafür ausschließlich `Identity.Contracts`, `Economy.Contracts`,
 `Inventory.Contracts`, Messaging, Persistence und BuildingBlocks, niemals fremde
-Implementierungen oder Tabellen. API und Administration bleiben außerhalb dieses Slices. Der
-separate Worker kennt `shop.purchase-completed` v1 über `Shop.Contracts`, registriert aber
+Implementierungen oder Tabellen. Die API stellt Storefront-, History- und
+`POST /api/shop/offers/{offerId}/purchases` bereit, verwendet dafür `AddShopModule()` sowie
+schmale Economy-/Inventory-Capabilities und bietet keine Katalogmutations- oder
+Administrations-Endpunkte. Der API-Host produziert `shop.purchase-completed` v1 in die Outbox;
+der separate Worker kennt das Event über `Shop.Contracts`, registriert aber
 bewusst keinen fachlichen Consumer; Shop-Implementierung und Shop-Migrationen werden dort nicht
 geladen. Warenkorb, Stock, Discounts und Refunds bleiben ebenfalls außerhalb dieses Slices.
 Details stehen in
@@ -79,7 +83,7 @@ Details stehen in
 
 Streamer.bot wird später als externer Adapter behandelt und lädt keine internen FlurNetz-Assemblies. Interne FlurNetz-Projekte verwenden .NET 10. PostgreSQL ist die primäre relationale Datenbank; die technische Grundlage dafür liegt in `FlurNetz.Persistence` mit Npgsql und Dapper.
 
-Die technische Messaging Foundation ist jetzt in `FlurNetz.Messaging` implementiert. Sie trennt interne Domain Events von Integration Events, bietet einen In-Process-Dispatcher sowie eine PostgreSQL-Outbox und Inbox mit Retry, Poison-Status und Deduplizierung. Der erste reale Einsatz führt Engagement-Aktivität und Outbox atomar zusammen und verarbeitet das Event über `FlurNetz.Worker`, `OutboxProcessor` und den Progression-Consumer. Die Foundation bleibt fachlich neutral und referenziert kein Modul; der Worker ist eine separate Composition Root. Details stehen in [messaging.md](messaging.md) und [worker.md](worker.md).
+Die technische Messaging Foundation ist jetzt in `FlurNetz.Messaging` implementiert. Sie trennt interne Domain Events von Integration Events, bietet einen In-Process-Dispatcher sowie eine PostgreSQL-Outbox und Inbox mit Retry, Poison-Status und Deduplizierung. Der API-Host besitzt für den Shop-Purchase eine producer-only Registry-/Serializer-/Outbox-Runtime und verarbeitet die Outbox nicht selbst. Der erste reale Consumer-Workflow führt Engagement-Aktivität und Outbox atomar zusammen und verarbeitet das Event über `FlurNetz.Worker`, `OutboxProcessor` und den Progression-Consumer. Die Foundation bleibt fachlich neutral und referenziert kein Modul; der Worker ist eine separate Composition Root. Details stehen in [messaging.md](messaging.md) und [worker.md](worker.md).
 
 `FlurNetz.BuildingBlocks` ist bewusst minimal gehalten und enthält ausschließlich domain-neutrale Primitives. Es gibt dort keine fachlichen Modelle, Generic Repositories oder fachlichen Services. Die Architekturtests sichern die heute prüfbaren Projekt- und Namespace-Grenzen automatisiert ab.
 

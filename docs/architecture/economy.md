@@ -93,6 +93,21 @@ Der PostgreSQL-Adapter verwendet ausschließlich parametrisiertes Dapper-SQL.
 Es gibt keine Identity-Abfrage, keine Zeitspalten, keine Economy-ID und kein
 Ledger oder History-Modell.
 
+## Capability-Registrierung
+
+`AddEconomyDebitCapability()` ist die schmale Composition für einen aufrufenden atomaren
+Purchase. Sie registriert ausschließlich:
+
+- `ICommunityEconomyStore` → `CommunityEconomyStore`
+- `IEconomyBalanceDebit` → `EconomyBalanceDebit`
+- `EconomyMigrationSource` als `IMigrationSource`
+
+Damit werden weder `IEconomyBalanceCredit`, `CreditEconomyBalance` noch der normale
+`DebitEconomyBalance`-Use-Case aktiviert. `AddEconomyModule()` baut weiterhin auf dieser
+Capability auf und ergänzt die vollständige Credit-/Debit-Application-Komposition. Der API-
+Host verwendet nur `AddEconomyDebitCapability()`; er stellt keinen Economy-HTTP-Endpunkt bereit
+und ändert weder Economy-Fachlogik noch Migration.
+
 ## Bewusst nicht vorweggenommen
 
 Der technische und fachliche Saldo wird zunächst neutral modelliert. Eine
@@ -124,8 +139,9 @@ Store und damit an dieselbe Domain-, Row-Lock- und SQL-Logik.
 
 Es gibt weiterhin kein Economy-eigenes Messaging, keine Inbox/Outbox und keine Domain- oder
 Integration Events. Ebenso sind keine Transfers, kein Ledger, keine Multi-Currency-Struktur,
-keine Shop-Produktlogik und keine API-Anbindung Bestandteil des Economy-Moduls. Der Worker
-bleibt unverändert.
+keine Shop-Produktlogik Bestandteil des Economy-Moduls. Die API nutzt den neutralen Debit-
+Contract ausschließlich als Teil der atomaren Shop-Purchase-Transaktion; sie bietet keine
+Economy-HTTP-Endpunkte. Der Worker bleibt unverändert.
 
 Die fachfremden Referenzen der Economy-Implementierung sind
 `FlurNetz.Modules.Identity.Contracts` und `FlurNetz.Persistence`. Eine Referenz

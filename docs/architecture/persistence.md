@@ -111,11 +111,14 @@ Cross-Module-Foreign-Key. Der Purchase-Executor verwendet einen `FOR SHARE`-Lock
 Angebot und einen `FOR UPDATE`-Guard pro Offer/Identity, bevor er die transaction-aware
 Capabilities der fremden Module aufruft.
 
-Die API verwendet für den Shop keine eigene Connection- oder SQL-Infrastruktur. Ihre
-Read-only-Registration greift über die bestehenden Shop-Stores auf die vorhandenen Tabellen
-zu; der API-eigene opaque History-Cursor wird ausschließlich im HTTP-Adapter kodiert. Es gibt
-keine Cursor- oder API-Tabelle, keine neue Shop-Migration und keine Änderung an den SQL-Texten
-oder Checksums von `Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases`.
+Die API verwendet für den Shop keine eigene Connection- oder SQL-Infrastruktur. Ihr
+`AddShopModule()`-Wiring greift über die bestehenden Shop-Stores und den unveränderten Purchase-
+Executor auf die vorhandenen Tabellen zu; die Economy-/Inventory-Capabilities bleiben schmal,
+und der API-eigene opaque History-Cursor wird ausschließlich im HTTP-Adapter kodiert. Es gibt
+keine Cursor- oder API-Tabelle, keine neue Migration und keine Änderung an den SQL-Texten oder
+Checksums von `Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases`. Der API-Host schreibt
+`shop.purchase-completed` v1 als Teil derselben Purchase-Transaktion in die Outbox, verarbeitet
+die Nachricht aber nicht selbst.
 
 ## Tests
 
@@ -131,8 +134,9 @@ Docker muss für diese Testvariante verfügbar sein; alternativ kann
 realen Identity-, Economy-, Inventory- und Messaging-Adapter: erfolgreicher gemeinsamer
 Commit, Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und
 vollständiger Rollback bei unzureichendem Saldo.
-`FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, die Identity- und
-beiden Shop-Migrationen, die read-only Offer-Storefront, vollständige DTO-Abbildung, Purchase-
-Lookup sowie identity-isolierte newest-first History mit mehrseitigem API-Keyset-Cursor und
-allen definierten Fehlerfällen. Die Testdaten werden mangels Admin-Write-API kontrolliert direkt
-in der isolierten PostgreSQL-Testdatenbank angelegt.
+`FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, alle sechs
+registrierten Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen, die read-only
+Offer-Storefront, vollständige DTO-Abbildung, den HTTP-Purchase mit Snapshot, Location,
+Idempotenz, Fehler-Rollback und Producer-only-Outbox sowie den Purchase-Lookup und die
+identity-isolierte newest-first History mit mehrseitigem API-Keyset-Cursor. Die Testdaten werden
+mangels Admin-Write-API kontrolliert direkt in der isolierten PostgreSQL-Testdatenbank angelegt.

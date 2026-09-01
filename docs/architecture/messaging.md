@@ -81,6 +81,22 @@ consumerlose Erfolgssemantik greift.
 Die Worker-spezifischen Idle-/Failure-Delays und der Scope pro Batch gehören zum Host, nicht
 zur Foundation. Message-Level-Retry und Lease-Semantik bleiben beim Processor.
 
+## API als Producer-Host
+
+Der API-Host besitzt für den HTTP-Purchase eine bewusst schmale Producer-Runtime. Er registriert
+explizit ausschließlich `ShopPurchaseCompletedIntegrationEvent` mit den Contract-Konstanten
+`MessageType = "shop.purchase-completed"` und `SchemaVersion = 1`. Dazu kommen genau die
+`IntegrationEventTypeRegistry`, `IntegrationEventJsonSerializer`,
+`IIntegrationEventSerializer`, `IIntegrationEventPublisher` als
+`PostgreSqlOutboxPublisher` sowie `MessagingMigrationSource`. Die `IClock`-Instanz kommt aus
+dem `AddShopModule()`-Wiring.
+
+Der API-Prozess registriert keinen `OutboxProcessor`, keinen Messaging-Worker, keinen
+Hosted-Service, keinen Inbox-Handler und keinen Shop-Consumer. Ein erfolgreicher
+`POST /api/shop/offers/{offerId}/purchases` schreibt das unveränderte
+`shop.purchase-completed` v1 als `pending` in die Outbox; der separate Worker ist für die
+spätere Verarbeitung zuständig.
+
 ## Migrationen und Tests
 
 `MessagingMigrationSource` registriert die technischen Tabellen unter dem eindeutigen Migration-Owner `Messaging` beim vorhandenen SQL-first `MigrationRunner`. Es gibt keine fachlichen Migrationen.
@@ -124,7 +140,7 @@ Die `ShopPurchaseRequestId` gehört nicht in die Event-Payload; sie wird als tec
 `CorrelationId` des Envelopes verwendet. Die fachliche Payload enthält ausschließlich den
 unveränderlichen Kauf-Snapshot.
 
-Slice 6 macht den Eventtyp im Worker explizit bekannt, ergänzt aber bewusst keinen Consumer.
+Der Worker macht den Eventtyp explizit bekannt, ergänzt aber bewusst keinen Consumer.
 Der Worker verarbeitet eine gültige `shop.purchase-completed`-Nachricht deshalb erfolgreich
 ohne Inbox-Eintrag. Ein späterer echter Consumer muss seinen Eventtyp und seine stabile
 Consumer-Identity ausdrücklich registrieren und kann dann die vorhandene Inbox-/Retry-

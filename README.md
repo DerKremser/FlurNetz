@@ -1,8 +1,8 @@
 # FlurNetz
 
 FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice, den persistierten Shop-Angebotskatalog,
-den ersten atomaren Shop-Inventory-Kauf, die read-only persistierte Shop-Kaufhistorie, die
-read-only Shop-HTTP-API sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist
+den ersten atomaren Shop-Inventory-Kauf, die persistierte Shop-Kaufhistorie, die Shop-HTTP-API
+mit read-only Storefront und HTTP-Purchase sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist
 Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet
 werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger,
 Titles-API, Achievement-Runtime-Trigger, Shop-Administration, fachliche Shop-Event-Consumer und
@@ -126,9 +126,10 @@ wird die Zeile gelöscht; Remove auf einer fehlenden Position erzeugt keine Null
 `Inventory:1:CreateCommunityInventoryEntries` erzwingt zusätzlich `quantity >= 0` und besitzt
 keinen Cross-Module-Foreign-Key.
 
-`FlurNetz.Modules.Inventory.Contracts` enthält ausschließlich den gemeinsam verwendeten,
-stabilen Fachtyp `ItemDefinitionId`. Messaging, Rewards-/Shop-Anbindung, Item-Katalog, API,
-Admin UI und Worker sind weiterhin nicht Bestandteil dieses Slices. Details stehen in
+`FlurNetz.Modules.Inventory.Contracts` enthält den stabilen Fachtyp `ItemDefinitionId` und die
+caller-neutrale `IInventoryQuantityGrant`-Capability. Messaging, ein Item-Katalog, Inventory-
+Endpunkte, Admin UI und Worker-Anbindung bleiben außerhalb des Inventory-Moduls; die API nutzt
+die Grant-Capability ausschließlich im atomaren Shop-Purchase. Details stehen in
 [docs/architecture/inventory.md](docs/architecture/inventory.md).
 
 ## Titles Vertical Slice
@@ -165,7 +166,7 @@ erfolgreiche Write gewinnt; ein Duplicate überschreibt den ursprünglichen Zeit
 Rewards-, Economy-, Inventory-, Titles-, Shop-, API- oder Worker-Anbindung. Details stehen in
 [docs/architecture/achievements.md](docs/architecture/achievements.md).
 
-## Shop Foundation, atomarer Purchase und read-only Kaufhistorie
+## Shop Foundation, atomarer Purchase, Kaufhistorie und HTTP-API
 
 `FlurNetz.Modules.Shop` enthält neben dem fachlichen Angebotsfundament und dem vollständig
 persistierten Katalog jetzt den ersten atomaren Inventory-Kauf und eine read-only
@@ -206,26 +207,32 @@ Datensätze und rehydriert den vollständigen Snapshot aus `shop_purchases`. Die
 eröffnen keine zusätzliche Transaktion und keine Locks; es gibt keinen Cross-Page-Snapshot.
 Unbekannte oder historisch leere Identities liefern eine leere Seite ohne Cursor.
 
-Der Shop ist erstmals read-only über `FlurNetz.Api` erreichbar. `GET /api/shop/offers` und
-`GET /api/shop/offers/{offerId}` zeigen ausschließlich aktivierte Angebote, deren
-`AvailabilityWindow` zum einmal ermittelten aktuellen Zeitpunkt sichtbar ist. Die API bildet
-Offers und Purchases in eigene DTOs ab; `GET /api/shop/purchases/{purchaseId}` sowie
-`GET /api/shop/identities/{communityIdentityId}/purchases` machen den vollständigen Purchase-
-Snapshot und die identitätsisolierte History lesbar. Die History verwendet dafür einen
-versionierten, API-eigenen opaken Base64Url-Keyset-Cursor. Es gibt weiterhin keinen
-HTTP-Purchase-Endpunkt. Der interne Shop-Purchase bleibt vorhanden. Der Worker kennt
-`shop.purchase-completed` v1 ausschließlich über `Shop.Contracts`, verarbeitet den bekannten
-Eventtyp aktuell aber ohne fachlichen Consumer; dabei entsteht kein Inbox-Eintrag. Ein späterer
-Consumer und ein eventueller historischer Backfill sind separate Anforderungen. Ein HTTP-Purchase
-folgt erst in einem separaten späteren Slice.
+Die API stellt weiterhin die read-only Storefront und Purchase-History bereit und ergänzt
+`POST /api/shop/offers/{offerId}/purchases`. Der API-eigene Request enthält ausschließlich
+`requestId` und `communityIdentityId`; als Erfolg liefert der Adapter den vollständigen
+`ShopPurchaseResponse` mit `201 Created` und der Location
+`/api/shop/purchases/{purchaseId}`. Die `ShopPurchaseRequestId` liefert die globale
+Idempotenzgrenze: Ein identischer Request gibt dieselbe Purchase-ID zurück und belastet Economy,
+Inventory, Purchase- und Outbox-Persistenz nur einmal.
+
+Der POST-Adapter validiert nur Route und Request, erzeugt daraus die vorhandenen fachlichen IDs
+und ruft `PurchaseShopOffer` auf. Der atomare bestehende Shop-Flow bleibt die einzige Stelle für
+Identity-Prüfung, Offer-Snapshot, Kauflimit, Economy-Debit, Inventory-Grant, Purchase und Outbox.
+Bekannte Client-/Fachfehler werden als `400`, `404` oder `409` ProblemDetails abgebildet;
+unerwartete Fehler bleiben `500`. Der API-Host ist dafür ein reiner Shop-Event-Producer: Er
+registriert `shop.purchase-completed` v1 und schreibt die Nachricht als Teil des Purchases in
+die Outbox, führt aber keinen Processor oder Consumer aus. Der separate Worker kennt den Eventtyp
+weiterhin über `Shop.Contracts`, verarbeitet ihn ohne fachlichen Shop-Consumer und erzeugt dabei
+keinen Inbox-Eintrag. Ein späterer Consumer und ein eventueller historischer Backfill sind separate
+Anforderungen.
 
 Echte PostgreSQL-Integrationstests prüfen zusätzlich erfolgreichen gemeinsamen Commit,
 Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und vollständigen
 Rollback bei unzureichendem Saldo sowie Lookup, Identity-Isolation, newest-first-Reihenfolge
 und mehrseitige History-Pagination ohne Duplikate oder ausgelassene Käufe. Die API-Integration
 prüft zusätzlich Storefront-Filterung, DTO-Abbildung, Cursor-Roundtrip und Fehlerfälle.
-Administration, fachlicher Shop-Event-Consumer, HTTP-Purchase, Warenkorb, variable Purchase-Menge, Stock,
-Discounts, Coupons, Refunds und Purchase-Cancellation bleiben außerhalb dieses Slices. Details
+Administration, Katalogmutations-Endpunkte, Warenkorb, variable Purchase-Menge, Stock, Discounts,
+Coupons, Refunds und Purchase-Cancellation bleiben außerhalb dieses Slices. Details
 stehen in
 [docs/architecture/shop.md](docs/architecture/shop.md).
 
@@ -240,25 +247,29 @@ Der Shop-Purchase koordiniert Request-, Guard- und Purchase-Writes mit Identity-
 Economy-Debit, Inventory-Grant und Outbox in einer zweiten konkreten gemeinsamen
 PostgreSQL-Transaktion. Die read-only Kaufhistorie nutzt dagegen gezielte Einzel-Reads gegen
 `shop_purchases` ohne zusätzliche Transaktion, Locks, Identity-Existenzprüfung oder neue
-Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; Rewards, Inventory, Titles und Achievements sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert, Rewards, Inventory, Titles und Achievements besitzen weder API noch Worker-Trigger. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; der API-Host bindet für den Shop-Purchase nur Economy-Debit- und Inventory-Grant-Capabilities ein, nicht die vollständigen fachlichen HTTP-Module. Rewards, Titles und Achievements sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert, Inventory besitzt keinen eigenen HTTP-Endpunkt. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
-Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests, bleibt aber ohne Host- oder API-Verdrahtung. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store,
+Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests; der API-Host nutzt daraus ausschließlich die schmale Debit-Capability im Shop-Purchase und bietet keinen Economy-Endpunkt. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store,
 eigener Migration und Sparse-Zero-Lifecycle und veröffentlicht jetzt zusätzlich die schmale
 caller-neutrale `IInventoryQuantityGrant`-Capability für gemeinsame Transaktionen. Titles ergänzt nun zusätzlich zu Rehydration und Community-State einen persistierten Definitionskatalog mit `TitleDefinition`, internen Create/Get/List/Rename/Description-Use-Cases, `Titles:2:CreateTitleDefinitions`, Row-Locking und echten Katalog-Concurrency-Tests. Achievements ergänzt einen persistierten Definitionskatalog und permanente, atomare, idempotente Community-Unlocks mit eigener Migration und Concurrency-Tests. Shop besitzt mit `Shop:1:CreateShopOffers` den persistierten Angebotskatalog und mit
 `Shop:2:CreateShopPurchases` den ersten atomaren Inventory-Purchase inklusive Idempotenz,
 Kauflimit, Economy-Debit, Inventory-Grant, Purchase-Persistenz, Outbox und gezielten
-read-only History-Queries mit Keyset-Pagination. Der Shop ist über die API read-only für
-Storefront-Angebote und Purchase-History erreichbar; HTTP-Purchase und Administration bleiben
-ausgeschlossen. Der Worker kennt das Shop-Event über `Shop.Contracts`, registriert aber keinen
-fachlichen Consumer. Der erste
+read-only History-Queries mit Keyset-Pagination. Der Shop ist über die API für Storefront-
+Angebote, Purchase-History und `POST /api/shop/offers/{offerId}/purchases` erreichbar. Der
+Purchase-Request enthält nur `requestId` und `communityIdentityId`; der bestehende
+`ShopPurchaseResponse` wird mit `201 Created` und Purchase-Location geliefert. Die
+`ShopPurchaseRequestId` bildet die globale Idempotenzgrenze. Der API-Host ist Producer für
+`shop.purchase-completed` v1 und verarbeitet die Outbox nicht selbst. Der Worker kennt das
+Shop-Event über `Shop.Contracts`, registriert aber keinen fachlichen Consumer. Administration,
+Katalogmutations-Endpunkte bleiben ausgeschlossen. Der erste
 Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist
 kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
 ## Lokale API-Ausführung
 
-Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die Identity- und beide vorhandenen Shop-Migrationen beim Start aus. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
+Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die sechs bestehenden Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen beim Start aus. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
 
 ```text
 dotnet user-secrets set "ConnectionStrings:FlurNetz" "Host=localhost;Port=5432;Database=<datenbank>;Username=<benutzer>;Password=<passwort>" --project src/FlurNetz.Api

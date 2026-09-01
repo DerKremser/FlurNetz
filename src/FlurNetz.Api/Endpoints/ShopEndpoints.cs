@@ -1,6 +1,7 @@
 using System.Globalization;
 using FlurNetz.Api.Contracts;
 using FlurNetz.Api.Cursors;
+using FlurNetz.Modules.Economy.Domain;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Shop.Application;
 using FlurNetz.Modules.Shop.Contracts;
@@ -12,12 +13,12 @@ using Microsoft.AspNetCore.Routing;
 namespace FlurNetz.Api.Endpoints;
 
 /// <summary>
-/// Ordnet die read-only HTTP-Grenze des Shop-Vertical-Slices zu.
+/// Ordnet die HTTP-Grenze des Shop-Vertical-Slices zu.
 /// </summary>
 public static class ShopEndpoints
 {
     /// <summary>
-    /// Registriert ausschließlich die öffentlichen Shop-Leseendpunkte.
+    /// Registriert die öffentlichen Shop-Leseendpunkte und den Purchase-Endpunkt.
     /// </summary>
     public static IEndpointRouteBuilder MapShopEndpoints(this IEndpointRouteBuilder endpoints)
     {
@@ -25,12 +26,104 @@ public static class ShopEndpoints
 
         endpoints.MapGet("/api/shop/offers", ListAvailableShopOffersAsync);
         endpoints.MapGet("/api/shop/offers/{offerId}", GetAvailableShopOfferAsync);
+        endpoints.MapPost(
+            "/api/shop/offers/{offerId}/purchases",
+            PurchaseShopOfferAsync);
         endpoints.MapGet("/api/shop/purchases/{purchaseId}", GetShopPurchaseAsync);
         endpoints.MapGet(
             "/api/shop/identities/{communityIdentityId}/purchases",
             ListShopPurchasesForIdentityAsync);
 
         return endpoints;
+    }
+
+    private static async Task<IResult> PurchaseShopOfferAsync(
+        string offerId,
+        PurchaseShopOfferRequest? request,
+        PurchaseShopOffer useCase,
+        CancellationToken cancellationToken)
+    {
+        if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
+        {
+            return InvalidRequest("Die Route-ID des Shop-Angebots ist ungültig.");
+        }
+
+        if (request is null)
+        {
+            return InvalidRequest("Der Request-Body ist erforderlich.");
+        }
+
+        if (!TryCreateId(
+                request.RequestId,
+                ShopPurchaseRequestId.Create,
+                out var validRequestId))
+        {
+            return InvalidRequest("Die Request-ID des Shop-Purchases ist ungültig.");
+        }
+
+        if (!TryCreateId(
+                request.CommunityIdentityId,
+                CommunityIdentityId.Create,
+                out var validCommunityIdentityId))
+        {
+            return InvalidRequest("Die Community-Identity-ID ist ungültig.");
+        }
+
+        try
+        {
+            var purchase = await useCase.ExecuteAsync(
+                    validRequestId,
+                    validOfferId,
+                    validCommunityIdentityId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            return Results.Created(
+                $"/api/shop/purchases/{purchase.Id.Value}",
+                ToResponse(purchase));
+        }
+        catch (ShopOfferNotFoundException exception)
+        {
+            return Problem(
+                StatusCodes.Status404NotFound,
+                "Shop-Angebot nicht gefunden.",
+                exception.Message);
+        }
+        catch (ShopPurchaseIdentityNotFoundException exception)
+        {
+            return Problem(
+                StatusCodes.Status404NotFound,
+                "Community-Identität nicht gefunden.",
+                exception.Message);
+        }
+        catch (ShopOfferUnavailableForPurchaseException exception)
+        {
+            return Problem(
+                StatusCodes.Status409Conflict,
+                "Shop-Angebot nicht kaufbar.",
+                exception.Message);
+        }
+        catch (ShopPurchaseLimitExceededException exception)
+        {
+            return Problem(
+                StatusCodes.Status409Conflict,
+                "Kauflimit erreicht.",
+                exception.Message);
+        }
+        catch (ShopPurchaseIdempotencyConflictException exception)
+        {
+            return Problem(
+                StatusCodes.Status409Conflict,
+                "Idempotenzkonflikt.",
+                exception.Message);
+        }
+        catch (InsufficientEconomyBalanceException exception)
+        {
+            return Problem(
+                StatusCodes.Status409Conflict,
+                "Economy-Saldo nicht ausreichend.",
+                exception.Message);
+        }
     }
 
     private static async Task<IResult> ListAvailableShopOffersAsync(
@@ -175,8 +268,23 @@ public static class ShopEndpoints
         }
     }
 
+    private static bool TryCreateId<TId>(
+        Guid rawId,
+        Func<Guid, TId> create,
+        out TId id)
+    {
+        id = default!;
+        return rawId != Guid.Empty
+            && TryCreate(rawId, create, out id);
+    }
+
     private static IResult InvalidRequest(string detail) => Results.Problem(
         statusCode: StatusCodes.Status400BadRequest,
         title: "Ungültige Anfrage.",
+        detail: detail);
+
+    private static IResult Problem(int statusCode, string title, string detail) => Results.Problem(
+        statusCode: statusCode,
+        title: title,
         detail: detail);
 }

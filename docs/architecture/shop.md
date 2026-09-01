@@ -1,4 +1,4 @@
-# Shop – Katalog, atomarer Inventory-Kauf, read-only Kaufhistorie und HTTP-Storefront
+# Shop – Katalog, atomarer Purchase, read-only Kaufhistorie und HTTP-API
 
 ## Verantwortung
 
@@ -124,11 +124,12 @@ Requests dürfen neue Käufe committed werden. Eine unbekannte oder historisch l
 Identity liefert eine leere Seite und wird nicht über `ICommunityIdentityExistence`
 geprüft.
 
-## Read-only Storefront API
+## Storefront- und Purchase-API
 
-Der Shop ist erstmals über `FlurNetz.Api` read-only per HTTP erreichbar. Die API registriert
-gezielt `AddShopReadOnlyModule()` und verwendet deshalb nur die bestehenden Read-Use-Cases und
-Stores:
+Der Shop ist über `FlurNetz.Api` per HTTP erreichbar. Die API registriert dafür das vollständige
+`AddShopModule()`: Dadurch sind der bestehende atomare Purchase-Use-Case und seine Persistence-
+Abhängigkeiten verfügbar, ohne dass daraus HTTP-Endpunkte für interne Katalogmutationen entstehen.
+Die Storefront-Reads verwenden weiterhin die bestehenden Read-Use-Cases und Stores:
 
 - `GET /api/shop/offers` listet ausschließlich aktivierte Angebote, die zum einmal ermittelten
   aktuellen Zeitpunkt in ihrem `AvailabilityWindow` liegen.
@@ -138,6 +139,8 @@ Stores:
   `404 Not Found`.
 - `GET /api/shop/identities/{communityIdentityId}/purchases` liefert die bestehende,
   identity-isolierte History mit `pageSize` (Default `50`, `1` bis `100`) und Cursor.
+- `POST /api/shop/offers/{offerId}/purchases` führt den bestehenden `PurchaseShopOffer` für ein
+  kaufbares Angebot aus.
 
 Die API verwendet ausschließlich API-eigene DTOs mit JSON-Primitives; Domainobjekte und
 Contract-Value-Types werden nicht direkt serialisiert. Der History-Cursor ist ein API-eigener
@@ -146,13 +149,22 @@ opaque Cursor: UTF-8-JSON mit interner Version `1`, den Feldern `communityIdenti
 Request strikt dekodiert, validiert und gegen die Route-Identity gebunden. Fehlerhafte,
 unvollständige, unbekannt versionierte oder Identity-fremde Cursor liefern `400 Bad Request`.
 
-Die API registriert keinen `IShopPurchaseExecutor`, kein `PurchaseShopOffer` und keine
-Katalogmutation. Es existiert weiterhin kein HTTP-Purchase; der interne atomare Purchase bleibt
-unverändert vorhanden. Der API-Host registriert weiterhin ausschließlich
-`AddShopReadOnlyModule()`. Der separate Worker kennt `shop.purchase-completed` v1 über
-`FlurNetz.Modules.Shop.Contracts`, registriert aber aktuell bewusst keinen fachlichen
-Shop-Consumer; dieses Contract-Wiring erzeugt keinen HTTP-Write-Pfad. Ein HTTP-Purchase folgt
-erst in einem separaten späteren Slice.
+Der POST-Adapter besitzt ausschließlich HTTP-Verantwortung: Er validiert Route und Request,
+bildet die vorhandenen `ShopOfferId`, `ShopPurchaseRequestId` und `CommunityIdentityId` und ruft
+`PurchaseShopOffer.ExecuteAsync(...)` auf. Der API-eigene Request enthält nur `requestId` und
+`communityIdentityId`; `offerId` bleibt Route-Parameter. Bei Erfolg kommt der bestehende
+`ShopPurchaseResponse` mit `201 Created` und Location
+`/api/shop/purchases/{purchaseId}` zurück. Derselbe Request wird über
+`ShopPurchaseRequestId` mit derselben Purchase-ID und Location idempotent beantwortet; ein
+Replay-Flag ist nicht Bestandteil des Vertrags.
+
+Ungültige Route-/Request-Identifier und malformed JSON liefern `400 Bad Request`, unbekanntes
+Offer oder unbekannte Identity `404 Not Found`, nicht kaufbares Offer, Kauflimit,
+Idempotenzkonflikt und unzureichender Saldo `409 Conflict`; alle bekannten Antworten sind
+ProblemDetails. Sonstige, insbesondere technische `InvalidOperationException`-Fälle, bleiben
+`500 Internal Server Error`. Katalogmutations-Endpunkte entstehen nicht. Der separate Worker
+kennt `shop.purchase-completed` v1 über `FlurNetz.Modules.Shop.Contracts`, registriert aber
+weiterhin bewusst keinen fachlichen Shop-Consumer.
 
 ## Minimale Cross-Module-Capabilities
 
@@ -288,13 +300,21 @@ eigene Verbindung und committed nicht selbst. Business-Write und Outbox-Eintrag 
 durch denselben PostgreSQL-Commit sichtbar.
 
 Der Shop-Purchase veröffentlicht das Event weiterhin ausschließlich als atomaren Outbox-
-Bestandteil des Kaufs. Slice 6 registriert `shop.purchase-completed` v1 im separaten Worker
-explizit über `Shop.Contracts`, ohne die Shop-Implementierung oder Shop-Migrationen zu
-referenzieren. Es existiert weiterhin kein fachlicher Shop-Event-Consumer. Der bekannte Eventtyp
+Bestandteil des Kaufs. Der separate Worker registriert `shop.purchase-completed` v1 explizit
+über `Shop.Contracts`, ohne die Shop-Implementierung oder Shop-Migrationen zu referenzieren. Es
+existiert weiterhin kein fachlicher Shop-Event-Consumer. Der bekannte Eventtyp
 wird vom Worker nach erfolgreicher Deserialisierung ohne Handler und ohne Inbox-Eintrag als
 `processed` markiert; er wird weder als Retry/Poison behandelt noch über bereits verarbeitete
 Outbox-Nachrichten später replaybar. Die bestehende Engagement→Progression-Runtime bleibt
 unverändert.
+
+Der API-Host ist zusätzlich ein Producer für dieses Event. Er registriert explizit nur
+`ShopPurchaseCompletedIntegrationEvent` v1 über die Contract-Konstanten, den vorhandenen
+`IntegrationEventJsonSerializer`, `IIntegrationEventPublisher` als
+`PostgreSqlOutboxPublisher` und `MessagingMigrationSource`. Die vom `AddShopModule()`-Wiring
+bereitgestellte `IClock` wird wiederverwendet. Der API-Prozess startet keinen
+`OutboxProcessor`, keinen Messaging-Worker und keinen Inbox-Consumer; eine erfolgreiche HTTP-
+Purchase hinterlässt die Nachricht daher `pending`, bis der separate Worker sie verarbeitet.
 
 ## Modulregistrierung und Abhängigkeiten
 
@@ -307,8 +327,11 @@ Katalogmutationen, `IShopPurchaseExecutor` und `PurchaseShopOffer`; der vollstä
 umfasst damit 20 Services.
 
 Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory, API- und
-Worker-Komposition bleiben außerhalb des Shop-Moduls. Der API-Host bindet die Read-only-
-Registration ein und führt dadurch die Identity- sowie beide vorhandenen Shop-Migrationen aus.
+Worker-Komposition bleiben außerhalb des Shop-Moduls. Der API-Host bindet `AddShopModule()`
+zusammen mit der Identity- sowie den schmalen Economy-/Inventory-Capabilities ein und führt
+dadurch die sechs bereits vorhandenen Identity-, Economy-, Inventory-, Shop- und Messaging-
+Migrationen aus. Die internen Katalogmutationen sind registriert, erhalten aber keine HTTP-
+Endpunkte.
 Der Worker referenziert für das Contract-Wiring ausschließlich `Shop.Contracts`; er registriert
 keine `ShopMigrationSource` und führt keine Shop-Migration aus.
 
@@ -354,6 +377,8 @@ Die PostgreSQL-Integrationstests prüfen zusätzlich:
 - mehrseitige Keyset-Pagination ohne Duplikate und ohne ausgelassene Käufe;
 - `NextCursor` auf der letzten Seite und die leere History;
 - den echten API-Host mit Offer-Storefront, DTO-Abbildung, Purchase-Lookup und History-Cursor;
+- den echten API-Host mit bezahlten und kostenlosen HTTP-Purchases, vollständigem Response,
+  Location, Idempotenz, gezielter Fehlerabbildung und atomarem Producer-Outbox-Write;
 - ungültige Route-IDs, Page Sizes und malformed, ungültige oder Identity-fremde API-Cursor;
 - einen zwischen Seiten neu persistierten, zeitlich neueren Kauf ohne Rückwärtsbewegung
   des bereits ausgegebenen Cursors.
@@ -362,8 +387,8 @@ Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Rou
 `shop.purchase-completed` v1 über die bestehende explizite Messaging-Registry.
 
 Die Worker-Integration prüft zusätzlich die Verarbeitung des bekannten Events durch den echten
-Worker ohne fachlichen Consumer und ohne Inbox-Eintrag. Nicht enthalten sind HTTP-Purchase,
-Admin API/UI, fachlicher Shop-Event-Consumer, Warenkorb, variable Purchase-Menge, Stock,
+Worker ohne fachlichen Consumer und ohne Inbox-Eintrag. Nicht enthalten sind Admin API/UI,
+fachlicher Shop-Event-Consumer, Warenkorb, variable Purchase-Menge, Stock,
 Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
 Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische Repositories,
 generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/

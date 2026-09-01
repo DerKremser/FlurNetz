@@ -86,9 +86,18 @@ den aufrufenden Shop nicht und erhält keine Shop-Typen.
 `Inventory:1:CreateCommunityInventoryEntries` gehört ausschließlich dem Inventory-Modul und legt
 nur die Inventory-eigene Tabelle an. Die Migration enthält keine Cross-Module-Foreign-Keys.
 
-`AddInventoryModule` registriert den Store, `IInventoryQuantityGrant`, die beiden internen
-Use Cases und `InventoryMigrationSource`. Kein Host verdrahtet zusätzliche
-Inventory-Runtime-Trigger; API und Worker bleiben unberührt.
+`AddInventoryGrantCapability()` ist die schmale Composition für aufrufende atomare Flows. Sie
+registriert ausschließlich:
+
+- `ICommunityInventoryStore` → `CommunityInventoryStore`
+- `IInventoryQuantityGrant` → `InventoryQuantityGrant`
+- `InventoryMigrationSource` als `IMigrationSource`
+
+Die Capability registriert keine normalen `AddInventoryQuantity`- oder
+`RemoveInventoryQuantity`-Use-Cases. `AddInventoryModule()` baut weiterhin auf ihr auf und
+ergänzt beide vollständigen Inventory-Use-Cases. Der API-Host verwendet nur die Grant-Capability
+als Teil der atomaren Shop-Purchase-Transaktion und bietet keine Inventory-HTTP-Endpunkte; der
+Worker bleibt ohne Inventory-Runtime.
 
 ## Contracts und bewusste Ausschlüsse
 
@@ -105,7 +114,7 @@ Weiterhin nicht enthalten sind:
 - Messaging, Integration Events, Domain Events, Inbox oder Outbox
 - Reward-Definitionen, Reward-Ausführung oder eine Rewards-Abhängigkeit
 - Shop-Produkte, Käufe, Preise oder eine Shop-Abhängigkeit
-- API, Admin UI oder Worker-Anbindung
+- eigenständige API- oder Worker-Endpunkte beziehungsweise -Trigger
 - Item-Katalog, Namen, Beschreibungen, Icons, Kategorien oder Seltenheiten
 - Stack-Limits, einzigartige Item-Instanzen oder Instanzzustände
 - Ausrüstung, Verbrauch, Handel, Transfer, Ablaufzeiten oder Ownership-Historie

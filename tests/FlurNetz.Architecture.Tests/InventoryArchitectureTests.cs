@@ -1,11 +1,14 @@
 using System.Data.Common;
 using System.Reflection;
 using FlurNetz.Modules.Identity.Contracts;
+using FlurNetz.Modules.Inventory;
 using FlurNetz.Modules.Inventory.Application;
 using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Inventory.Domain;
 using FlurNetz.Modules.Inventory.Migrations;
 using FlurNetz.Modules.Inventory.Persistence;
+using FlurNetz.Persistence.Migrations;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FlurNetz.Architecture.Tests;
 
@@ -100,6 +103,39 @@ public sealed class InventoryArchitectureTests
     }
 
     [Fact]
+    public void InventoryGrantCapabilityRegistersOnlyGrantRuntimeAndMigration()
+    {
+        var services = new ServiceCollection();
+
+        var result = services.AddInventoryGrantCapability();
+
+        Assert.Same(services, result);
+        Assert.Equal(3, services.Count);
+        AssertService<ICommunityInventoryStore, CommunityInventoryStore>(services, ServiceLifetime.Scoped);
+        AssertService<IInventoryQuantityGrant, InventoryQuantityGrant>(services, ServiceLifetime.Scoped);
+        AssertService<IMigrationSource, InventoryMigrationSource>(services, ServiceLifetime.Singleton);
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType == typeof(AddInventoryQuantity)
+                || descriptor.ServiceType == typeof(RemoveInventoryQuantity));
+    }
+
+    [Fact]
+    public void InventoryModuleKeepsItsCompleteRuntimeComposition()
+    {
+        var services = new ServiceCollection();
+
+        var result = services.AddInventoryModule();
+
+        Assert.Same(services, result);
+        Assert.Equal(5, services.Count);
+        AssertService<ICommunityInventoryStore, CommunityInventoryStore>(services, ServiceLifetime.Scoped);
+        AssertService<IInventoryQuantityGrant, InventoryQuantityGrant>(services, ServiceLifetime.Scoped);
+        AssertService<AddInventoryQuantity, AddInventoryQuantity>(services, ServiceLifetime.Scoped);
+        AssertService<RemoveInventoryQuantity, RemoveInventoryQuantity>(services, ServiceLifetime.Scoped);
+        AssertService<IMigrationSource, InventoryMigrationSource>(services, ServiceLifetime.Singleton);
+    }
+
+    [Fact]
     public void InventoryMigrationOwnsOnlyItsTableAndHasNoCrossModuleSqlDependency()
     {
         var migration = Assert.Single(new InventoryMigrationSource().GetMigrations());
@@ -164,4 +200,14 @@ public sealed class InventoryArchitectureTests
         .Select(name => name!)
         .Order(StringComparer.Ordinal)
         .ToArray();
+
+    private static void AssertService<TService, TImplementation>(
+        IServiceCollection services,
+        ServiceLifetime lifetime)
+        where TImplementation : TService
+    {
+        var descriptor = Assert.Single(services, service => service.ServiceType == typeof(TService));
+        Assert.Equal(typeof(TImplementation), descriptor.ImplementationType);
+        Assert.Equal(lifetime, descriptor.Lifetime);
+    }
 }

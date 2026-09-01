@@ -14,9 +14,12 @@ public sealed class ApiArchitectureTests
 {
     private static readonly string[] AllowedApiProjectReferences =
     [
+        "FlurNetz.Messaging",
+        "FlurNetz.Modules.Economy",
         "FlurNetz.Persistence",
         "FlurNetz.Modules.Identity",
         "FlurNetz.Modules.Identity.Contracts",
+        "FlurNetz.Modules.Inventory",
         "FlurNetz.Modules.Shop",
         "FlurNetz.Modules.Shop.Contracts"
     ];
@@ -28,11 +31,15 @@ public sealed class ApiArchitectureTests
     {
         var references = GetReferencedAssemblyNames(ApiAssembly);
 
+        Assert.Contains("FlurNetz.Messaging", references);
+        Assert.Contains("FlurNetz.Modules.Economy", references);
         Assert.Contains("FlurNetz.Persistence", references);
         Assert.Contains("FlurNetz.Modules.Identity", references);
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
+        Assert.Contains("FlurNetz.Modules.Inventory", references);
         Assert.Contains("FlurNetz.Modules.Shop", references);
         Assert.Contains("FlurNetz.Modules.Shop.Contracts", references);
+        Assert.DoesNotContain("FlurNetz.Worker", references);
     }
 
     [Fact]

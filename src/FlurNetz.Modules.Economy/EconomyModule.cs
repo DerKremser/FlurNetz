@@ -19,11 +19,24 @@ public static class EconomyModule
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddScoped<ICommunityEconomyStore, CommunityEconomyStore>();
+        services.AddEconomyDebitCapability();
         services.AddScoped<IEconomyBalanceCredit, EconomyBalanceCredit>();
-        services.AddScoped<IEconomyBalanceDebit, EconomyBalanceDebit>();
         services.AddScoped<CreditEconomyBalance>();
         services.AddScoped<DebitEconomyBalance>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registriert ausschließlich die transaction-aware Economy-Debit-Fähigkeit und die
+    /// bestehende Economy-Migrationsquelle.
+    /// </summary>
+    public static IServiceCollection AddEconomyDebitCapability(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddScoped<ICommunityEconomyStore, CommunityEconomyStore>();
+        services.AddScoped<IEconomyBalanceDebit, EconomyBalanceDebit>();
         services.AddSingleton<IMigrationSource, EconomyMigrationSource>();
 
         return services;

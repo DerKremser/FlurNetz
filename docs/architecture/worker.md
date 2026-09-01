@@ -20,6 +20,13 @@ werden nicht geladen. Insbesondere referenziert der Worker nicht `FlurNetz.Modul
 zieht keine Shop-Implementierung oder Shop-Migration nach. Der Worker erzeugt keine
 Engagement-Aktivitäten; Engagement bleibt der Besitzer des Events engagement.message-recorded.
 
+Der API-Host ist im Shop-Slice der getrennte Producer: Sein
+`POST /api/shop/offers/{offerId}/purchases` führt den bestehenden atomaren Purchase aus und
+hinterlässt `shop.purchase-completed` v1 zunächst `pending` in der PostgreSQL-Outbox. Der
+API-Prozess startet dafür keinen Processor und keinen Consumer. Dieser Worker bleibt die
+separate Processor-Runtime, die die Nachricht später verarbeitet; ein fachlicher Shop-Consumer
+ist weiterhin nicht registriert.
+
 ## PostgreSQL und Startup
 
 Die PostgreSQL-Verbindung wird ausschließlich aus ConnectionStrings:FlurNetz gelesen. Fehlt
@@ -74,7 +81,7 @@ Logik ein.
 
 Der reale Workflow lautet:
 
-Producer → PostgreSQL-Outbox → FlurNetz.Worker → OutboxProcessor → Progression-Consumer.
+API- oder anderer Producer → PostgreSQL-Outbox → FlurNetz.Worker → OutboxProcessor → Consumer.
 
 Eine Nachricht engagement.message-recorded mit Schema-Version 1 wird vom bestehenden
 Progression-Consumer als genau 1 XP interpretiert. Inbox-Eintrag und XP-Write bleiben in der
