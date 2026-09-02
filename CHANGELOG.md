@@ -2,6 +2,21 @@
 
 ## [Unveröffentlicht]
 
+### Overlay V1
+
+- Persistierte Overlay-Channels und immutable Alerts mit Unicode-/Zeit-/Duration-
+  Invarianten, SourceReference und migrationseigenen PostgreSQL-Constraints ergänzt.
+- Kryptographische OBS-Source Keys werden nur einmal bei Create/Rotation ausgegeben; in
+  PostgreSQL liegt ausschließlich der SHA-256-Hash. Archivierung invalidiert den Key.
+- Interne Channel-Management-API, transparente responsive Browser Source und SSE-Transport
+  mit Tail-Cursor, Reconnect, Heartbeats, FIFO-Queue und begrenzter Deduplizierung ergänzt.
+- Automation `overlay.alert` über den schmalen transaction-aware Contract integriert;
+  `Automation:2:AddOverlayAlertAction` lässt `Automation:1` unverändert.
+- API-/Worker-Komposition, PostgreSQL-, API-, Domain-, Architecture- und Workflow-Tests
+  sowie die Overlay-V1-Architekturdokumentation ergänzt.
+- Bewusst nicht enthalten: Audio/Medien, benutzerdefiniertes Markup, freie Layouts,
+  Plattformlogik, SignalR, externer Broker und Authentication-/Authorization-Foundation.
+
 ### Automation V1
 
 - Persistierte, betreiberkonfigurierbare Rule Engine mit AutomationRule, Lifecycle,

@@ -9,7 +9,9 @@ Sie verarbeitet ausschließlich die vorhandenen Integration Events
 Integration Event → AutomationTriggerSnapshot → Conditions → Actions → AutomationExecution
 
 Konkrete Regeln liegen ausschließlich in PostgreSQL. Der Code kennt nur die explizit
-unterstützten Trigger-, Condition- und Action-Typen. Automation.Contracts bleibt in V1 leer.
+unterstützten Trigger-, Condition- und Action-Typen. Für `overlay.alert` referenziert
+Automation ausschließlich `FlurNetz.Modules.Overlay.Contracts`; die Overlay-Implementierung
+bleibt außerhalb der Modulgrenze. Automation.Contracts bleibt in V1 leer.
 
 ## Domain und Lifecycle
 
@@ -22,8 +24,10 @@ aktivierte oder archivierte Rules fachlich abgewiesen werden.
 Conditions sind ausschließlich AND-verknüpft; eine leere Liste bedeutet Match All. V1 erlaubt
 genau "community-identity.equals", "shop.offer-id.equals", "shop.item-definition-id.equals",
 "shop.price-paid.at-least" und "shop.price-paid.at-most". Engagement akzeptiert nur die
-Identity-Condition. Actions sind "economy.credit" und "notification.create"; sie werden über
-lückenlose Positionen ab null deterministisch ausgeführt. Economy-Beträge sind positiv,
+Identity-Condition. Actions sind "economy.credit", "notification.create" und "overlay.alert";
+sie werden über lückenlose Positionen ab null deterministisch ausgeführt. `overlay.alert`
+besitzt explizite Channel-, Titel-, Nachrichten-, Varianten- und Duration-Felder und verwendet
+exakt die Overlay-V1-Grenzen. Economy-Beträge sind positiv,
 Notification-Titel und optionale Nachrichten streng validiert und es gibt keine Templates oder
 Variableninterpolation.
 
@@ -53,19 +57,27 @@ bleiben vollständig beim vorhandenen OutboxProcessor.
 "economy.credit" verwendet ausschließlich IEconomyBalanceCredit. "notification.create"
 verwendet ausschließlich ICommunityNotificationCreate und setzt NotificationType auf
 "automation.rule-executed", SourceType auf "automation.execution" und SourceId auf die
-Execution-ID. Beide Capabilities verwenden die Caller-Transaktion.
+Execution-ID. Beide Capabilities verwenden die Caller-Transaktion. `overlay.alert` verwendet
+`IOverlayAlertPublish` mit derselben Connection und Transaction. Ein fehlender, deaktivierter
+oder archivierter Zielchannel liefert einen Suppression-Status und wird nicht zum Poison-
+Fehler; ein echter Persistenzfehler rollt die gemeinsame Transaktion zurück.
 
 ## Persistenz
 
-Die einzige Automation-Migration lautet:
+Die Automation-Migrationen sind:
 
 Automation:1:CreateAutomationRulesAndExecutions
+Automation:2:AddOverlayAlertAction
 
-Sie erzeugt exakt automation_rules, automation_rule_conditions,
+Migration 1 erzeugt exakt automation_rules, automation_rule_conditions,
 automation_rule_actions und automation_executions. Foreign Keys zeigen ausschließlich
 innerhalb dieses Automation-Schemas; Identity-, Shop-, Notifications- und Economy-IDs bleiben
 fachliche Referenzen ohne Cross-Module-FK. Die Execution-History ist über
 automation_rule_id, executed_at_utc DESC, id DESC indiziert.
+
+Migration 2 ergänzt eigene Overlay-Spalten für `automation_rule_actions` und ersetzt die
+Value-Shape-Constraints. Migration 1 bleibt unverändert; es gibt keinen Cross-Module-FK
+zum Overlay-Channel.
 
 IAutomationRuleStore eröffnet für Management-Operationen eigene Transaktionen und verwendet
 für atomare Mutationen SELECT FOR UPDATE. Die History verwendet Keyset-Pagination ohne

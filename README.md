@@ -25,6 +25,22 @@ AutomationExecution-History und die Economy-/Notification-Writes teilen die vorh
 Messaging-Transaktion. Der Worker führt die Rules aus; die API bleibt Management-Host.
 Details stehen in docs/architecture/automation.md.
 
+## Overlay V1
+
+Overlay V1 ist eine persistierte OBS-/Browser-Source-Alert-Pipeline. Channels werden über
+die interne Management-Grenze `/api/admin/overlay/channels` angelegt und verwaltet; Create
+und Rotation geben einen kryptographisch zufälligen Source Key genau einmal aus. PostgreSQL
+speichert nur dessen SHA-256-Hash. Die relative Browser Source `/overlay/{sourceKey}` zeigt
+Alerts über SSE (`/api/overlay/sources/{sourceKey}/stream`) mit FIFO-Queue, Tail-Cursor,
+Reconnect, Heartbeats und begrenzter Browser-Deduplizierung an.
+
+Automation unterstützt zusätzlich `overlay.alert` über ausschließlich
+`FlurNetz.Modules.Overlay.Contracts`. Der Alert-Write verwendet die bestehende Messaging-
+Transaktion; ein deaktivierter, archivierter oder fehlender Zielchannel wird fachlich
+unterdrückt und nicht als Worker-Poison-Fehler behandelt. Der API-Host besitzt HTTP-/SSE-
+Verantwortung, der Worker nur die Runtime-Komposition. Details stehen in
+[docs/architecture/overlay.md](docs/architecture/overlay.md).
+
 ## Technische Basis
 
 - .NET 10 für interne FlurNetz-Projekte

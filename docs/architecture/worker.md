@@ -16,6 +16,8 @@ Der Worker referenziert ausschließlich:
   `shop.purchase-completed`-Consumer;
 - FlurNetz.Modules.Economy für die transaction-aware Credit-Capability und die Economy-Migration;
 - FlurNetz.Modules.Automation für Rule Engine, Runtime-Store, Migration und Consumer;
+- FlurNetz.Modules.Overlay für die Runtime-Publish-Capability und Overlay-Migration;
+- FlurNetz.Modules.Overlay.Contracts für die transaction-aware Alert-Publish-Grenze;
 - FlurNetz.Modules.Engagement.Contracts für den bereits bestehenden Event-Vertrag;
 - FlurNetz.Modules.Shop.Contracts für den bekannten `shop.purchase-completed`-Vertrag.
 
@@ -42,6 +44,11 @@ Consumer-Matrix:
 - shop.purchase-completed → notifications.shop-purchase
 - shop.purchase-completed → automation.shop-purchase-completed
 
+Die Automation-Runtime kann zusätzlich `overlay.alert` über
+`IOverlayAlertPublish` in derselben Messaging-Transaktion wie Inbox, Execution und andere
+Action-Writes persistieren. Der Worker besitzt dafür keine HTTP- oder SSE-Verantwortung und
+registriert keinen Overlay-Consumer.
+
 Alle Kanten laufen über den unveränderten OutboxProcessor und besitzen getrennte Inbox-
 Identitäten. Die Automation-Engine verwendet keine fremden Tabellen und startet weder einen
 Scheduler noch einen zweiten BackgroundService.
@@ -56,13 +63,15 @@ bereitgestellt und nicht in Repository-Dateien versioniert.
 
 Vor dem Start des Processing-Loops führt der Worker den bestehenden MigrationRunner aus.
 Registriert werden genau die Migrationsquellen der Messaging Foundation, des Progression-,
-Economy-, Notifications- und Automation-Moduls:
+Economy-, Notifications-, Automation- und Overlay-Moduls:
 
 - Messaging:1:CreateOutboxAndInbox;
 - Progression:1:CreateCommunityProgressions;
 - Economy:1:CreateCommunityEconomies;
 - Notifications:1:CreateCommunityNotifications;
-- Automation:1:CreateAutomationRulesAndExecutions.
+- Automation:1:CreateAutomationRulesAndExecutions;
+- Automation:2:AddOverlayAlertAction;
+- Overlay:1:CreateOverlayChannelsAndAlerts.
 
 EngagementMigrationSource wird bewusst nicht registriert. Der Worker benötigt
 engagement_activities für das Consuming nicht. Ebenso werden `Shop:1:CreateShopOffers` und

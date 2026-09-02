@@ -7,6 +7,12 @@ Für Automation V1 ist die API zusätzlich die reine Management-Grenze unter
 Replace, Enable, Disable, Archive sowie die Execution-History. Sie registriert keine
 Automation-Consumer, keinen OutboxProcessor und führt keine Automation-Action aus.
 
+Für Overlay V1 registriert die API zusätzlich `AddOverlayModule()` und mappt die interne
+Channel-Management-Grenze unter `/api/admin/overlay/channels`, die transparente Browser Source
+unter `/overlay/{sourceKey}` und den SSE-Stream unter
+`/api/overlay/sources/{sourceKey}/stream`. Die API führt auch damit keine Automation Rules
+und keinen OutboxProcessor aus.
+
 `FlurNetz.Api` ist ein eigenständiger ausführbarer FlurNetz-Host und ausschließlich Composition
 Root und HTTP-Adapter. Er konfiguriert den ASP.NET-Core-Host, liest die PostgreSQL-
 Konfiguration, registriert die technische Persistence Foundation, bindet das Identity-Modul,
@@ -35,6 +41,9 @@ Der API-Host referenziert für die Shop-V1-Komposition:
 - `FlurNetz.Modules.Shop` für `AddShopModule()` und die bestehenden Shop-Use-Cases
 - `FlurNetz.Modules.Shop.Contracts` für die Shop-Identifier
 - `FlurNetz.Modules.Notifications` für `AddNotificationsModule()` und die Inbox-Use-Cases
+- `FlurNetz.Modules.Overlay` für `AddOverlayModule()`, Overlay-Use-Cases und die Browser-/SSE-
+  Adaptergrenze
+- `FlurNetz.Modules.Overlay.Contracts` für die Overlay-Alert-Contract-Werte
 
 Die erlaubte Richtung lautet:
 
@@ -56,11 +65,11 @@ Der Host verwendet die vorhandene `PostgreSqlConnectionFactory` und erzeugt kein
 `NpgsqlDataSource`-, Connection- oder Transaction-Infrastruktur. Vor dem Start des HTTP-
 Listeners löst der Host den bestehenden `MigrationRunner` auf und führt die registrierten
 Migrationsquellen aus. In diesem Host sind die Identity-, Economy-, Inventory-, Shop-,
-Notifications- und Messaging-Quellen registriert; dadurch werden genau `Identity:1:CreateCommunityIdentities`,
+Notifications-, Overlay- und Messaging-Quellen registriert; dadurch werden genau `Identity:1:CreateCommunityIdentities`,
 `Economy:1:CreateCommunityEconomies`, `Inventory:1:CreateCommunityInventoryEntries`,
 `Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder`,
 `Shop:4:AddShopOfferArchiveState`, `Notifications:1:CreateCommunityNotifications` und
-`Messaging:1:CreateOutboxAndInbox` ausgeführt. Die technische
+`Messaging:1:CreateOutboxAndInbox` und `Overlay:1:CreateOverlayChannelsAndAlerts` ausgeführt. Die technische
 `flurnetz_persistence.migration_history` wird vom Runner selbst verwaltet. Schlägt die
 Verbindung oder eine Migration fehl, wird der Fehler mit ASP.NET-Core-Logging auf Critical-
 Ebene geloggt und der Startup abgebrochen.
