@@ -64,7 +64,7 @@ Bereits angewendete Migrationen werden übersprungen, wenn Identität und Checks
 Der ausführbare API-Host stellt die Connection-Konfiguration als Composition Root bereit und
 ruft den bestehenden Runner vor dem Listener-Start auf. Ein Fehler wird geloggt und beendet den
 Startup, damit kein nicht initialisierter Host als betriebsbereit erscheint. Der API-Host
-registriert die Identity- und die Shop-Read-only-Migrationsquelle und führt damit die
+registriert die Identity- und die Shop-Migrationsquelle und führt damit die
 vorhandenen Migrationen `Identity:1:CreateCommunityIdentities`,
 `Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder` und
 `Shop:4:AddShopOfferArchiveState` aus. Der erste fachliche
@@ -105,7 +105,8 @@ aus und verwendet bei Rename sowie Description-Änderung einen Row-Lock mit
 
 Shop besitzt zusätzlich die unveränderten Migrationen `Shop:1:CreateShopOffers`,
 `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder` und
-`Shop:4:AddShopOfferArchiveState`. V2 legt `shop_purchase_requests`,
+`Shop:4:AddShopOfferArchiveState`. Die Migration `Shop:2:CreateShopPurchases` legt
+`shop_purchase_requests`,
 `shop_purchase_guards` und `shop_purchases` an. Der einzige Foreign Key dieser
 Purchase-Migration ist Shop-intern von `shop_purchases.shop_offer_id` auf
 `shop_offers.id`; Identity-, Economy- und Inventory-Beziehungen bleiben bewusst ohne

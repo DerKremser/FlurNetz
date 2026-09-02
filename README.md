@@ -1,7 +1,7 @@
 # FlurNetz
 
-FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice, den persistierten Shop-Angebotskatalog,
-den ersten atomaren Shop-Inventory-Kauf, die persistierte Shop-Kaufhistorie, die Shop-HTTP-API
+FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält neben dem technischen Repository- und Solution-Grundgerüst eine minimale BuildingBlocks-Grundlage, die technische Persistence Foundation, die Messaging Foundation, die physischen Grenzen der vorgesehenen Fachmodule, den ersten fachlichen Identity-Vertical-Slice, den ersten Engagement-Message-Recording-Slice mit Outbox, den ersten Progression-Inbox-Consumer, den ersten persistierten Economy-Vertical-Slice, den ersten persistierten und ausführbaren Rewards-Vertical-Slice, den ersten persistierten Inventory-Vertical-Slice, den ersten persistierten Titles-Vertical-Slice, den ersten persistierten Achievements-Vertical-Slice sowie den vollständigen Shop-V1-Stand mit persistiertem Angebotskatalog,
+atomarem Shop-Inventory-Kauf, persistierter Shop-Kaufhistorie und Shop-HTTP-API
 mit read-only Storefront, HTTP-Purchase und HTTP-Katalogverwaltung sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist
 Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet
 werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger,
@@ -166,11 +166,10 @@ erfolgreiche Write gewinnt; ein Duplicate überschreibt den ursprünglichen Zeit
 Rewards-, Economy-, Inventory-, Titles-, Shop-, API- oder Worker-Anbindung. Details stehen in
 [docs/architecture/achievements.md](docs/architecture/achievements.md).
 
-## Shop Foundation, atomarer Purchase, Kaufhistorie und HTTP-API
+## Vollständiger Shop-V1-Stand
 
-`FlurNetz.Modules.Shop` enthält neben dem fachlichen Angebotsfundament und dem vollständig
-persistierten Katalog jetzt den ersten atomaren Inventory-Kauf und eine read-only
-Kaufhistorie. `Shop.Contracts` veröffentlicht
+`FlurNetz.Modules.Shop` enthält den fachlichen Angebotskatalog, den atomaren Inventory-Kauf und
+die read-only Kaufhistorie. `Shop.Contracts` veröffentlicht
 `ShopOfferId`, `ShopPurchaseId`, `ShopPurchaseRequestId` und
 `ShopPurchaseCompletedIntegrationEvent` mit dem stabilen Message Type
 `shop.purchase-completed` und Schema-Version `1`. `ShopOffer` verwendet die gemeinsame `ItemDefinitionId` aus
@@ -255,21 +254,21 @@ Die Management-Sicht enthält auch deaktivierte, zukünftige und abgelaufene Ang
 öffentliche Storefront bleibt auf `IsEnabled && !IsArchived && IsAvailableAt(now)` beschränkt.
 Die API führt dafür keine eigene Transaktion ein, erzeugt keine Events und keinen
 Consumer. Es gibt keine neuen Shop.Contracts, keine neue Event-Version und keine Worker-
-Änderung. Die Management-Routen besitzen aktuell bewusst noch keine
+Änderung. Die Management-Routen besitzen bewusst noch keine
 Authentication/Authorization und müssen vor externem Produktivbetrieb durch einen separaten
-Security-/Host-Slice geschützt werden.
+Security-/Host-Auftrag geschützt werden.
 
 Ein Admin-Frontend, Drag & Drop, Bulk-Reorder, Unarchive, Restore, Soft Delete und Hard Delete
-sind nicht Teil dieses Slices.
+sind bewusst nicht Teil des Shop-V1-Scope.
 
 Echte PostgreSQL-Integrationstests prüfen zusätzlich erfolgreichen gemeinsamen Commit,
 Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und vollständigen
 Rollback bei unzureichendem Saldo sowie Lookup, Identity-Isolation, newest-first-Reihenfolge
 und mehrseitige History-Pagination ohne Duplikate oder ausgelassene Käufe. Die API-Integration
 prüft zusätzlich Storefront-Filterung, DTO-Abbildung, Cursor-Roundtrip und Fehlerfälle.
-Administration-Frontend, Warenkorb, variable Purchase-Menge, Stock, Discounts,
-Coupons, Refunds und Purchase-Cancellation bleiben außerhalb dieses Slices. Details
-stehen in
+Ein Administration-Frontend, Warenkorb, variable Purchase-Menge, Stock, Kategorien, zusätzliche
+Metadaten, Discounts, Coupons, Refunds und Purchase-Cancellation gehören bewusst nicht zum
+Shop-V1-Scope. Die V1-Entscheidungen und der Abschlussaudit stehen in
 [docs/architecture/shop.md](docs/architecture/shop.md).
 
 ## Persistence Foundation
@@ -290,7 +289,7 @@ Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Invento
 Für jedes vorgesehene Fachmodul existieren eine Contracts-Class-Library, eine Implementierungs-Class-Library und ein xUnit-v3-Testprojekt. Die noch nicht begonnenen Module bleiben bewusst leer; Identity bildet mit `CommunityIdentityId`, `CommunityIdentity`, Use Case, gezieltem Persistence-Adapter und Migration den ersten fachlichen Vertical Slice. Engagement ergänzt den Message-Recording-Slice mit eigenem Integration Event und atomarem Activity-/Outbox-Write. Progression ergänzt den persistierten XP-Slice mit atomarem Store, Inbox-Consumer und Parallelitätstests. Economy ergänzt den persistierten Saldo-Slice mit atomarem Store, eigener Migration und Parallelitätstests; der API-Host nutzt daraus ausschließlich die schmale Debit-Capability im Shop-Purchase und bietet keinen Economy-Endpunkt. Rewards besitzt nun einen persistierten und ausführbaren Domain-/Application-/Persistence-Slice für Economy-Balance-Gutschriften mit eigener Migration, Idempotenz- und Atomicity-Tests, bleibt aber ohne Runtime-Trigger, API und Worker-Verdrahtung. Inventory ergänzt den ersten persistierten Vertical Slice mit atomarem PostgreSQL-Store,
 eigener Migration und Sparse-Zero-Lifecycle und veröffentlicht jetzt zusätzlich die schmale
 caller-neutrale `IInventoryQuantityGrant`-Capability für gemeinsame Transaktionen. Titles ergänzt nun zusätzlich zu Rehydration und Community-State einen persistierten Definitionskatalog mit `TitleDefinition`, internen Create/Get/List/Rename/Description-Use-Cases, `Titles:2:CreateTitleDefinitions`, Row-Locking und echten Katalog-Concurrency-Tests. Achievements ergänzt einen persistierten Definitionskatalog und permanente, atomare, idempotente Community-Unlocks mit eigener Migration und Concurrency-Tests. Shop besitzt mit `Shop:1:CreateShopOffers` den persistierten Angebotskatalog und mit
-`Shop:2:CreateShopPurchases` den ersten atomaren Inventory-Purchase inklusive Idempotenz,
+`Shop:2:CreateShopPurchases` den atomaren Inventory-Purchase inklusive Idempotenz,
 Kauflimit, Economy-Debit, Inventory-Grant, Purchase-Persistenz, Outbox und gezielten
 read-only History-Queries mit Keyset-Pagination. Der Shop ist über die API für Storefront-
 Angebote, Purchase-History und `POST /api/shop/offers/{offerId}/purchases` erreichbar. Der
@@ -298,26 +297,22 @@ Purchase-Request enthält nur `requestId` und `communityIdentityId`; der bestehe
 `ShopPurchaseResponse` wird mit `201 Created` und Purchase-Location geliefert. Die
 `ShopPurchaseRequestId` bildet die globale Idempotenzgrenze. Der API-Host ist Producer für
 `shop.purchase-completed` v1 und verarbeitet die Outbox nicht selbst. Der Worker kennt das
-Shop-Event über `Shop.Contracts`, registriert aber keinen fachlichen Consumer. Slice 8 stellt
-die HTTP-Katalogverwaltung für den Shop über die separate
+Shop-Event über `Shop.Contracts`, registriert aber keinen fachlichen Consumer. Die
+HTTP-Katalogverwaltung für den Shop ist über die separate
 `/api/admin/shop/offers`-Management-Grenze bereit. Ein Administration-Frontend ist weiterhin
-nicht Bestandteil des aktuellen Stands. Die Management-Routen besitzen weiterhin noch keine
+nicht Bestandteil des Shop-V1-Scope. Die Management-Routen besitzen weiterhin noch keine
 Authentication/Authorization und dürfen vor einem separaten Security-Slice nicht extern
-produktiv exponiert werden. Der erste
+produktiv exponiert werden. Der
 Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist
 kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
-Slice 9 ergänzt `SortOrder >= 0` für den Shop-Katalog. Mehrere gleiche Werte sind erlaubt,
-es gibt keine automatische Umnummerierung und die Reihenfolge bleibt `sort_order ASC, id ASC`.
-Management-Create und die neue SortOrder-PUT-Route steuern diesen Zustand; Storefront und
-Management-Liste verwenden dieselbe autoritative Reihenfolge. Shop.Contracts, das Event
-`shop.purchase-completed` v1, Worker, Administration und Security bleiben unverändert.
-
-Slice 10 ergänzt die endgültige Angebotsarchivierung. `ArchiveShopOffer` verwendet weiterhin die
-`IShopOfferStore.ExecuteAsync(...)`-Grenze; Archivieren deaktiviert das Angebot, ist idempotent
-und kann nicht rückgängig gemacht werden. `EnableShopOffer` lehnt archivierte Angebote mit
-einem gezielten Shop-Fehler ab. Storefront und Purchase prüfen den Archivierungszustand
-ausdrücklich; die Management-Grenze macht ihn sichtbar und bietet die Archive-Route.
+Der verbindliche Shop-V1-Katalog verwendet eine nichtnegative, betreibersteuerbare `SortOrder`
+mit stabiler Reihenfolge `sort_order ASC, id ASC`; gleiche Werte werden nicht automatisch
+umgeordnet. `ArchiveShopOffer` deaktiviert das Angebot, ist idempotent und kann nicht
+rückgängig gemacht werden. `EnableShopOffer` lehnt archivierte Angebote mit einem gezielten
+Shop-Fehler ab; Storefront und Purchase prüfen den Archivierungszustand ausdrücklich. Die
+vollständigen V1-Scope-Entscheidungen und der Abschlussaudit stehen in
+[docs/architecture/shop.md](docs/architecture/shop.md).
 
 ## Lokale API-Ausführung
 

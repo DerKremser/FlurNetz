@@ -5,7 +5,7 @@
 `FlurNetz.Api` ist ein eigenständiger ausführbarer FlurNetz-Host und ausschließlich Composition
 Root und HTTP-Adapter. Er konfiguriert den ASP.NET-Core-Host, liest die PostgreSQL-
 Konfiguration, registriert die technische Persistence Foundation, bindet das Identity-Modul,
-den vollständigen Shop-Purchase-Slice sowie die schmalen Economy-/Inventory-Capabilities ein,
+den vollständigen Shop-V1-Purchase sowie die schmalen Economy-/Inventory-Capabilities ein,
 führt die Startmigrationen aus und ordnet Storefront-, Purchase- und Shop-Management-
 HTTP-Endpunkte zu. Der unabhängige
 `FlurNetz.Worker` ist der separate Runtime-Host für Messaging und wird vom API-Host weder
@@ -17,7 +17,7 @@ GUID und greift nicht direkt auf ein Repository zu.
 
 ## Abhängigkeiten
 
-Der API-Host referenziert für diesen Slice:
+Der API-Host referenziert für die Shop-V1-Komposition:
 
 - `FlurNetz.Persistence` für Connection Factory, Transaktions- und Migration-Foundation
 - `FlurNetz.Messaging` für die explizite Producer-Registry, Serialisierung, Outbox und Migration
@@ -206,13 +206,13 @@ Die API registriert explizit genau `ShopPurchaseCompletedIntegrationEvent` mit
 über `TryAddSingleton` bereitgestellte `IClock` wird wiederverwendet. Es gibt kein Assembly
 Scanning und keine Registrierung anderer Eventtypen.
 
-## Fehlerbehandlung und aktueller Umfang
+## Fehlerbehandlung und Shop-V1-Umfang
 
 Der Host verwendet `AddProblemDetails()`, in Development die Developer Exception Page und
 außerhalb von Development `UseExceptionHandler()`. Damit werden ungefangene technische
 Fehler nicht als unkontrollierte Stacktrace-Antwort ausgeliefert.
 
-Aktuell gibt es bewusst:
+Für den API-Host und den beschlossenen Shop-V1-Umfang gibt es bewusst:
 
 - keine Authentifizierung oder Autorisierung
 - kein JWT, Cookie, OAuth oder Identity Framework
@@ -220,8 +220,10 @@ Aktuell gibt es bewusst:
 - keine Twitch-, Streamer.bot-, Discord-, YouTube- oder Kick-Integration
 - keine HTTP-Endpunkte für Economy oder Inventory
 - kein Admin-Frontend und keine Authentication/Authorization für die Shop-Management-Grenze;
-  vor externem Produktivbetrieb ist dafür ein separater Security-/Host-Slice erforderlich
-- keinen Cart-, Stock-, Discount-, Coupon-, Refund- oder Cancellation-Flow
+  vor externem Produktivbetrieb ist dafür ein separater Security-/Host-Auftrag erforderlich
+- keinen variablen Mengenparameter; ein Purchase gewährt verbindlich genau eine Inventory-Einheit
+- keinen Cart-, Stock-, Kategorien-, zusätzlichen Metadaten-, Discount-, Coupon-, Refund- oder
+  Cancellation-Flow; die fachlichen Entscheidungen sind in [shop.md](shop.md) festgehalten
 
 ## Tests
 

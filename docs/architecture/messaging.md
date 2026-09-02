@@ -2,7 +2,7 @@
 
 `FlurNetz.Messaging` ist die technische Grundlage für Kommunikation zwischen FlurNetz-
 Modulgrenzen. Der erste vollständige Producer/Consumer-Workflow verbindet Engagement und
-Progression über Outbox, Processor und Inbox. Der Shop-Purchase-Slice ist der zweite reale
+Progression über Outbox, Processor und Inbox. Der Shop-V1-Purchase ist der zweite reale
 Outbox-Produzent und veröffentlicht `shop.purchase-completed` v1 atomar mit dem Kauf.
 Die Foundation bleibt fachlich neutral und kennt weder die Module noch deren Contracts.
 
@@ -71,12 +71,12 @@ Nach dem letzten erlaubten Versuch erhält die Nachricht den Status `failed` (Po
 
 Die Messaging Foundation definiert nur die technischen Outbox-/Inbox- und Processor-
 Verträge. Sie startet keinen Prozess und kennt weder Progression noch andere Fachmodule.
-`FlurNetz.Worker` ist der erste separate Runtime-Host: Er registriert die benötigten
+`FlurNetz.Worker` ist der separate Runtime-Host: Er registriert die benötigten
 Contracts und Consumer explizit, führt die Messaging- und Progression-Migrationen beim
 Startup aus und ruft danach `OutboxProcessor.ProcessBatchAsync` kontinuierlich auf. Seine
 Registry enthält `engagement.message-recorded` v1 und `shop.purchase-completed` v1; dafür
 referenziert er `FlurNetz.Modules.Shop.Contracts`, nicht die Shop-Implementierung. Für das
-Shop-Event ist aktuell bewusst kein Consumer registriert, sodass die oben beschriebene
+Shop-Event ist bewusst kein fachlicher Consumer registriert, sodass die oben beschriebene
 consumerlose Erfolgssemantik greift.
 Die Worker-spezifischen Idle-/Failure-Delays und der Scope pro Batch gehören zum Host, nicht
 zur Foundation. Message-Level-Retry und Lease-Semantik bleiben beim Processor.

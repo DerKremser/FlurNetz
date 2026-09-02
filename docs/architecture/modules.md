@@ -140,11 +140,12 @@ aktiviert. Der API-Host nutzt diese Capability ausschließlich innerhalb des Sho
 bietet keinen Inventory-Endpunkt. Item-Katalog, Messaging, Rewards-Ausführung, Admin UI und
 Worker bleiben außerhalb des Inventory-Moduls. Details stehen in [inventory.md](inventory.md).
 
-## Aktueller Stand des Shop-Moduls
+## Shop-V1-Endzustand
 
-Shop besitzt jetzt vier aufeinander aufbauende Stände innerhalb derselben Modulgrenze:
-Angebotsdomain, persistierten Angebotskatalog, den ersten atomaren Inventory-Kauf und die
-terminale Angebotsarchivierung.
+Shop besitzt als zusammenhängendes Modul die Angebotsdomain, den persistierten und
+betreibersteuerbaren Angebotskatalog, den atomaren Inventory-Kauf, die unveränderliche
+Kaufhistorie, die direkte Storefront sowie die getrennte HTTP-Management-Grenze. Die
+Archivierung ist terminal.
 `Shop.Contracts` veröffentlicht `ShopOfferId`, `ShopPurchaseId`,
 `ShopPurchaseRequestId` sowie `ShopPurchaseCompletedIntegrationEvent` mit
 `shop.purchase-completed` v1.
@@ -173,12 +174,13 @@ erfüllt.
 Der HTTP-Adapter führt dafür keine neue Migration oder fachliche Shop-Änderung ein; es gibt
 keine neuen Events und keinen Shop-Consumer. Die Management-Routen besitzen bewusst noch keine
 Authentication/Authorization und benötigen vor externem Produktivbetrieb einen separaten
-Security-/Host-Slice.
+Security-/Host-Auftrag.
 Der separate Worker referenziert
 für `shop.purchase-completed` v1 nur `Shop.Contracts`, kennt den Eventtyp explizit und
 registriert bewusst keinen fachlichen Consumer. Shop-Implementierung und Shop-Migrationen werden
-dort nicht geladen. Warenkorb, Stock, Discounts und Refunds bleiben ebenfalls außerhalb dieses
-Slices. Details stehen in
+dort nicht geladen. Warenkorb, variable Kaufmengen, Stock, Kategorien, zusätzliche Metadaten,
+Discounts, Coupons, Refunds und Cancellation bleiben ebenfalls bewusst außerhalb des
+Shop-V1-Scope. Details stehen in
 [shop.md](shop.md).
 
 ## Aktueller Stand des Titles-Moduls
