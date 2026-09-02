@@ -33,7 +33,9 @@ public sealed class ListAvailableShopOffers
 
         return Array.AsReadOnly(
             offers
-                .Where(offer => offer.IsEnabled && offer.IsAvailableAt(now))
+                .Where(offer => offer.IsEnabled
+                    && !offer.IsArchived
+                    && offer.IsAvailableAt(now))
                 .ToArray());
     }
 }

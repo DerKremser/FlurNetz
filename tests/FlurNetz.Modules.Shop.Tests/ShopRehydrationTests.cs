@@ -26,6 +26,7 @@ public sealed class ShopOfferRehydrationTests
             "Beschreibung",
             ShopPrice.Create(42),
             true,
+            false,
             availability,
             3,
             11);
@@ -51,6 +52,7 @@ public sealed class ShopOfferRehydrationTests
             null,
             ShopPrice.Zero,
             false,
+            false,
             AvailabilityWindow.Create(null, null),
             null);
 
@@ -67,6 +69,7 @@ public sealed class ShopOfferRehydrationTests
             "  Beschreibung  ",
             ShopPrice.Zero,
             true,
+            false,
             AvailabilityWindow.Create(null, null),
             1);
 
@@ -87,11 +90,30 @@ public sealed class ShopOfferRehydrationTests
             description,
             ShopPrice.Zero,
             false,
+            false,
             AvailabilityWindow.Create(null, null),
             null);
 
         Assert.Equal(displayName, offer.DisplayName);
         Assert.Equal(description, offer.Description);
+    }
+
+    [Fact]
+    public void RehydrateRestoresArchivedState()
+    {
+        var offer = ShopOffer.Rehydrate(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Archiviertes Angebot",
+            null,
+            ShopPrice.Zero,
+            false,
+            true,
+            AvailabilityWindow.Create(null, null),
+            null);
+
+        Assert.True(offer.IsArchived);
+        Assert.False(offer.IsEnabled);
     }
 
     [Fact]
@@ -103,19 +125,19 @@ public sealed class ShopOfferRehydrationTests
         var validAvailability = AvailabilityWindow.Create(null, null);
 
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
-            default, itemDefinitionId, "Angebot", null, validPrice, false, validAvailability, null));
+            default, itemDefinitionId, "Angebot", null, validPrice, false, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
-            id, default, "Angebot", null, validPrice, false, validAvailability, null));
+            id, default, "Angebot", null, validPrice, false, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
-            id, itemDefinitionId, "   ", null, validPrice, false, validAvailability, null));
+            id, itemDefinitionId, "   ", null, validPrice, false, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
-            id, itemDefinitionId, "Angebot", "   ", validPrice, false, validAvailability, null));
+            id, itemDefinitionId, "Angebot", "   ", validPrice, false, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
-            id, itemDefinitionId, "Angebot\0intern", null, validPrice, false, validAvailability, null));
+            id, itemDefinitionId, "Angebot\0intern", null, validPrice, false, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
-            id, itemDefinitionId, "Angebot", "Beschreibung\0intern", validPrice, false, validAvailability, null));
+            id, itemDefinitionId, "Angebot", "Beschreibung\0intern", validPrice, false, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
-            id, itemDefinitionId, "\uD800", null, validPrice, false, validAvailability, null));
+            id, itemDefinitionId, "\uD800", null, validPrice, false, false, validAvailability, null));
         Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
             id,
             itemDefinitionId,
@@ -123,14 +145,25 @@ public sealed class ShopOfferRehydrationTests
             null,
             validPrice,
             false,
+            false,
             AvailabilityWindow.Create(From, From),
             null));
+        Assert.Throws<ArgumentException>(() => ShopOffer.Rehydrate(
+            id,
+            itemDefinitionId,
+            "Angebot",
+            null,
+            validPrice,
+            true,
+            true,
+            validAvailability,
+            null));
         Assert.Throws<ArgumentOutOfRangeException>(() => ShopOffer.Rehydrate(
-            id, itemDefinitionId, "Angebot", null, validPrice, false, validAvailability, 0));
+            id, itemDefinitionId, "Angebot", null, validPrice, false, false, validAvailability, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => ShopOffer.Rehydrate(
-            id, itemDefinitionId, "Angebot", null, validPrice, false, validAvailability, -1));
+            id, itemDefinitionId, "Angebot", null, validPrice, false, false, validAvailability, -1));
         Assert.Throws<ArgumentOutOfRangeException>(() => ShopOffer.Rehydrate(
-            id, itemDefinitionId, "Angebot", null, validPrice, false, validAvailability, null, -1));
+            id, itemDefinitionId, "Angebot", null, validPrice, false, false, validAvailability, null, -1));
     }
 
     [Fact]
@@ -143,6 +176,7 @@ public sealed class ShopOfferRehydrationTests
             null,
             ShopPrice.Zero,
             true,
+            false,
             AvailabilityWindow.Create(null, null),
             null);
 

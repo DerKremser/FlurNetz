@@ -50,6 +50,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Equal("Beschreibung", body.Description);
         Assert.Equal(42, body.Price);
         Assert.False(body.IsEnabled);
+        Assert.False(body.IsArchived);
         Assert.Equal(availableFrom, body.AvailableFromUtc);
         Assert.Equal(availableUntil, body.AvailableUntilUtc);
         Assert.Equal(3, body.PurchaseLimitPerIdentity);
@@ -63,6 +64,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Equal(body.Description, persisted.Description);
         Assert.Equal(body.Price, persisted.Price);
         Assert.False(persisted.IsEnabled);
+        Assert.False(persisted.IsArchived);
         Assert.Equal(body.AvailableFromUtc, persisted.AvailableFromUtc);
         Assert.Equal(body.AvailableUntilUtc, persisted.AvailableUntilUtc);
         Assert.Equal(body.PurchaseLimitPerIdentity, persisted.PurchaseLimitPerIdentity);
@@ -124,6 +126,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
         Assert.Null(created.Description);
         Assert.Equal(0, created.SortOrder);
+        Assert.False(created.IsArchived);
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         Assert.NotNull(list);
         Assert.Equal(
@@ -168,6 +171,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         Assert.Equal(offerId, body.Id);
         Assert.False(body.IsEnabled);
+        Assert.False(body.IsArchived);
         Assert.Equal(0, body.SortOrder);
         Assert.Equal(HttpStatusCode.NotFound, unknownResponse.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
@@ -330,6 +334,61 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Null(updated.PurchaseLimitPerIdentity);
         Assert.Equal(12, updated.SortOrder);
         Assert.False(updated.IsEnabled);
+        Assert.False(updated.IsArchived);
+    }
+
+    [Fact]
+    public async Task ArchiveIsTerminalAndVisibleOnlyInManagement()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await ResetDatabaseAsync();
+        using var factory = await StartHostAsync();
+        using var client = factory.CreateClient();
+
+        var offer = await CreateOfferAsync(client);
+        await EnableAsync(client, offer.Id);
+
+        using var firstArchiveResponse = await client.PostAsync(
+            $"/api/admin/shop/offers/{offer.Id}/archive",
+            content: null,
+            TestToken);
+        using var repeatedArchiveResponse = await client.PostAsync(
+            $"/api/admin/shop/offers/{offer.Id}/archive",
+            content: null,
+            TestToken);
+        using var enableResponse = await client.PostAsync(
+            $"/api/admin/shop/offers/{offer.Id}/enable",
+            content: null,
+            TestToken);
+        using var storefrontResponse = await client.GetAsync(
+            $"/api/shop/offers/{offer.Id}",
+            TestToken);
+        using var managementGetResponse = await client.GetAsync(
+            $"/api/admin/shop/offers/{offer.Id}",
+            TestToken);
+        var managementOffer = await ReadManagementOfferAsync(managementGetResponse);
+        using var managementListResponse = await client.GetAsync(
+            "/api/admin/shop/offers",
+            TestToken);
+        var managementList = await managementListResponse.Content
+            .ReadFromJsonAsync<ShopOfferManagementListResponse>(TestToken);
+        var persisted = await ReadPersistedOfferAsync(offer.Id);
+
+        Assert.Equal(HttpStatusCode.NoContent, firstArchiveResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, repeatedArchiveResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, enableResponse.StatusCode);
+        Assert.Equal(
+            "application/problem+json",
+            enableResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(HttpStatusCode.NotFound, storefrontResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, managementGetResponse.StatusCode);
+        Assert.True(managementOffer.IsArchived);
+        Assert.False(managementOffer.IsEnabled);
+        Assert.Equal(HttpStatusCode.OK, managementListResponse.StatusCode);
+        Assert.Contains(managementList!.Items, item =>
+            item.Id == offer.Id && item.IsArchived && !item.IsEnabled);
+        Assert.True(persisted!.IsArchived);
+        Assert.False(persisted.IsEnabled);
     }
 
     [Fact]
@@ -410,13 +469,15 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             ($"/api/admin/shop/offers/{unknownOfferId}/purchase-limit", new ChangeShopOfferPurchaseLimitRequest(null)),
             ($"/api/admin/shop/offers/{unknownOfferId}/sort-order", new ChangeShopOfferSortOrderRequest(1)),
             ($"/api/admin/shop/offers/{unknownOfferId}/enable", new { }),
-            ($"/api/admin/shop/offers/{unknownOfferId}/disable", new { })
+            ($"/api/admin/shop/offers/{unknownOfferId}/disable", new { }),
+            ($"/api/admin/shop/offers/{unknownOfferId}/archive", new { })
         };
 
         foreach (var route in routes)
         {
             using var response = route.Route.EndsWith("/enable", StringComparison.Ordinal)
                 || route.Route.EndsWith("/disable", StringComparison.Ordinal)
+                || route.Route.EndsWith("/archive", StringComparison.Ordinal)
                 ? await client.PostAsJsonAsync(route.Route, route.Body, TestToken)
                 : await PutAsync(client, route.Route, route.Body);
 
@@ -428,6 +489,11 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             content: null,
             TestToken);
         Assert.Equal(HttpStatusCode.BadRequest, invalidMutationRouteResponse.StatusCode);
+        using var invalidArchiveRouteResponse = await client.PostAsync(
+            "/api/admin/shop/offers/not-a-guid/archive",
+            content: null,
+            TestToken);
+        Assert.Equal(HttpStatusCode.BadRequest, invalidArchiveRouteResponse.StatusCode);
     }
 
     [Fact]
@@ -666,10 +732,10 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             """
             INSERT INTO shop_offers
                 (id, item_definition_id, display_name, description, price, is_enabled,
-                 available_from, available_until, purchase_limit_per_identity, sort_order)
+                 is_archived, available_from, available_until, purchase_limit_per_identity, sort_order)
             VALUES
                 (@id, @itemDefinitionId, @displayName, @description, @price, @isEnabled,
-                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
+                 @isArchived, @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
             """,
             connection);
         command.Parameters.AddWithValue("id", offer.Id);
@@ -678,6 +744,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         command.Parameters.AddWithValue("description", (object?)offer.Description ?? DBNull.Value);
         command.Parameters.AddWithValue("price", offer.Price);
         command.Parameters.AddWithValue("isEnabled", offer.IsEnabled);
+        command.Parameters.AddWithValue("isArchived", offer.IsArchived);
         command.Parameters.AddWithValue(
             "availableFromUtc",
             (object?)offer.AvailableFromUtc ?? DBNull.Value);
@@ -697,7 +764,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         await using var command = new NpgsqlCommand(
             """
             SELECT id, item_definition_id, display_name, description, price, is_enabled,
-                   available_from, available_until, purchase_limit_per_identity, sort_order
+                   is_archived, available_from, available_until, purchase_limit_per_identity, sort_order
             FROM shop_offers
             WHERE id = @id;
             """,
@@ -716,10 +783,11 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             reader.IsDBNull(3) ? null : reader.GetString(3),
             reader.GetInt64(4),
             reader.GetBoolean(5),
-            reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6),
+            reader.GetBoolean(6),
             reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7),
-            reader.IsDBNull(8) ? null : reader.GetInt32(8),
-            reader.GetInt32(9));
+            reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
+            reader.IsDBNull(9) ? null : reader.GetInt32(9),
+            reader.GetInt32(10));
     }
 
     private async Task InsertIdentityAsync(Guid identityId)
@@ -784,7 +852,8 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         DateTimeOffset? AvailableFromUtc,
         DateTimeOffset? AvailableUntilUtc,
         int? PurchaseLimitPerIdentity,
-        int SortOrder = 0);
+        int SortOrder = 0,
+        bool IsArchived = false);
 
     private sealed record PersistedOffer(
         Guid Id,
@@ -793,6 +862,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         string? Description,
         long Price,
         bool IsEnabled,
+        bool IsArchived,
         DateTimeOffset? AvailableFromUtc,
         DateTimeOffset? AvailableUntilUtc,
         int? PurchaseLimitPerIdentity,

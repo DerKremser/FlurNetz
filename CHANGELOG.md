@@ -4,6 +4,29 @@
 
 ### Hinzugefügt
 
+- Slice 10 ergänzt für `ShopOffer` den terminalen Zustand `IsArchived`. Neue Angebote starten
+  deaktiviert und nicht archiviert; `Archive()` archiviert einmalig, deaktiviert zugleich und ist
+  bei Wiederholung ein No-op. `Enable()` lehnt archivierte Angebote mit einem gezielten
+  `ShopOfferArchivedException` ab; `Rehydrate(...)` stellt den Zustand wieder her und verwirft
+  die ungültige Kombination aus archiviert und aktiviert.
+- Der neue Use Case `ArchiveShopOffer` verwendet ausschließlich
+  `IShopOfferStore.ExecuteAsync(...)`. Store und Purchase-Snapshot berücksichtigen
+  `is_archived`; die bestehende `FOR UPDATE`-/`FOR SHARE`-Locking-Architektur und die
+  historische Purchase-History bleiben erhalten. Ein abgelehnter Kauf eines archivierten
+  Angebots rollt weiterhin alle Teilwirkungen einschließlich Reservation, Guard und Outbox zurück.
+- `Shop:4:AddShopOfferArchiveState` ergänzt ausschließlich `shop_offers.is_archived` als
+  `boolean NOT NULL`, backfillt bestehende Angebote mit `false`, entfernt den temporären Default
+  und erzwingt `CHECK (NOT (is_archived AND is_enabled))`. `Shop:1` bis `Shop:3` bleiben
+  unverändert; es gibt keine neue Tabelle oder weitere Migration.
+- Die öffentliche Storefront verwendet die Sichtbarkeitsregel
+  `IsEnabled && !IsArchived && IsAvailableAt(now)`; archivierte Einzelangebote liefern `404`.
+  Die interne Management-Grenze enthält `IsArchived` und ergänzt
+  `POST /api/admin/shop/offers/{offerId}/archive` mit idempotentem `204`; Enable auf archivierten
+  Angeboten liefert `409 Conflict` als ProblemDetails.
+- Domain-, Application-, PostgreSQL-, API-, Architektur- und Concurrency-Tests decken
+  Archivierung, Rehydration, Migration, Constraint, No-op, vollständigen Kauf-Rollback und die
+  deterministische Archive-vs.-Purchase-Sperrreihenfolge ab.
+
 - Slice 9 ergänzt eine persistierte, betreibersteuerbare `ShopOffer.SortOrder`-Reihenfolge.
   `SortOrder` muss `>= 0` sein, neue Angebote starten mit `0`, gleiche Werte sind erlaubt und
   es gibt keine automatische Umnummerierung. Die verbindliche Katalogreihenfolge lautet
@@ -27,7 +50,7 @@
 - `Shop.Contracts` bleibt bei exakt vier öffentlichen Typen; `ShopPurchaseCompletedIntegrationEvent`
   bleibt vollständig `shop.purchase-completed` v1. Purchase-Snapshot, Purchase-Semantik,
   Outbox, Worker, Consumerlosigkeit, Administration und Security-Scope werden nicht erweitert.
-- Kein Admin-Frontend sowie kein Delete, Soft Delete oder Archive wird eingeführt.
+- Kein Admin-Frontend sowie kein Delete oder Soft Delete wird eingeführt.
 
 - Getrennte HTTP-Management-Grenze für den vollständigen Shop-Angebotskatalog unter
   `/api/admin/shop/offers` mit Create, Get, List, gezielten Feldmutationen sowie Enable und

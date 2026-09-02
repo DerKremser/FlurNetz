@@ -546,7 +546,7 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
     }
 
     [Fact]
-    public async Task CatalogMutationWaitsForPurchaseOfferSnapshotLock()
+    public async Task ArchiveWaitsForPurchaseOfferSnapshotLockAndPurchaseWinsFirst()
     {
         SkipIfDatabaseIsUnavailable();
         await using var setupFactory = CreateFactory();
@@ -584,7 +584,7 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
 
             mutationTask = Task.Run(() => new ShopOfferStore(mutationFactory).ExecuteAsync(
                 offer.Id,
-                current => current.ChangePrice(99),
+                current => current.Archive(),
                 TestToken));
 
             await WaitForRowLockWaitAsync(observerFactory, mutationApplicationName);
@@ -600,7 +600,11 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
                 TestContext.Current.CancellationToken));
 
             Assert.Equal(25, purchase.PricePaid.Value);
-            Assert.Equal(99, (await new ShopOfferStore(setupFactory).GetAsync(offer.Id, TestToken))!.Price.Value);
+            var archivedOffer = await new ShopOfferStore(setupFactory).GetAsync(offer.Id, TestToken);
+            Assert.NotNull(archivedOffer);
+            Assert.True(archivedOffer!.IsArchived);
+            Assert.False(archivedOffer.IsEnabled);
+            Assert.Equal(25, archivedOffer.Price.Value);
 
             await using var connection = await setupFactory.OpenConnectionAsync(TestToken);
             Assert.Equal(1L, await CountAsync(connection, "shop_purchases"));
@@ -612,6 +616,88 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
             await DrainTaskAsync(purchaseTask);
             await DrainTaskAsync(mutationTask);
         }
+    }
+
+    [Fact]
+    public async Task ArchiveWinsBeforePurchaseAndPurchaseRollsBackWithoutEffects()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var setupFactory = CreateFactory();
+        await PreparePurchaseDatabaseAsync(setupFactory);
+
+        var identityId = await CreateIdentityAsync(setupFactory);
+        await CreditAsync(setupFactory, identityId, 100);
+        var itemDefinitionId = ItemDefinitionId.New();
+        var offer = await CreateEnabledOfferAsync(setupFactory, itemDefinitionId, price: 25);
+
+        var archiveApplicationName = $"shop-archive-lock-{offer.Id.Value:N}";
+        var purchaseApplicationName = $"shop-purchase-after-archive-{offer.Id.Value:N}";
+        await using var archiveFactory = CreateFactory(archiveApplicationName);
+        await using var purchaseFactory = CreateFactory(purchaseApplicationName);
+        await using var observerFactory = CreateFactory();
+
+        var archiveCallbackEntered = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseArchive = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<bool>? archiveTask = null;
+        Task<ShopPurchase>? purchaseTask = null;
+
+        try
+        {
+            archiveTask = Task.Run(() => new ShopOfferStore(archiveFactory).ExecuteAsync(
+                offer.Id,
+                current =>
+                {
+                    archiveCallbackEntered.TrySetResult(true);
+                    releaseArchive.Task.GetAwaiter().GetResult();
+                    return current.Archive();
+                },
+                TestToken));
+
+            await archiveCallbackEntered.Task.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken);
+
+            var useCase = CreateUseCase(purchaseFactory, PurchaseTime);
+            purchaseTask = Task.Run(() => useCase.ExecuteAsync(
+                ShopPurchaseRequestId.New(),
+                offer.Id,
+                identityId,
+                TestToken));
+
+            await WaitForRowLockWaitAsync(observerFactory, purchaseApplicationName);
+            Assert.False(purchaseTask.IsCompleted);
+
+            releaseArchive.TrySetResult(true);
+
+            Assert.True(await archiveTask.WaitAsync(
+                ConcurrencyTimeout,
+                TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<ShopOfferUnavailableForPurchaseException>(() =>
+                purchaseTask.WaitAsync(
+                    ConcurrencyTimeout,
+                    TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            releaseArchive.TrySetResult(true);
+            await DrainTaskAsync(archiveTask);
+            await DrainTaskAsync(purchaseTask);
+        }
+
+        var archivedOffer = await new ShopOfferStore(setupFactory).GetAsync(offer.Id, TestToken);
+        Assert.NotNull(archivedOffer);
+        Assert.True(archivedOffer!.IsArchived);
+        Assert.False(archivedOffer.IsEnabled);
+
+        await using var connection = await setupFactory.OpenConnectionAsync(TestToken);
+        Assert.Equal(100, await ReadBalanceAsync(connection, identityId));
+        Assert.Null(await ReadQuantityOrNullAsync(connection, identityId, itemDefinitionId));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0L, await CountAsync(connection, "shop_purchase_guards"));
+        Assert.Equal(0L, await CountOutboxAsync(connection));
     }
 
     [Fact]

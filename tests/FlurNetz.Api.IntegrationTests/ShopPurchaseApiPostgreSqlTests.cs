@@ -300,6 +300,55 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
     }
 
     [Fact]
+    public async Task ArchivedOfferReturnsConflictWithoutAnyPurchaseEffect()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await ResetDatabaseAsync();
+        using var factory = await StartHostAsync();
+        using var client = factory.CreateClient();
+
+        var identityId = Guid.NewGuid();
+        var itemDefinitionId = Guid.NewGuid();
+        var offerId = Guid.NewGuid();
+        await InsertIdentityAsync(identityId);
+        await InsertEconomyAsync(identityId, 20);
+        await InsertOfferAsync(new OfferSeed(
+            offerId,
+            itemDefinitionId,
+            "Archiviertes Purchase-Angebot",
+            5,
+            true,
+            null,
+            null,
+            1));
+
+        using var archiveResponse = await client.PostAsync(
+            $"/api/admin/shop/offers/{offerId}/archive",
+            content: null,
+            TestToken);
+        using var purchaseResponse = await PurchaseAsync(
+            client,
+            offerId,
+            Guid.NewGuid(),
+            identityId);
+
+        Assert.Equal(HttpStatusCode.NoContent, archiveResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, purchaseResponse.StatusCode);
+        Assert.Equal(
+            "application/problem+json",
+            purchaseResponse.Content.Headers.ContentType?.MediaType);
+
+        await using var connection = await OpenConnectionAsync();
+        Assert.Equal(20, await ReadBalanceAsync(connection, identityId));
+        Assert.Null(await ReadQuantityOrNullAsync(connection, identityId, itemDefinitionId));
+        Assert.Equal(0, await CountAsync(connection, "shop_purchases"));
+        Assert.Equal(0, await CountAsync(connection, "shop_purchase_requests"));
+        Assert.Equal(0, await CountAsync(connection, "shop_purchase_guards"));
+        Assert.Equal(0, await CountAsync(connection, "community_inventory_entries"));
+        Assert.Equal(0, await CountOutboxAsync(connection));
+    }
+
+    [Fact]
     public async Task ReachingThePurchaseLimitReturnsConflictWithoutAdditionalEffect()
     {
         SkipIfDatabaseIsUnavailable();
@@ -503,10 +552,10 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
             """
             INSERT INTO shop_offers
                 (id, item_definition_id, display_name, price, is_enabled,
-                 available_from, available_until, purchase_limit_per_identity, sort_order)
+                 is_archived, available_from, available_until, purchase_limit_per_identity, sort_order)
             VALUES
                 (@id, @itemDefinitionId, @displayName, @price, @isEnabled,
-                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
+                 @isArchived, @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
             """,
             connection);
         command.Parameters.AddWithValue("id", offer.Id);
@@ -514,6 +563,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         command.Parameters.AddWithValue("displayName", offer.DisplayName);
         command.Parameters.AddWithValue("price", offer.Price);
         command.Parameters.AddWithValue("isEnabled", offer.IsEnabled);
+        command.Parameters.AddWithValue("isArchived", offer.IsArchived);
         command.Parameters.AddWithValue(
             "availableFromUtc",
             (object?)offer.AvailableFromUtc ?? DBNull.Value);
@@ -670,7 +720,8 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         DateTimeOffset? AvailableFromUtc,
         DateTimeOffset? AvailableUntilUtc,
         int? PurchaseLimitPerIdentity,
-        int SortOrder = 0);
+        int SortOrder = 0,
+        bool IsArchived = false);
 
     private sealed record OutboxSnapshot(
         string MessageType,

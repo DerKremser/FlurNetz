@@ -40,6 +40,21 @@ public sealed class ShopAvailableOffersApplicationTests
     }
 
     [Fact]
+    public async Task GetAvailableOfferReturnsNullForArchivedOffer()
+    {
+        var offer = CreateOffer(
+            isEnabled: true,
+            availability: AvailabilityWindow.Create(null, null));
+        offer.Archive();
+        var store = new FakeOfferStore { Offer = offer };
+
+        var result = await new GetAvailableShopOffer(store, new FixedClock(Now))
+            .ExecuteAsync(offer.Id, TestToken);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public async Task GetAvailableOfferUsesInclusiveStartAndExclusiveEnd()
     {
         var from = Now.AddHours(-1);
@@ -112,9 +127,13 @@ public sealed class ShopAvailableOffersApplicationTests
         var last = CreateOffer(
             isEnabled: true,
             availability: AvailabilityWindow.Create(null, Now.AddHours(1)));
+        var archived = CreateOffer(
+            isEnabled: true,
+            availability: AvailabilityWindow.Create(null, null));
+        archived.Archive();
         var store = new FakeOfferStore
         {
-            Offers = [first, disabled, future, last]
+            Offers = [first, disabled, future, archived, last]
         };
         var clock = new CountingClock(Now);
 

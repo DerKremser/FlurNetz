@@ -261,6 +261,7 @@ public sealed class ShopOfferTests
         var offer = CreateOffer();
 
         Assert.False(offer.IsEnabled);
+        Assert.False(offer.IsArchived);
     }
 
     [Fact]
@@ -831,6 +832,58 @@ public sealed class ShopOfferTests
     }
 
     [Fact]
+    public void ArchiveDisablesActiveOfferAndIsIdempotent()
+    {
+        var offer = CreateOffer();
+        offer.Enable();
+
+        Assert.True(offer.Archive());
+        Assert.True(offer.IsArchived);
+        Assert.False(offer.IsEnabled);
+        Assert.False(offer.Archive());
+        Assert.True(offer.IsArchived);
+        Assert.False(offer.IsEnabled);
+    }
+
+    [Fact]
+    public void ArchivePreservesAllOtherOfferFields()
+    {
+        var offer = CreateOffer(description: "Beschreibung", purchaseLimitPerIdentity: 2, sortOrder: 5);
+        var id = offer.Id;
+        var itemDefinitionId = offer.ItemDefinitionId;
+        var displayName = offer.DisplayName;
+        var description = offer.Description;
+        var price = offer.Price;
+        var availability = offer.Availability;
+        var purchaseLimit = offer.PurchaseLimitPerIdentity;
+        var sortOrder = offer.SortOrder;
+
+        Assert.True(offer.Archive());
+
+        Assert.Equal(id, offer.Id);
+        Assert.Equal(itemDefinitionId, offer.ItemDefinitionId);
+        Assert.Equal(displayName, offer.DisplayName);
+        Assert.Equal(description, offer.Description);
+        Assert.Equal(price, offer.Price);
+        Assert.Equal(availability, offer.Availability);
+        Assert.Equal(purchaseLimit, offer.PurchaseLimitPerIdentity);
+        Assert.Equal(sortOrder, offer.SortOrder);
+    }
+
+    [Fact]
+    public void EnableRejectsArchivedOfferWithAShopSpecificException()
+    {
+        var offer = CreateOffer();
+        offer.Archive();
+
+        var exception = Assert.Throws<ShopOfferArchivedException>(() => offer.Enable());
+
+        Assert.Equal(offer.Id, exception.ShopOfferId);
+        Assert.False(offer.IsEnabled);
+        Assert.True(offer.IsArchived);
+    }
+
+    [Fact]
     public void TargetIdentifiersAreImmutable()
     {
         var id = typeof(ShopOffer).GetProperty(nameof(ShopOffer.Id));
@@ -855,7 +908,8 @@ public sealed class ShopOfferTests
             nameof(ShopOffer.ChangePurchaseLimit),
             nameof(ShopOffer.ChangeSortOrder),
             nameof(ShopOffer.Enable),
-            nameof(ShopOffer.Disable)
+            nameof(ShopOffer.Disable),
+            nameof(ShopOffer.Archive)
         };
 
         var unexpectedPublicInstanceMethods = typeof(ShopOffer)
@@ -888,6 +942,7 @@ public sealed class ShopOfferTests
         var description = typeof(ShopOffer).GetProperty(nameof(ShopOffer.Description));
         var price = typeof(ShopOffer).GetProperty(nameof(ShopOffer.Price));
         var isEnabled = typeof(ShopOffer).GetProperty(nameof(ShopOffer.IsEnabled));
+        var isArchived = typeof(ShopOffer).GetProperty(nameof(ShopOffer.IsArchived));
         var availability = typeof(ShopOffer).GetProperty(nameof(ShopOffer.Availability));
         var purchaseLimit = typeof(ShopOffer).GetProperty(nameof(ShopOffer.PurchaseLimitPerIdentity));
         var sortOrder = typeof(ShopOffer).GetProperty(nameof(ShopOffer.SortOrder));
@@ -900,6 +955,8 @@ public sealed class ShopOfferTests
         Assert.Null(price!.GetSetMethod());
         Assert.NotNull(isEnabled);
         Assert.Null(isEnabled!.GetSetMethod());
+        Assert.NotNull(isArchived);
+        Assert.Null(isArchived!.GetSetMethod());
         Assert.NotNull(availability);
         Assert.Null(availability!.GetSetMethod());
         Assert.NotNull(purchaseLimit);

@@ -35,9 +35,17 @@ public sealed class ShopOffer
         AvailabilityWindow availabilityWindow,
         int? purchaseLimitPerIdentity,
         int sortOrder,
-        bool isEnabled)
+        bool isEnabled,
+        bool isArchived)
     {
         EnsureValidSortOrder(sortOrder);
+
+        if (isArchived && isEnabled)
+        {
+            throw new ArgumentException(
+                "Ein archiviertes Shop-Angebot darf nicht aktiviert sein.",
+                nameof(isArchived));
+        }
 
         Id = id;
         ItemDefinitionId = itemDefinitionId;
@@ -48,6 +56,7 @@ public sealed class ShopOffer
         PurchaseLimitPerIdentity = purchaseLimitPerIdentity;
         SortOrder = sortOrder;
         IsEnabled = isEnabled;
+        IsArchived = isArchived;
     }
 
     /// <summary>
@@ -94,6 +103,11 @@ public sealed class ShopOffer
     /// Liefert, ob das Angebot fachlich aktiviert ist.
     /// </summary>
     public bool IsEnabled { get; private set; }
+
+    /// <summary>
+    /// Liefert, ob das Angebot endgültig archiviert und damit aus dem Verkauf genommen ist.
+    /// </summary>
+    public bool IsArchived { get; private set; }
 
     /// <summary>
     /// Liefert das Verfügbarkeitsfenster des Angebots.
@@ -149,6 +163,7 @@ public sealed class ShopOffer
             availabilityWindow,
             NormalizePurchaseLimit(purchaseLimitPerIdentity),
             sortOrder,
+            false,
             false);
     }
 
@@ -190,6 +205,7 @@ public sealed class ShopOffer
         string? description,
         ShopPrice price,
         bool isEnabled,
+        bool isArchived,
         AvailabilityWindow availabilityWindow,
         int? purchaseLimitPerIdentity,
         int sortOrder = 0)
@@ -206,7 +222,8 @@ public sealed class ShopOffer
             availabilityWindow,
             NormalizePurchaseLimit(purchaseLimitPerIdentity),
             sortOrder,
-            isEnabled);
+            isEnabled,
+            isArchived);
     }
 
     /// <summary>
@@ -317,6 +334,11 @@ public sealed class ShopOffer
     /// </summary>
     public bool Enable()
     {
+        if (IsArchived)
+        {
+            throw new ShopOfferArchivedException(Id);
+        }
+
         if (IsEnabled)
         {
             return false;
@@ -336,6 +358,21 @@ public sealed class ShopOffer
             return false;
         }
 
+        IsEnabled = false;
+        return true;
+    }
+
+    /// <summary>
+    /// Archiviert das Angebot endgültig und deaktiviert es zugleich.
+    /// </summary>
+    public bool Archive()
+    {
+        if (IsArchived)
+        {
+            return false;
+        }
+
+        IsArchived = true;
         IsEnabled = false;
         return true;
     }

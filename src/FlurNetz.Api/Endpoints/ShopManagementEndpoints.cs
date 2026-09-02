@@ -51,6 +51,9 @@ public static class ShopManagementEndpoints
         endpoints.MapPost(
             $"{OffersRoute}/{{offerId}}/disable",
             DisableShopOfferAsync);
+        endpoints.MapPost(
+            $"{OffersRoute}/{{offerId}}/archive",
+            ArchiveShopOfferAsync);
 
         return endpoints;
     }
@@ -306,6 +309,16 @@ public static class ShopManagementEndpoints
                 cancellationToken)
             .ConfigureAwait(false);
 
+    private static async Task<IResult> ArchiveShopOfferAsync(
+        string offerId,
+        ArchiveShopOffer useCase,
+        CancellationToken cancellationToken) =>
+        await ExecuteStatusMutationAsync(
+                offerId,
+                useCase.ExecuteAsync,
+                cancellationToken)
+            .ConfigureAwait(false);
+
     private static async Task<IResult> ExecuteStatusMutationAsync(
         string rawOfferId,
         Func<ShopOfferId, CancellationToken, Task<bool>> operation,
@@ -335,6 +348,13 @@ public static class ShopManagementEndpoints
                 title: "Shop-Angebot nicht gefunden.",
                 detail: exception.Message);
         }
+        catch (ShopOfferArchivedException exception)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Shop-Angebot archiviert.",
+                detail: exception.Message);
+        }
         catch (ArgumentException exception)
         {
             return InvalidRequest(exception.Message);
@@ -349,6 +369,7 @@ public static class ShopManagementEndpoints
             offer.Description,
             offer.Price.Value,
             offer.IsEnabled,
+            offer.IsArchived,
             offer.Availability.AvailableFrom,
             offer.Availability.AvailableUntil,
             offer.PurchaseLimitPerIdentity,

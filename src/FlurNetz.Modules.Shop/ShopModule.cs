@@ -37,6 +37,7 @@ public static class ShopModule
         services.AddScoped<ChangeShopOfferSortOrder>();
         services.AddScoped<EnableShopOffer>();
         services.AddScoped<DisableShopOffer>();
+        services.AddScoped<ArchiveShopOffer>();
         services.AddScoped<PurchaseShopOffer>();
 
         return services;

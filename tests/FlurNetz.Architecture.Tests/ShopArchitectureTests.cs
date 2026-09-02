@@ -85,6 +85,7 @@ public sealed class ShopArchitectureTests
             typeof(AvailabilityWindow),
             typeof(ShopPurchase),
             typeof(ChangeShopOfferSortOrder),
+            typeof(ArchiveShopOffer),
             typeof(IShopOfferStore),
             typeof(IShopPurchaseHistoryStore),
             typeof(IShopPurchaseExecutor),
@@ -152,11 +153,11 @@ public sealed class ShopArchitectureTests
     }
 
     [Fact]
-    public void ShopMigrationsKeepV1AndV2AndAddFocusedSortOrderV3()
+    public void ShopMigrationsKeepV1AndV2AndV3AndAddFocusedArchiveStateV4()
     {
         var migrations = new ShopMigrationSource().GetMigrations().OrderBy(m => m.Version).ToArray();
 
-        Assert.Equal(3, migrations.Length);
+        Assert.Equal(4, migrations.Length);
 
         var catalog = migrations[0];
         Assert.Equal("Shop", catalog.Owner);
@@ -191,6 +192,19 @@ public sealed class ShopArchitectureTests
         Assert.DoesNotContain("CREATE TABLE", sortOrder.Sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("REFERENCES", sortOrder.Sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("shop_purchases", sortOrder.Sql, StringComparison.Ordinal);
+
+        var archiveState = migrations[3];
+        Assert.Equal("Shop", archiveState.Owner);
+        Assert.Equal(4, archiveState.Version);
+        Assert.Equal("AddShopOfferArchiveState", archiveState.Name);
+        Assert.Contains("ALTER TABLE shop_offers", archiveState.Sql, StringComparison.Ordinal);
+        Assert.Contains("ADD COLUMN is_archived boolean DEFAULT false", archiveState.Sql, StringComparison.Ordinal);
+        Assert.Contains("ALTER COLUMN is_archived SET NOT NULL", archiveState.Sql, StringComparison.Ordinal);
+        Assert.Contains("ALTER COLUMN is_archived DROP DEFAULT", archiveState.Sql, StringComparison.Ordinal);
+        Assert.Contains("CHECK (NOT (is_archived AND is_enabled))", archiveState.Sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CREATE TABLE", archiveState.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REFERENCES", archiveState.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("shop_purchases", archiveState.Sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -201,7 +215,7 @@ public sealed class ShopArchitectureTests
         var result = services.AddShopModule();
 
         Assert.Same(services, result);
-        Assert.Equal(21, services.Count);
+        Assert.Equal(22, services.Count);
         AssertService<IClock, SystemClock>(services, ServiceLifetime.Singleton);
         AssertService<IShopOfferStore, ShopOfferStore>(services, ServiceLifetime.Scoped);
         AssertService<IShopPurchaseHistoryStore, ShopPurchaseHistoryStore>(services, ServiceLifetime.Scoped);
@@ -222,6 +236,7 @@ public sealed class ShopArchitectureTests
         AssertService<ChangeShopOfferSortOrder, ChangeShopOfferSortOrder>(services, ServiceLifetime.Scoped);
         AssertService<EnableShopOffer, EnableShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<DisableShopOffer, DisableShopOffer>(services, ServiceLifetime.Scoped);
+        AssertService<ArchiveShopOffer, ArchiveShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<IMigrationSource, ShopMigrationSource>(services, ServiceLifetime.Singleton);
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType == typeof(IIntegrationEventPublisher));
@@ -258,7 +273,8 @@ public sealed class ShopArchitectureTests
                 || descriptor.ServiceType == typeof(ChangeShopOfferPurchaseLimit)
                 || descriptor.ServiceType == typeof(ChangeShopOfferSortOrder)
                 || descriptor.ServiceType == typeof(EnableShopOffer)
-                || descriptor.ServiceType == typeof(DisableShopOffer));
+                || descriptor.ServiceType == typeof(DisableShopOffer)
+                || descriptor.ServiceType == typeof(ArchiveShopOffer));
     }
 
     [Fact]

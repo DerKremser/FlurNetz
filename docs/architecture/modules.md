@@ -142,8 +142,9 @@ Worker bleiben außerhalb des Inventory-Moduls. Details stehen in [inventory.md]
 
 ## Aktueller Stand des Shop-Moduls
 
-Shop besitzt jetzt drei aufeinander aufbauende Stände innerhalb derselben Modulgrenze:
-Angebotsdomain, persistierten Angebotskatalog und den ersten atomaren Inventory-Kauf.
+Shop besitzt jetzt vier aufeinander aufbauende Stände innerhalb derselben Modulgrenze:
+Angebotsdomain, persistierten Angebotskatalog, den ersten atomaren Inventory-Kauf und die
+terminale Angebotsarchivierung.
 `Shop.Contracts` veröffentlicht `ShopOfferId`, `ShopPurchaseId`,
 `ShopPurchaseRequestId` sowie `ShopPurchaseCompletedIntegrationEvent` mit
 `shop.purchase-completed` v1.
@@ -167,7 +168,8 @@ Implementierungsassemblies oder Tabellen. `FlurNetz.Api` registriert `AddShopMod
 stellt Storefront-, History-, Purchase- und eine getrennte
 `/api/admin/shop/offers`-Management-Grenze bereit. Die Management-Grenze verwendet die
 vorhandenen Katalog-Use-Cases und eigene API-Verträge; sie sieht den vollständigen internen
-Katalog, während die Storefront weiterhin nur aktivierte und aktuell verfügbare Angebote zeigt.
+Katalog, während die Storefront weiterhin nur `IsEnabled && !IsArchived && IsAvailableAt(now)`
+erfüllt.
 Der HTTP-Adapter führt dafür keine neue Migration oder fachliche Shop-Änderung ein; es gibt
 keine neuen Events und keinen Shop-Consumer. Die Management-Routen besitzen bewusst noch keine
 Authentication/Authorization und benötigen vor externem Produktivbetrieb einen separaten
@@ -284,9 +286,10 @@ interne Use Cases, atomaren Store, Migration und Registrierung; sein Contracts-P
 Application-Use-Cases, getrennte Community- und Katalog-Stores, zwei Migrationen, Modulregistrierung
 und echte Integrationstests; Achievements besitzt Domain, Application, getrennte Katalog- und
 Community-Stores, eine Migration, Modulregistrierung und echte Integrationstests; Shop besitzt den
-persistierten `Shop-Katalog` mit minimalem `ShopOfferId`-Contract, `Shop:1:CreateShopOffers`,
-internen Use Cases, PostgreSQL-/Dapper-Store und Row-Lock-Mutationen sowie gezielte read-only
-Storefront- und Purchase-History-Queries. Shop bewertet Textgrenzen
+persistierten `Shop-Katalog` mit minimalem `ShopOfferId`-Contract, den vier fachlichen
+Migrationen `Shop:1:CreateShopOffers` bis `Shop:4:AddShopOfferArchiveState`, internen Use Cases,
+PostgreSQL-/Dapper-Store, Row-Lock-Mutationen und terminaler Angebotsarchivierung sowie gezielte
+read-only Storefront- und Purchase-History-Queries. Shop bewertet Textgrenzen
 nach Unicode-Skalarwerten passend zu PostgreSQL, verwirft U+0000 und nicht wohlgeformtes UTF-16
 und modelliert Availability-Grenzen als UTC-Instants mit mikrosekundengenauer Präzision. Die übrigen Contracts-Projekte
 bleiben leer.
@@ -305,7 +308,7 @@ Registrierung; kein Host verdrahtet den Slice und es gibt keine öffentliche API
 Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; der API-Host
 verdrahtet ausschließlich die schmale Grant-Capability innerhalb des Shop-Purchases und bietet
 keine Inventory-HTTP-Endpunkte. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`,
-die Purchase-History-Stores, zwei unveränderte Migrationen sowie `ShopModule` mit Read-Basis;
+die Purchase-History-Stores, vier fachliche Migrationen sowie `ShopModule` mit Read-Basis;
 der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt. Der API-Host verdrahtet
 `AddShopModule()`, mappt Storefront-, History-, Purchase- und die getrennte Management-
 Endpoint-Gruppe auf die vorhandenen Use-Cases. Der Worker kennt `shop.purchase-completed` v1 über

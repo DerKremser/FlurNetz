@@ -66,7 +66,8 @@ ruft den bestehenden Runner vor dem Listener-Start auf. Ein Fehler wird geloggt 
 Startup, damit kein nicht initialisierter Host als betriebsbereit erscheint. Der API-Host
 registriert die Identity- und die Shop-Read-only-Migrationsquelle und führt damit die
 vorhandenen Migrationen `Identity:1:CreateCommunityIdentities`,
-`Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases` aus. Der erste fachliche
+`Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder` und
+`Shop:4:AddShopOfferArchiveState` aus. Der erste fachliche
 Besitzer einer Migration ist Identity: `Identity:1:CreateCommunityIdentities` legt die Tabelle
 `community_identities` mit ausschließlich `id uuid primary key` an. Engagement besitzt nun als
 weiteres Modul die Migration `Engagement:1:CreateEngagementActivities` für seine Tabelle
@@ -102,8 +103,9 @@ auch während des Writes gültig. Der Root-Lock serialisiert nur Operationen der
 aus und verwendet bei Rename sowie Description-Änderung einen Row-Lock mit
 `SELECT FOR UPDATE`; ein UPDATE erfolgt nur bei tatsächlicher Domain-Änderung.
 
-Shop besitzt zusätzlich die unveränderte Migration `Shop:1:CreateShopOffers` und
-`Shop:2:CreateShopPurchases`. V2 legt `shop_purchase_requests`,
+Shop besitzt zusätzlich die unveränderten Migrationen `Shop:1:CreateShopOffers`,
+`Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder` und
+`Shop:4:AddShopOfferArchiveState`. V2 legt `shop_purchase_requests`,
 `shop_purchase_guards` und `shop_purchases` an. Der einzige Foreign Key dieser
 Purchase-Migration ist Shop-intern von `shop_purchases.shop_offer_id` auf
 `shop_offers.id`; Identity-, Economy- und Inventory-Beziehungen bleiben bewusst ohne
@@ -134,7 +136,7 @@ Docker muss für diese Testvariante verfügbar sein; alternativ kann
 realen Identity-, Economy-, Inventory- und Messaging-Adapter: erfolgreicher gemeinsamer
 Commit, Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und
 vollständiger Rollback bei unzureichendem Saldo.
-`FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, alle sechs
+`FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, alle acht
 registrierten Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen, die read-only
 Offer-Storefront, vollständige DTO-Abbildung, den HTTP-Purchase mit Snapshot, Location,
 Idempotenz, Fehler-Rollback und Producer-only-Outbox sowie den Purchase-Lookup und die

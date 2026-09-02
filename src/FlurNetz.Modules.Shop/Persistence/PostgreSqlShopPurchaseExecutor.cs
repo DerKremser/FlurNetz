@@ -56,6 +56,7 @@ public sealed class PostgreSqlShopPurchaseExecutor : IShopPurchaseExecutor
             description AS Description,
             price AS Price,
             is_enabled AS IsEnabled,
+            is_archived AS IsArchived,
             available_from AS AvailableFrom,
             available_until AS AvailableUntil,
             purchase_limit_per_identity AS PurchaseLimitPerIdentity,
@@ -198,7 +199,7 @@ public sealed class PostgreSqlShopPurchaseExecutor : IShopPurchaseExecutor
             }
 
             var offer = RehydrateOffer(offerRow);
-            if (!offer.IsEnabled || !offer.IsAvailableAt(purchasedAtUtc))
+            if (offer.IsArchived || !offer.IsEnabled || !offer.IsAvailableAt(purchasedAtUtc))
             {
                 throw new ShopOfferUnavailableForPurchaseException(validShopOfferId);
             }
@@ -386,6 +387,7 @@ public sealed class PostgreSqlShopPurchaseExecutor : IShopPurchaseExecutor
             row.Description,
             ShopPrice.Create(row.Price),
             row.IsEnabled,
+            row.IsArchived,
             AvailabilityWindow.Create(row.AvailableFrom, row.AvailableUntil),
             row.PurchaseLimitPerIdentity,
             row.SortOrder);
@@ -456,6 +458,8 @@ public sealed class PostgreSqlShopPurchaseExecutor : IShopPurchaseExecutor
         public long Price { get; set; }
 
         public bool IsEnabled { get; set; }
+
+        public bool IsArchived { get; set; }
 
         public DateTimeOffset? AvailableFrom { get; set; }
 

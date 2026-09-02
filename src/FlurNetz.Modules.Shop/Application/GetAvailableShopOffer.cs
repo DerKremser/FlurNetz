@@ -34,7 +34,10 @@ public sealed class GetAvailableShopOffer
         var offer = await store.GetAsync(validShopOfferId, cancellationToken).ConfigureAwait(false);
         var now = clock.UtcNow;
 
-        return offer is not null && offer.IsEnabled && offer.IsAvailableAt(now)
+        return offer is not null
+            && offer.IsEnabled
+            && !offer.IsArchived
+            && offer.IsAvailableAt(now)
             ? offer
             : null;
     }

@@ -34,8 +34,8 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         var firstRun = await runner.RunAsync(TestToken);
         var secondRun = await runner.RunAsync(TestToken);
 
-        Assert.Equal(new MigrationRunResult(3, 0), firstRun);
-        Assert.Equal(new MigrationRunResult(0, 3), secondRun);
+        Assert.Equal(new MigrationRunResult(4, 0), firstRun);
+        Assert.Equal(new MigrationRunResult(0, 4), secondRun);
 
         await using var connection = await factory.OpenConnectionAsync(TestToken);
         var shopRelations = (await connection.QueryAsync<ShopRelation>(
@@ -75,18 +75,19 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
             shopRelations.Select(relation => relation.RelationName).ToArray());
         Assert.All(shopRelations, relation => Assert.Equal("r", relation.RelationKind));
 
-        Assert.Equal(3, histories.Length);
-        Assert.Equal([1L, 2L, 3L], histories.Select(history => history.Version).ToArray());
+        Assert.Equal(4, histories.Length);
+        Assert.Equal([1L, 2L, 3L, 4L], histories.Select(history => history.Version).ToArray());
         Assert.Equal(
-            ["CreateShopOffers", "CreateShopPurchases", "AddShopOfferSortOrder"],
+            ["CreateShopOffers", "CreateShopPurchases", "AddShopOfferSortOrder", "AddShopOfferArchiveState"],
             histories.Select(history => history.Name).ToArray());
         Assert.Equal(MigrationChecksum.Compute(migrations[0].Sql), histories[0].Checksum);
         Assert.Equal(MigrationChecksum.Compute(migrations[1].Sql), histories[1].Checksum);
         Assert.Equal(MigrationChecksum.Compute(migrations[2].Sql), histories[2].Checksum);
+        Assert.Equal(MigrationChecksum.Compute(migrations[3].Sql), histories[3].Checksum);
     }
 
     [Fact]
-    public async Task SortOrderMigrationBackfillsExistingRowsAndDropsItsTemporaryDefault()
+    public async Task SortOrderAndArchiveMigrationsBackfillExistingRowsAndDropTemporaryDefaults()
     {
         SkipIfDatabaseIsUnavailable();
         await using var factory = CreateFactory();
@@ -128,13 +129,13 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         var upgradeRun = await new MigrationRunner(factory, migrationSource).RunAsync(TestToken);
 
         Assert.Equal(new MigrationRunResult(2, 0), legacyRun);
-        Assert.Equal(new MigrationRunResult(1, 2), upgradeRun);
+        Assert.Equal(new MigrationRunResult(2, 2), upgradeRun);
 
         await using var upgradedConnection = await factory.OpenConnectionAsync(TestToken);
         var row = await upgradedConnection.QuerySingleAsync<SortOrderColumnInfo>(
             new CommandDefinition(
                 """
-                SELECT sort_order AS SortOrder
+                SELECT sort_order AS SortOrder, is_archived AS IsArchived
                 FROM shop_offers
                 WHERE id = @Id;
                 """,
@@ -150,10 +151,23 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
                   AND column_name = 'sort_order';
                 """,
                 cancellationToken: TestToken));
+        var archiveColumn = await upgradedConnection.QuerySingleAsync<ColumnInfo>(
+            new CommandDefinition(
+                """
+                SELECT is_nullable AS IsNullable, column_default AS ColumnDefault
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'shop_offers'
+                  AND column_name = 'is_archived';
+                """,
+                cancellationToken: TestToken));
 
         Assert.Equal(0, row.SortOrder);
+        Assert.False(row.IsArchived);
         Assert.Equal("NO", column.IsNullable);
         Assert.Null(column.ColumnDefault);
+        Assert.Equal("NO", archiveColumn.IsNullable);
+        Assert.Null(archiveColumn.ColumnDefault);
     }
 
     [Fact]
@@ -208,7 +222,8 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
                 "available_from",
                 "available_until",
                 "purchase_limit_per_identity",
-                "sort_order"
+                "sort_order",
+                "is_archived"
             ],
             columns.Select(column => column.ColumnName).ToArray());
         Assert.Equal("uuid", columns[0].DataType);
@@ -223,7 +238,8 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         Assert.Equal("timestamp with time zone", columns[7].DataType);
         Assert.Equal("integer", columns[8].DataType);
         Assert.Equal("integer", columns[9].DataType);
-        Assert.Equal(["NO", "NO", "NO", "YES", "NO", "NO", "YES", "YES", "YES", "NO"],
+        Assert.Equal("boolean", columns[10].DataType);
+        Assert.Equal(["NO", "NO", "NO", "YES", "NO", "NO", "YES", "YES", "YES", "NO", "NO"],
             columns.Select(column => column.IsNullable).ToArray());
         Assert.All(columns, column => Assert.Null(column.ColumnDefault));
         Assert.Equal("id", await ReadPrimaryKeyAsync(connection));
@@ -235,6 +251,7 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
                 "ck_shop_offers_description_trimmed",
                 "ck_shop_offers_display_name_not_blank",
                 "ck_shop_offers_display_name_trimmed",
+                "ck_shop_offers_not_archived_and_enabled",
                 "ck_shop_offers_price_non_negative",
                 "ck_shop_offers_purchase_limit_positive",
                 "ck_shop_offers_sort_order_non_negative"
@@ -266,7 +283,8 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
             new RawOffer(description: RepeatUnicodeScalar("🧪", 2001)),
             new RawOffer(displayName: "Angebot\0intern"),
             new RawOffer(description: "Beschreibung\0intern"),
-            new RawOffer(sortOrder: -1)
+            new RawOffer(sortOrder: -1),
+            new RawOffer(isEnabled: true, isArchived: true)
         };
 
         foreach (var invalidWrite in invalidWrites)
@@ -332,6 +350,7 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         Assert.Equal("Beschreibung 🧪", loaded.Description);
         Assert.Equal(ShopPrice.Create(42), loaded.Price);
         Assert.True(loaded.IsEnabled);
+        Assert.False(loaded.IsArchived);
         Assert.Equal(offer.Availability, loaded.Availability);
         Assert.Equal(offer.Availability.AvailableFrom, loaded.Availability.AvailableFrom);
             Assert.Equal(offer.Availability.AvailableUntil, loaded.Availability.AvailableUntil);
@@ -354,6 +373,7 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         Assert.Null(loadedFreeOffer.PurchaseLimitPerIdentity);
         Assert.Equal(0, loadedFreeOffer.SortOrder);
         Assert.False(loadedFreeOffer.IsEnabled);
+        Assert.False(loadedFreeOffer.IsArchived);
     }
 
     [Fact]
@@ -417,6 +437,8 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         Assert.True(await new EnableShopOffer(store).ExecuteAsync(offer.Id, TestToken));
         Assert.False(await new EnableShopOffer(store).ExecuteAsync(offer.Id, TestToken));
         Assert.True(await new DisableShopOffer(store).ExecuteAsync(offer.Id, TestToken));
+        Assert.True(await new ArchiveShopOffer(store).ExecuteAsync(offer.Id, TestToken));
+        Assert.False(await new ArchiveShopOffer(store).ExecuteAsync(offer.Id, TestToken));
 
         var loaded = await new GetShopOffer(store).ExecuteAsync(offer.Id, TestToken);
         Assert.NotNull(loaded);
@@ -427,6 +449,7 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         Assert.Null(loaded.PurchaseLimitPerIdentity);
         Assert.Equal(15, loaded.SortOrder);
         Assert.False(loaded.IsEnabled);
+        Assert.True(loaded.IsArchived);
     }
 
     [Fact]
@@ -503,6 +526,44 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         Assert.Equal(offer.Description, loaded.Description);
         Assert.Equal(offer.Price, loaded.Price);
         Assert.Equal(offer.IsEnabled, loaded.IsEnabled);
+        Assert.Equal(offer.Availability, loaded.Availability);
+        Assert.Equal(offer.PurchaseLimitPerIdentity, loaded.PurchaseLimitPerIdentity);
+        Assert.Equal(offer.SortOrder, loaded.SortOrder);
+    }
+
+    [Fact]
+    public async Task RepeatedArchiveNoOpDoesNotUpdateTheDatabaseRow()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareShopAsync(factory);
+        var store = new ShopOfferStore(factory);
+        var offer = ShopOffer.Create(
+            ShopOfferId.New(),
+            ItemDefinitionId.New(),
+            "Archiviertes Angebot",
+            "Beschreibung",
+            ShopPrice.Create(7),
+            AvailabilityWindow.Create(Utc(12), Utc(13)),
+            2);
+
+        await store.AddAsync(offer, TestToken);
+        Assert.True(await new ArchiveShopOffer(store).ExecuteAsync(offer.Id, TestToken));
+        var beforeXmin = await ReadXminAsync(factory, offer.Id);
+
+        var changed = await new ArchiveShopOffer(store).ExecuteAsync(offer.Id, TestToken);
+
+        var afterXmin = await ReadXminAsync(factory, offer.Id);
+        var loaded = await store.GetAsync(offer.Id, TestToken);
+
+        Assert.False(changed);
+        Assert.Equal(beforeXmin, afterXmin);
+        Assert.NotNull(loaded);
+        Assert.True(loaded!.IsArchived);
+        Assert.False(loaded.IsEnabled);
+        Assert.Equal(offer.DisplayName, loaded.DisplayName);
+        Assert.Equal(offer.Description, loaded.Description);
+        Assert.Equal(offer.Price, loaded.Price);
         Assert.Equal(offer.Availability, loaded.Availability);
         Assert.Equal(offer.PurchaseLimitPerIdentity, loaded.PurchaseLimitPerIdentity);
         Assert.Equal(offer.SortOrder, loaded.SortOrder);
@@ -792,7 +853,7 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
                 DROP TABLE IF EXISTS shop_purchases;
                 DROP TABLE IF EXISTS shop_offers;
                 DELETE FROM {MigrationRunner.MigrationHistoryTableName}
-                WHERE owner = 'Shop' AND version IN (1, 2, 3);
+                WHERE owner = 'Shop' AND version IN (1, 2, 3, 4);
                 """,
                 cancellationToken: TestToken));
     }
@@ -807,10 +868,10 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
                 """
                 INSERT INTO shop_offers
                     (id, item_definition_id, display_name, description, price, is_enabled,
-                     available_from, available_until, purchase_limit_per_identity, sort_order)
+                     is_archived, available_from, available_until, purchase_limit_per_identity, sort_order)
                 VALUES
                     (@Id, @ItemDefinitionId, @DisplayName, @Description, @Price, @IsEnabled,
-                     @AvailableFrom, @AvailableUntil, @PurchaseLimitPerIdentity, @SortOrder);
+                     @IsArchived, @AvailableFrom, @AvailableUntil, @PurchaseLimitPerIdentity, @SortOrder);
                 """,
                 new
                 {
@@ -820,6 +881,7 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
                     rawOffer.Description,
                     rawOffer.Price,
                     rawOffer.IsEnabled,
+                    rawOffer.IsArchived,
                     rawOffer.AvailableFrom,
                     rawOffer.AvailableUntil,
                     rawOffer.PurchaseLimitPerIdentity,
@@ -868,7 +930,8 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
             DateTimeOffset? availableFrom = null,
             DateTimeOffset? availableUntil = null,
             int? purchaseLimitPerIdentity = null,
-            int sortOrder = 0)
+            int sortOrder = 0,
+            bool isArchived = false)
         {
             Id = id == Guid.Empty ? Guid.NewGuid() : id;
             ItemDefinitionId = itemDefinitionId == Guid.Empty ? Guid.NewGuid() : itemDefinitionId;
@@ -876,6 +939,7 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
             Description = description;
             Price = price;
             IsEnabled = isEnabled;
+            IsArchived = isArchived;
             AvailableFrom = availableFrom;
             AvailableUntil = availableUntil;
             PurchaseLimitPerIdentity = purchaseLimitPerIdentity;
@@ -893,6 +957,8 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
         public long Price { get; }
 
         public bool IsEnabled { get; }
+
+        public bool IsArchived { get; }
 
         public DateTimeOffset? AvailableFrom { get; }
 
@@ -930,5 +996,7 @@ public sealed class ShopPostgreSqlIntegrationTests(ShopPostgreSqlFixture databas
     private sealed class SortOrderColumnInfo
     {
         public int SortOrder { get; set; }
+
+        public bool IsArchived { get; set; }
     }
 }

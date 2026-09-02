@@ -142,6 +142,21 @@ public sealed class ShopMigrationSource : IMigrationSource
                 CHECK (sort_order >= 0);
         """;
 
+    private const string AddShopOfferArchiveStateSql = """
+        ALTER TABLE shop_offers
+            ADD COLUMN is_archived boolean DEFAULT false;
+
+        ALTER TABLE shop_offers
+            ALTER COLUMN is_archived SET NOT NULL;
+
+        ALTER TABLE shop_offers
+            ALTER COLUMN is_archived DROP DEFAULT;
+
+        ALTER TABLE shop_offers
+            ADD CONSTRAINT ck_shop_offers_not_archived_and_enabled
+                CHECK (NOT (is_archived AND is_enabled));
+        """;
+
     /// <summary>
     /// Gibt den persistierten Angebotskatalog und die atomare Purchase-Persistenz zurück.
     /// </summary>
@@ -150,5 +165,6 @@ public sealed class ShopMigrationSource : IMigrationSource
         yield return new Migration("Shop", 1, "CreateShopOffers", CreateShopOffersSql);
         yield return new Migration("Shop", 2, "CreateShopPurchases", CreateShopPurchasesSql);
         yield return new Migration("Shop", 3, "AddShopOfferSortOrder", AddShopOfferSortOrderSql);
+        yield return new Migration("Shop", 4, "AddShopOfferArchiveState", AddShopOfferArchiveStateSql);
     }
 }

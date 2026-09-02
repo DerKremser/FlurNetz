@@ -58,7 +58,8 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
                 ("Messaging", 1L, "CreateOutboxAndInbox"),
                 ("Shop", 1L, "CreateShopOffers"),
                 ("Shop", 2L, "CreateShopPurchases"),
-                ("Shop", 3L, "AddShopOfferSortOrder")
+                ("Shop", 3L, "AddShopOfferSortOrder"),
+                ("Shop", 4L, "AddShopOfferArchiveState")
             },
             history);
     }
@@ -136,12 +137,20 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
             now.AddHours(-1),
             null,
             0);
+        var archived = firstVisible with
+        {
+            Id = Guid.NewGuid(),
+            DisplayName = "Archiviert",
+            IsEnabled = false,
+            IsArchived = true
+        };
         await InsertOfferAsync(firstVisible);
         await InsertOfferAsync(secondVisible);
         await InsertOfferAsync(laterVisible);
         await InsertOfferAsync(disabled);
         await InsertOfferAsync(future);
         await InsertOfferAsync(expired);
+        await InsertOfferAsync(archived);
 
         var response = await client.GetAsync("/api/shop/offers", TestToken);
         var body = await response.Content.ReadFromJsonAsync<ShopOfferListResponse>(TestToken);
@@ -195,10 +204,18 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
             AvailableFromUtc = null,
             AvailableUntilUtc = now.AddHours(-1)
         };
+        var archived = visible with
+        {
+            Id = Guid.NewGuid(),
+            DisplayName = "Archiviert",
+            IsEnabled = false,
+            IsArchived = true
+        };
         await InsertOfferAsync(visible);
         await InsertOfferAsync(disabled);
         await InsertOfferAsync(future);
         await InsertOfferAsync(expired);
+        await InsertOfferAsync(archived);
 
         var visibleResponse = await client.GetAsync($"/api/shop/offers/{visible.Id}", TestToken);
         var visibleBody = await visibleResponse.Content.ReadFromJsonAsync<ShopOfferResponse>(TestToken);
@@ -210,7 +227,7 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
         Assert.Equal(visible.DisplayName, visibleBody.DisplayName);
         Assert.Equal(visible.Price, visibleBody.Price);
 
-        foreach (var hiddenId in new[] { disabled.Id, future.Id, expired.Id, Guid.NewGuid() })
+        foreach (var hiddenId in new[] { disabled.Id, future.Id, expired.Id, archived.Id, Guid.NewGuid() })
         {
             using var hiddenResponse = await client.GetAsync($"/api/shop/offers/{hiddenId}", TestToken);
             Assert.Equal(HttpStatusCode.NotFound, hiddenResponse.StatusCode);
@@ -567,10 +584,10 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
             """
             INSERT INTO shop_offers
                 (id, item_definition_id, display_name, description, price, is_enabled,
-                 available_from, available_until, purchase_limit_per_identity, sort_order)
+                 is_archived, available_from, available_until, purchase_limit_per_identity, sort_order)
             VALUES
                 (@id, @itemDefinitionId, @displayName, @description, @price, @isEnabled,
-                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
+                 @isArchived, @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
             """,
             connection);
         command.Parameters.AddWithValue("id", offer.Id);
@@ -579,6 +596,7 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
         command.Parameters.AddWithValue("description", (object?)offer.Description ?? DBNull.Value);
         command.Parameters.AddWithValue("price", offer.Price);
         command.Parameters.AddWithValue("isEnabled", offer.IsEnabled);
+        command.Parameters.AddWithValue("isArchived", offer.IsArchived);
         command.Parameters.AddWithValue("availableFromUtc", (object?)offer.AvailableFromUtc ?? DBNull.Value);
         command.Parameters.AddWithValue("availableUntilUtc", (object?)offer.AvailableUntilUtc ?? DBNull.Value);
         command.Parameters.AddWithValue(
@@ -656,7 +674,8 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
         DateTimeOffset? AvailableFromUtc,
         DateTimeOffset? AvailableUntilUtc,
         int? PurchaseLimitPerIdentity,
-        int SortOrder = 0);
+        int SortOrder = 0,
+        bool IsArchived = false);
 
     private sealed record PurchaseSeed(
         Guid Id,

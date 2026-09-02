@@ -21,10 +21,10 @@ public sealed class ShopOfferStore : IShopOfferStore
     private const string AddSql = """
         INSERT INTO shop_offers
             (id, item_definition_id, display_name, description, price, is_enabled,
-             available_from, available_until, purchase_limit_per_identity, sort_order)
+             is_archived, available_from, available_until, purchase_limit_per_identity, sort_order)
         VALUES
             (@Id, @ItemDefinitionId, @DisplayName, @Description, @Price, @IsEnabled,
-             @AvailableFrom, @AvailableUntil, @PurchaseLimitPerIdentity, @SortOrder);
+             @IsArchived, @AvailableFrom, @AvailableUntil, @PurchaseLimitPerIdentity, @SortOrder);
         """;
 
     private const string GetSql = """
@@ -35,6 +35,7 @@ public sealed class ShopOfferStore : IShopOfferStore
             description AS Description,
             price AS Price,
             is_enabled AS IsEnabled,
+            is_archived AS IsArchived,
             available_from AS AvailableFrom,
             available_until AS AvailableUntil,
             purchase_limit_per_identity AS PurchaseLimitPerIdentity,
@@ -51,6 +52,7 @@ public sealed class ShopOfferStore : IShopOfferStore
             description AS Description,
             price AS Price,
             is_enabled AS IsEnabled,
+            is_archived AS IsArchived,
             available_from AS AvailableFrom,
             available_until AS AvailableUntil,
             purchase_limit_per_identity AS PurchaseLimitPerIdentity,
@@ -67,6 +69,7 @@ public sealed class ShopOfferStore : IShopOfferStore
             description AS Description,
             price AS Price,
             is_enabled AS IsEnabled,
+            is_archived AS IsArchived,
             available_from AS AvailableFrom,
             available_until AS AvailableUntil,
             purchase_limit_per_identity AS PurchaseLimitPerIdentity,
@@ -83,6 +86,7 @@ public sealed class ShopOfferStore : IShopOfferStore
             description = @Description,
             price = @Price,
             is_enabled = @IsEnabled,
+            is_archived = @IsArchived,
             available_from = @AvailableFrom,
             available_until = @AvailableUntil,
             purchase_limit_per_identity = @PurchaseLimitPerIdentity,
@@ -215,6 +219,7 @@ public sealed class ShopOfferStore : IShopOfferStore
                                 after.Description,
                                 Price = after.Price.Value,
                                 after.IsEnabled,
+                                after.IsArchived,
                                 AvailableFrom = after.AvailableFrom,
                                 AvailableUntil = after.AvailableUntil,
                                 after.PurchaseLimitPerIdentity,
@@ -245,6 +250,7 @@ public sealed class ShopOfferStore : IShopOfferStore
         offer.Description,
         Price = offer.Price.Value,
         offer.IsEnabled,
+        offer.IsArchived,
         AvailableFrom = offer.Availability.AvailableFrom,
         AvailableUntil = offer.Availability.AvailableUntil,
         offer.PurchaseLimitPerIdentity,
@@ -260,6 +266,7 @@ public sealed class ShopOfferStore : IShopOfferStore
             row.Description,
             ShopPrice.Create(row.Price),
             row.IsEnabled,
+            row.IsArchived,
             AvailabilityWindow.Create(row.AvailableFrom, row.AvailableUntil),
             row.PurchaseLimitPerIdentity,
             row.SortOrder);
@@ -271,6 +278,7 @@ public sealed class ShopOfferStore : IShopOfferStore
             offer.Description,
             offer.Price,
             offer.IsEnabled,
+            offer.IsArchived,
             offer.Availability.AvailableFrom,
             offer.Availability.AvailableUntil,
             offer.PurchaseLimitPerIdentity,
@@ -290,6 +298,7 @@ public sealed class ShopOfferStore : IShopOfferStore
         string? Description,
         ShopPrice Price,
         bool IsEnabled,
+        bool IsArchived,
         DateTimeOffset? AvailableFrom,
         DateTimeOffset? AvailableUntil,
         int? PurchaseLimitPerIdentity,
@@ -308,6 +317,8 @@ public sealed class ShopOfferStore : IShopOfferStore
         public long Price { get; set; }
 
         public bool IsEnabled { get; set; }
+
+        public bool IsArchived { get; set; }
 
         public DateTimeOffset? AvailableFrom { get; set; }
 

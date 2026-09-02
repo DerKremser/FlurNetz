@@ -10,6 +10,7 @@ public sealed record ShopOfferManagementResponse(
     string? Description,
     long Price,
     bool IsEnabled,
+    bool IsArchived,
     DateTimeOffset? AvailableFromUtc,
     DateTimeOffset? AvailableUntilUtc,
     int? PurchaseLimitPerIdentity,

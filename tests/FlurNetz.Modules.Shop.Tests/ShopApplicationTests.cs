@@ -32,6 +32,7 @@ public sealed class ShopApplicationTests
         Assert.Equal("Beschreibung", offer.Description);
         Assert.Equal(ShopPrice.Create(7), offer.Price);
         Assert.False(offer.IsEnabled);
+        Assert.False(offer.IsArchived);
         Assert.Equal(2, offer.PurchaseLimitPerIdentity);
         Assert.Equal(7, offer.SortOrder);
         Assert.Equal(cancellationToken, store.LastCancellationToken);
@@ -74,6 +75,8 @@ public sealed class ShopApplicationTests
         Assert.False(await new ChangeShopOfferSortOrder(store).ExecuteAsync(id, 10, token));
         Assert.True(await new EnableShopOffer(store).ExecuteAsync(id, token));
         Assert.True(await new DisableShopOffer(store).ExecuteAsync(id, token));
+        Assert.True(await new ArchiveShopOffer(store).ExecuteAsync(id, token));
+        Assert.False(await new ArchiveShopOffer(store).ExecuteAsync(id, token));
 
         Assert.Equal("Neu", store.Offer!.DisplayName);
         Assert.Null(store.Offer.Description);
@@ -81,6 +84,7 @@ public sealed class ShopApplicationTests
         Assert.Equal(1, store.Offer.PurchaseLimitPerIdentity);
         Assert.Equal(10, store.Offer.SortOrder);
         Assert.False(store.Offer.IsEnabled);
+        Assert.True(store.Offer.IsArchived);
         Assert.Equal(id, store.LastExecutedId);
         Assert.Equal(token, store.LastCancellationToken);
     }
@@ -114,6 +118,11 @@ public sealed class ShopApplicationTests
                 ShopOfferId.New(),
                 1,
                 TestContext.Current.CancellationToken));
+
+        await Assert.ThrowsAsync<ShopOfferNotFoundException>(() =>
+            new ArchiveShopOffer(store).ExecuteAsync(
+                ShopOfferId.New(),
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -130,6 +139,7 @@ public sealed class ShopApplicationTests
         Assert.Throws<ArgumentNullException>(() => new ChangeShopOfferSortOrder(null!));
         Assert.Throws<ArgumentNullException>(() => new EnableShopOffer(null!));
         Assert.Throws<ArgumentNullException>(() => new DisableShopOffer(null!));
+        Assert.Throws<ArgumentNullException>(() => new ArchiveShopOffer(null!));
     }
 
     [Fact]
