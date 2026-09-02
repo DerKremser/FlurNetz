@@ -1,7 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <RootNamespace>FlurNetz.Modules.Integrations.Tests</RootNamespace>
+    <RootNamespace>FlurNetz.Modules.Integrations.IntegrationTests</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -11,9 +11,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity\FlurNetz.Modules.Identity.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Integrations\FlurNetz.Modules.Integrations.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Integrations.Contracts\FlurNetz.Modules.Integrations.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 

@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Npgsql" />
+    <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Integrations.Contracts\FlurNetz.Modules.Integrations.Contracts.csproj" />
   </ItemGroup>
 

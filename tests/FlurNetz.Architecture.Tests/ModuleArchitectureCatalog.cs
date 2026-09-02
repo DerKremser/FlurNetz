@@ -89,6 +89,8 @@ internal static class ModuleArchitectureCatalog
                     ],
                 "Overlay" =>
                     [ContractsAssemblyName, "FlurNetz.BuildingBlocks", "FlurNetz.Persistence"],
+                "Integrations" =>
+                    [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
                 _ => [ContractsAssemblyName]
             };
     }
