@@ -1,15 +1,38 @@
-# Shop – Katalog, HTTP-Management, atomarer Purchase, read-only Kaufhistorie und HTTP-API
+# Shop – vollständiger FlurNetz-V1-Katalog, atomarer Purchase, Kaufhistorie und HTTP-API
 
 ## Verantwortung
 
 `FlurNetz.Modules.Shop` besitzt den fachlichen Angebotskatalog sowie die Shop-eigene
 Kaufhistorie und Idempotenzgrenze. Ein Angebot verweist unveränderlich auf genau eine
-`ItemDefinitionId` aus `Inventory.Contracts`; ein erfolgreicher Kauf dieses Slices gewährt
+`ItemDefinitionId` aus `Inventory.Contracts`; ein erfolgreicher Kauf im Shop-V1 gewährt
 exakt eine Einheit dieser Item-Definition.
 
 Shop besitzt weder Identity-, Economy- noch Inventory-Zustände. Diese Module werden beim Kauf
 ausschließlich über schmale, caller-neutrale Contracts innerhalb derselben PostgreSQL-
 Transaktion angesprochen. Es gibt kein globales Unit of Work und kein Cross-Module-SQL.
+
+## Verbindlicher Shop-V1-Scope
+
+Der Shop-V1-Scope ist nach dem vollständigen Ist-/Gap-Audit bewusst klein und direkt. Die
+folgende Tabelle hält die Entscheidungen für die aktuell vorgesehene FlurNetz-Nutzung fest:
+
+| Bereich | V1-Entscheidung | Konsequenz |
+| --- | --- | --- |
+| Kaufmenge | Nicht erforderlich | Ein Purchase gewährt verbindlich genau eine Inventory-Einheit. Mehrere Einheiten können über mehrere unabhängige Requests gekauft werden; jeder erfolgreiche Request besitzt weiterhin eigene Idempotenz-, History- und Event-Semantik. |
+| Globaler Angebotsbestand | Nicht erforderlich | Der Shop verkauft virtuelle Inventory-Einheiten ohne Shop-eigene Knappheit. Die Community-Bestände bleiben Inventory-owned. Begrenzter Stock ist ein späteres, additives Feature. |
+| Kategorien/Katalogstruktur | Nicht erforderlich | Die flache Katalogliste mit stabiler `sort_order ASC, id ASC`-Reihenfolge deckt den V1-Lesefall ab. Es gibt keine Kategorieidentitäten und keine UI-Dekorationsfelder. |
+| Shop-Metadaten | Teilweise erforderlich und vorhanden | `DisplayName` und optionale `Description` sind persistiert, validiert und administrierbar. Badge-, Bild- und weitere Metadaten sowie Asset-Hosting haben keinen belegten V1-Nutzen. |
+| Zeitpreise/Discounts/Coupons | Nicht erforderlich | Der aktuelle Preis und das Availability-Fenster sind ausreichend. Es gibt keine verdeckte oder zeitgesteuerte Rabattlogik und keine Coupon-Einlösung. |
+| Warenkorb | Nicht erforderlich | Der verbindliche V1-Kauf ist ein direkter Offer-Purchase. Ein Cart würde ohne Mehrangebots- oder Checkout-Anforderung nur zusätzliche Transaktions- und Idempotenzsemantik einführen. |
+| Refund/Cancellation | Nicht erforderlich | Erfolgreiche Purchases bleiben unveränderliche Historie. Eine Rückabwicklung müsste Economy, Inventory, History und gegebenenfalls Messaging gemeinsam kompensieren; dafür gibt es im vorgesehenen V1-Einsatz keinen Bedarf. |
+| `shop.purchase-completed`-Consumer | Nicht erforderlich | Es gibt aktuell keinen konkreten Shop-owned Folgeeffekt. Der Worker registriert und deserialisiert das Event, verarbeitet es aber bewusst ohne fachlichen Consumer und ohne Inbox-Eintrag. |
+| Authentication/Authorization | Nicht Shop-owned | Die Management-Grenze bleibt bis zum systemweiten Security-/Host-Auftrag ungeschützt und darf nicht als extern produktionssicher betrachtet werden. Eine isolierte Shop-Security wird nicht erfunden. |
+
+Damit sind `ShopOfferId`, `ItemDefinitionId`, Anzeigename, Beschreibung, Preis, Availability,
+Kauflimit, SortOrder, Aktivierung und terminale Archivierung die vollständige Shop-owned
+Katalogkonfiguration für V1. Diese Werte sind über die Management-Grenze steuerbar; feste
+Domain- und Technikregeln wie Einzelstück-Semantik, UTC-/Mikrosekundenkanonisierung,
+Idempotenzschlüssel und Katalogreihenfolge sind keine Laufzeitkonfiguration.
 
 ## Öffentliche Contracts
 
@@ -235,7 +258,7 @@ Request`, jeweils als ProblemDetails. Wiederholtes Enable oder Disable bleibt ei
 Die Storefront bleibt ausschließlich auf `IsEnabled && !IsArchived && IsAvailableAt(now)`
 beschränkt.
 Die API verfügt derzeit bewusst noch über keine Authentication/Authorization; vor externem
-Produktivbetrieb muss ein separater Security-/Host-Slice diese Management-Routen schützen.
+Produktivbetrieb muss ein separater Security-/Host-Auftrag diese Management-Routen schützen.
 Der API-Adapter führt Migrationen nicht selbst aus; `Shop:4:AddShopOfferArchiveState` wird wie
 die übrigen Shop-Migrationen über `ShopMigrationSource` registriert. Die Management-Grenze
 veröffentlicht keine Events und registriert keinen Shop-Consumer; der Worker bleibt
@@ -255,7 +278,7 @@ Alle verwenden ausschließlich fachliche IDs beziehungsweise Beträge und neutra
 Identity prüft nur die Existenz der bereits aufgelösten internen Identität. Economy führt
 denselben Domain- und Row-Lock-Debit wie sein normaler Debit-Pfad aus, aber ohne eigenen
 Commit. Inventory verwendet denselben Domain- und Sparse-Lifecycle wie sein normaler Add-Pfad
-und gewährt im Shop-Slice exakt die Menge `1`.
+und gewährt im Shop-V1 exakt die Menge `1`.
 
 Shop referenziert keine fremde Modulimplementierung und schreibt niemals direkt in
 `community_identities`, `community_economies` oder `community_inventory_entries`.
@@ -335,7 +358,7 @@ Es gibt keine Cross-Module-Foreign-Keys.
 
 ### Shop:2:CreateShopPurchases
 
-V2 ergänzt drei Shop-eigene Tabellen.
+Die Migration `Shop:2:CreateShopPurchases` ergänzt drei Shop-eigene Tabellen.
 
 `shop_purchases`:
 
@@ -375,7 +398,8 @@ Die unveränderte V1-Tabelle `shop_offers` wird ausschließlich um
 `DEFAULT 0`, damit alle bestehenden Angebote fachlich mit `SortOrder = 0` backfillt werden,
 setzt danach `NOT NULL`, entfernt den Default wieder und ergänzt ausschließlich den Check
 `sort_order >= 0`. Es gibt keinen permanenten Default, keinen Index, keinen Unique Constraint,
-keinen Foreign Key und keine weitere Tabelle. V1 und V2 werden inhaltlich nicht verändert.
+keinen Foreign Key und keine weitere Tabelle. Die vorherigen Migrationen werden inhaltlich nicht
+verändert.
 
 Für die Kaufhistorie wird keine weitere Migration, Tabelle oder Pagination-Struktur
 angelegt. Der vorhandene Index `(community_identity_id, purchased_at)` wird für die
@@ -447,7 +471,7 @@ Erlaubte FlurNetz-Abhängigkeiten der Shop-Implementierung sind ausschließlich:
 - `FlurNetz.Modules.Inventory.Contracts`
 - `FlurNetz.Persistence`
 
-## Tests und bewusste Nicht-Ziele
+## Tests und bewusst ausgeschlossene V1-Funktionen
 
 Unit- und Architekturtests sichern IDs, Event-Schema, immutable Purchase-Snapshots,
 Zeitkanonisierung, Purchase-History-Cursor und -Seitengröße, DI-Scope, Reference Graph
@@ -499,13 +523,33 @@ Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Rou
 `shop.purchase-completed` v1 über die bestehende explizite Messaging-Registry.
 
 Die Worker-Integration prüft zusätzlich die Verarbeitung des bekannten Events durch den echten
-Worker ohne fachlichen Consumer und ohne Inbox-Eintrag. Nicht enthalten sind ein Admin-Frontend
-und produktive Authentication/Authorization,
-fachlicher Shop-Event-Consumer, Warenkorb, variable Purchase-Menge, Stock,
-Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
-Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische Repositories,
-generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/
-Achievement-Ausführung oder eine generische `OfferTarget`-Abstraktion.
-Auch kein Admin-Frontend, kein Drag & Drop, kein Bulk-Reorder, kein Delete, kein Soft Delete,
-kein Unarchive und kein Restore gehören zu Slice 10. Authentication/Authorization bleibt ein separater
-Security-/Host-Scope; Worker, Consumer, Contracts und Event-Versionen werden nicht erweitert.
+Worker ohne fachlichen Consumer und ohne Inbox-Eintrag. Bewusst aus diesem Shop-V1-Scope
+ausgeschlossen bleiben ein Admin-Frontend und produktive Authentication/Authorization,
+ein fachlicher Shop-Event-Consumer, Warenkorb, variable Purchase-Menge, Stock, Kategorien,
+zusätzliche Metadaten, Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger,
+Saga/Compensation, Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische
+Repositories, generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/
+Achievement-Ausführung oder eine generische `OfferTarget`-Abstraktion. Ebenfalls nicht
+erforderlich sind Drag & Drop, Bulk-Reorder, Delete, Soft Delete, Unarchive und Restore;
+die Archivierung ist terminal. Authentication/Authorization bleibt ein separater
+Security-/Host-Scope; Worker, Consumer, Contracts und Event-Versionen werden für V1 nicht
+erweitert.
+
+## Abschlussaudit
+
+Der Abschlussaudit des zusammenhängenden Shop-V1-Auftrags bestätigt folgende Zustände:
+
+| Prüffläche | Ergebnis |
+| --- | --- |
+| Domain | Vollständig für den beschlossenen Scope: validiertes Angebot, Preis, Availability, Aktivierung, terminale Archivierung, SortOrder, Kauflimit, unveränderliches Ziel-Item und unveränderlicher Purchase-Snapshot. |
+| Application | Vollständige Katalog-, Storefront-, Purchase- und History-Use-Cases; keine weitere belegte Shop-owned V1-Funktion fehlt. |
+| Persistence | Vier unveränderliche Shop-Migrationen, ausschließlich Shop-eigene Tabellen, gezielte Indizes, Row-Locks, Guard-Semantik, atomarer Commit/Rollback und historische Integrität. Eine Schema-Evolution ist für den beschlossenen Scope nicht erforderlich. |
+| API/Storefront | Öffentliche sichtbare Katalogliste, Einzelangebot, direkter Purchase, Purchase-Lookup und identity-isolierte Keyset-History mit API-eigenen DTOs und ProblemDetails. Interne Zustände bleiben in der Management-Antwort. |
+| Management | Create, vollständige interne Katalogsicht, alle fachlichen Mutationen, Enable/Disable und terminale Archivierung sind HTTP-erreichbar. Die noch ungeschützte Grenze ist als systemweiter Security-Befund dokumentiert. |
+| Messaging/Worker | `shop.purchase-completed` v1 bleibt unverändert, wird atomar über die vorhandene Outbox erzeugt und im Worker ohne künstlichen No-op-Consumer behandelt. |
+| Modulgrenzen | Shop referenziert nur erlaubte Contracts und technische Foundations; kein Cross-Module-SQL und keine fremde Modulimplementierung. |
+| Tests | Domain-, Application-, PostgreSQL-, API-, Messaging-, Worker- und Architekturabdeckung für den vollständigen Scope ist vorhanden. |
+| Dokumentation | README, API-, Modul-, Persistence-, Messaging- und diese Shop-Dokumentation beschreiben den realen V1-Zustand sowie die bewussten Ausschlüsse. |
+
+Der Audit findet keine offene Shop-owned V1-Lücke, keinen verbliebenen Shop-TODO, keine neue
+Cross-Module-Kopplung und keine durch den Abschlussauftrag entstandene technische Schuld.

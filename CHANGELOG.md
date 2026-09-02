@@ -2,6 +2,19 @@
 
 ## [Unveröffentlicht]
 
+### Shop-V1-Abschluss
+
+- Der vollständige Shop-Ist-/Gap-Audit bestätigt den bestehenden fachlichen V1-Scope aus
+  persistiertem Katalog, direktem Einzelstück-Purchase, atomarer Cross-Module-Komposition,
+  Purchase-History, Storefront und HTTP-Management.
+- Variable Kaufmengen, globaler Angebotsbestand, Kategorien, zusätzliche Shop-Metadaten,
+  Discounts/Coupons, Cart, Refund/Cancellation und ein Shop-owned Event-Consumer werden für
+  den vorgesehenen FlurNetz-V1-Einsatz bewusst nicht implementiert; die Begründungen stehen in
+  `docs/architecture/shop.md`.
+- README sowie Shop-, API-, Modul-, Persistence- und Messaging-Dokumentation beschreiben den
+  zusammenhängenden Shop-V1-Endzustand. Migrationen `Shop:1` bis `Shop:4`, öffentliche Contracts
+  und `shop.purchase-completed` v1 bleiben unverändert.
+
 ### Hinzugefügt
 
 - Slice 10 ergänzt für `ShopOffer` den terminalen Zustand `IsArchived`. Neue Angebote starten
