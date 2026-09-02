@@ -71,6 +71,14 @@ IAutomationRuleStore eröffnet für Management-Operationen eigene Transaktionen 
 für atomare Mutationen SELECT FOR UPDATE. Die History verwendet Keyset-Pagination ohne
 Offset; der opake, versionierte Base64URL-Cursor ist an die Rule-ID gebunden.
 
+Die PostgreSQL-Integrationstests prüfen die Sperrwirkung mit getrennten Connections und
+Transaktionen: Eine laufende Runtime-Transaktion mit FOR SHARE blockiert Disable mit FOR UPDATE
+bis zum Commit der Runtime. Replace wird unter demselben Lock ebenfalls bis zur Freigabe
+blockiert und liefert danach bei einer weiterhin aktivierten Rule den fachlichen Konflikt; die
+zulässige Disable-→Replace-Transition wird anschließend separat verifiziert. Alle Lifecycle-
+Zeitpunkte werden explizit als kanonische UTC-Microsecond-Werte übergeben; Domain und Persistence
+verwenden keine Systemzeit direkt.
+
 ## Management-API
 
 Die interne API-Grenze liegt unter /api/admin/automation/rules:

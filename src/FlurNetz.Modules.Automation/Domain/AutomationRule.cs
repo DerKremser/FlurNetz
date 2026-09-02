@@ -127,17 +127,6 @@ public sealed class AutomationRule
             timestamp);
     }
 
-    /// <summary>Komfortüberladung mit Systemzeit für reine Domain-Nutzung.</summary>
-    public static AutomationRule Create(
-        AutomationRuleId id,
-        string displayName,
-        string? description,
-        string triggerType,
-        IEnumerable<AutomationCondition> conditions,
-        IEnumerable<AutomationAction> actions,
-        int sortOrder = 0) =>
-        Create(id, displayName, description, triggerType, conditions, actions, sortOrder, CanonicalizeNow());
-
     /// <summary>Rehydriert eine persistierte Rule und validiert auch beschädigte Zustände.</summary>
     public static AutomationRule Rehydrate(
         AutomationRuleId id,
@@ -185,9 +174,6 @@ public sealed class AutomationRule
             updated);
     }
 
-    /// <summary>Aktiviert die Rule; ein erneutes Aktivieren ist ein erfolgreicher No-op.</summary>
-    public bool Enable() => Enable(CanonicalizeNow());
-
     /// <summary>Aktiviert die Rule mit einem vorgegebenen Änderungszeitpunkt.</summary>
     public bool Enable(DateTimeOffset updatedAtUtc)
     {
@@ -206,9 +192,6 @@ public sealed class AutomationRule
         return true;
     }
 
-    /// <summary>Deaktiviert die Rule; auf Disabled oder Archived ist die Operation ein No-op.</summary>
-    public bool Disable() => Disable(CanonicalizeNow());
-
     /// <summary>Deaktiviert die Rule mit einem vorgegebenen Änderungszeitpunkt.</summary>
     public bool Disable(DateTimeOffset updatedAtUtc)
     {
@@ -221,9 +204,6 @@ public sealed class AutomationRule
         SetUpdatedAt(updatedAtUtc);
         return true;
     }
-
-    /// <summary>Archiviert terminal und deaktiviert die Rule zugleich.</summary>
-    public bool Archive() => Archive(CanonicalizeNow());
 
     /// <summary>Archiviert terminal mit einem vorgegebenen Änderungszeitpunkt.</summary>
     public bool Archive(DateTimeOffset updatedAtUtc)
@@ -238,16 +218,6 @@ public sealed class AutomationRule
         SetUpdatedAt(updatedAtUtc);
         return true;
     }
-
-    /// <summary>Ersetzt die vollständige Konfiguration einer deaktivierten Rule.</summary>
-    public bool ReplaceConfiguration(
-        string displayName,
-        string? description,
-        string triggerType,
-        IEnumerable<AutomationCondition> conditions,
-        IEnumerable<AutomationAction> actions,
-        int sortOrder) =>
-        ReplaceConfiguration(displayName, description, triggerType, conditions, actions, sortOrder, CanonicalizeNow());
 
     /// <summary>Ersetzt die vollständige Konfiguration atomar ohne künstlichen No-op-Zeitstempel.</summary>
     public bool ReplaceConfiguration(
@@ -434,9 +404,4 @@ public sealed class AutomationRule
         UpdatedAtUtc = timestamp;
     }
 
-    private static DateTimeOffset CanonicalizeNow()
-    {
-        var now = DateTimeOffset.UtcNow;
-        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMicrosecond));
-    }
 }

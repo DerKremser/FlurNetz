@@ -73,7 +73,8 @@ public sealed class AutomationRuleDomainTests
             rule.TriggerType,
             rule.Conditions,
             rule.Actions,
-            2));
+            2,
+            CreatedAt.AddHours(3)));
     }
 
     [Fact]
