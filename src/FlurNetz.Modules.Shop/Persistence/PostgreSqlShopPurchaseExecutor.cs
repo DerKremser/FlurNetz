@@ -58,7 +58,8 @@ public sealed class PostgreSqlShopPurchaseExecutor : IShopPurchaseExecutor
             is_enabled AS IsEnabled,
             available_from AS AvailableFrom,
             available_until AS AvailableUntil,
-            purchase_limit_per_identity AS PurchaseLimitPerIdentity
+            purchase_limit_per_identity AS PurchaseLimitPerIdentity,
+            sort_order AS SortOrder
         FROM shop_offers
         WHERE id = @ShopOfferId
         FOR SHARE;
@@ -386,7 +387,8 @@ public sealed class PostgreSqlShopPurchaseExecutor : IShopPurchaseExecutor
             ShopPrice.Create(row.Price),
             row.IsEnabled,
             AvailabilityWindow.Create(row.AvailableFrom, row.AvailableUntil),
-            row.PurchaseLimitPerIdentity);
+            row.PurchaseLimitPerIdentity,
+            row.SortOrder);
     }
 
     private static ShopPurchase RehydratePurchase(ShopPurchaseRow row)
@@ -460,5 +462,7 @@ public sealed class PostgreSqlShopPurchaseExecutor : IShopPurchaseExecutor
         public DateTimeOffset? AvailableUntil { get; set; }
 
         public int? PurchaseLimitPerIdentity { get; set; }
+
+        public int SortOrder { get; set; }
     }
 }

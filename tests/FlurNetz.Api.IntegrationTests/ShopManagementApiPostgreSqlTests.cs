@@ -31,7 +31,8 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             42,
             availableFrom,
             availableUntil,
-            3);
+            3,
+            17);
 
         using var response = await client.PostAsJsonAsync(
             "/api/admin/shop/offers",
@@ -52,6 +53,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Equal(availableFrom, body.AvailableFromUtc);
         Assert.Equal(availableUntil, body.AvailableUntilUtc);
         Assert.Equal(3, body.PurchaseLimitPerIdentity);
+        Assert.Equal(17, body.SortOrder);
 
         var persisted = await ReadPersistedOfferAsync(body.Id);
         Assert.NotNull(persisted);
@@ -64,6 +66,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Equal(body.AvailableFromUtc, persisted.AvailableFromUtc);
         Assert.Equal(body.AvailableUntilUtc, persisted.AvailableUntilUtc);
         Assert.Equal(body.PurchaseLimitPerIdentity, persisted.PurchaseLimitPerIdentity);
+        Assert.Equal(body.SortOrder, persisted.SortOrder);
     }
 
     [Fact]
@@ -120,6 +123,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
 
         Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
         Assert.Null(created.Description);
+        Assert.Equal(0, created.SortOrder);
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         Assert.NotNull(list);
         Assert.Equal(
@@ -164,11 +168,70 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         Assert.Equal(offerId, body.Id);
         Assert.False(body.IsEnabled);
+        Assert.Equal(0, body.SortOrder);
         Assert.Equal(HttpStatusCode.NotFound, unknownResponse.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
         Assert.Equal(
             "application/problem+json",
             invalidResponse.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task ManagementListUsesSortOrderThenOfferIdAndSortOrderMutationIsPersisted()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await ResetDatabaseAsync();
+        using var factory = await StartHostAsync();
+        using var client = factory.CreateClient();
+
+        var first = await CreateOfferAsync(client, sortOrder: 20);
+        var second = await CreateOfferAsync(client, sortOrder: 0);
+        var third = await CreateOfferAsync(client, sortOrder: 0);
+
+        using var initialListResponse = await client.GetAsync(
+            "/api/admin/shop/offers",
+            TestToken);
+        var initialList = await initialListResponse.Content
+            .ReadFromJsonAsync<ShopOfferManagementListResponse>(TestToken);
+
+        Assert.Equal(HttpStatusCode.OK, initialListResponse.StatusCode);
+        Assert.NotNull(initialList);
+        Assert.Equal(
+            new[] { second, third, first }
+                .OrderBy(offer => offer.SortOrder)
+                .ThenBy(offer => offer.Id)
+                .Select(offer => offer.Id),
+            initialList!.Items.Select(offer => offer.Id));
+        Assert.All(initialList.Items, offer =>
+            Assert.Equal(
+                offer.Id == first.Id ? 20 : 0,
+                offer.SortOrder));
+
+        using var changeResponse = await PutAsync(
+            client,
+            $"/api/admin/shop/offers/{first.Id}/sort-order",
+            new ChangeShopOfferSortOrderRequest(0));
+        using var repeatedChangeResponse = await PutAsync(
+            client,
+            $"/api/admin/shop/offers/{first.Id}/sort-order",
+            new ChangeShopOfferSortOrderRequest(0));
+
+        using var finalListResponse = await client.GetAsync(
+            "/api/admin/shop/offers",
+            TestToken);
+        var finalList = await finalListResponse.Content
+            .ReadFromJsonAsync<ShopOfferManagementListResponse>(TestToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, changeResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, repeatedChangeResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, finalListResponse.StatusCode);
+        Assert.NotNull(finalList);
+        Assert.Equal(
+            new[] { first, second, third }
+                .OrderBy(offer => offer.Id)
+                .Select(offer => offer.Id),
+            finalList!.Items.Select(offer => offer.Id));
+        Assert.Equal(0, (await ReadPersistedOfferAsync(first.Id))!.SortOrder);
     }
 
     [Fact]
@@ -211,6 +274,14 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             client,
             $"/api/admin/shop/offers/{offer.Id}/purchase-limit",
             new ChangeShopOfferPurchaseLimitRequest(null));
+        using var sortOrderResponse = await PutAsync(
+            client,
+            $"/api/admin/shop/offers/{offer.Id}/sort-order",
+            new ChangeShopOfferSortOrderRequest(12));
+        using var repeatedSortOrderResponse = await PutAsync(
+            client,
+            $"/api/admin/shop/offers/{offer.Id}/sort-order",
+            new ChangeShopOfferSortOrderRequest(12));
         using var firstEnableResponse = await client.PostAsync(
             $"/api/admin/shop/offers/{offer.Id}/enable",
             content: null,
@@ -243,6 +314,8 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
                 availabilityResponse,
                 limitResponse,
                 removeLimitResponse,
+                sortOrderResponse,
+                repeatedSortOrderResponse,
                 firstEnableResponse,
                 repeatedEnableResponse,
                 firstDisableResponse,
@@ -255,6 +328,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         Assert.Equal(availableFrom, updated.AvailableFromUtc);
         Assert.Equal(availableUntil, updated.AvailableUntilUtc);
         Assert.Null(updated.PurchaseLimitPerIdentity);
+        Assert.Equal(12, updated.SortOrder);
         Assert.False(updated.IsEnabled);
     }
 
@@ -285,6 +359,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             ($"/api/admin/shop/offers/{offer.Id}/availability", new ChangeShopOfferAvailabilityRequest(
                 invalidWindowBoundary, invalidWindowBoundary)),
             ($"/api/admin/shop/offers/{offer.Id}/purchase-limit", new ChangeShopOfferPurchaseLimitRequest(0)),
+            ($"/api/admin/shop/offers/{offer.Id}/sort-order", new ChangeShopOfferSortOrderRequest(-1)),
             ($"/api/admin/shop/offers/{offer.Id}/display-name", new RenameShopOfferRequest(" "))
         };
 
@@ -308,9 +383,14 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             $"/api/admin/shop/offers/{offer.Id}/display-name",
             content: null,
             TestToken);
+        using var missingSortOrderResponse = await PutAsync(
+            client,
+            $"/api/admin/shop/offers/{offer.Id}/sort-order",
+            new { });
 
         Assert.Equal(HttpStatusCode.BadRequest, malformedResponse.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, missingBodyResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, missingSortOrderResponse.StatusCode);
     }
 
     [Fact]
@@ -328,6 +408,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             ($"/api/admin/shop/offers/{unknownOfferId}/price", new ChangeShopOfferPriceRequest(1)),
             ($"/api/admin/shop/offers/{unknownOfferId}/availability", new ChangeShopOfferAvailabilityRequest(null, null)),
             ($"/api/admin/shop/offers/{unknownOfferId}/purchase-limit", new ChangeShopOfferPurchaseLimitRequest(null)),
+            ($"/api/admin/shop/offers/{unknownOfferId}/sort-order", new ChangeShopOfferSortOrderRequest(1)),
             ($"/api/admin/shop/offers/{unknownOfferId}/enable", new { }),
             ($"/api/admin/shop/offers/{unknownOfferId}/disable", new { })
         };
@@ -525,7 +606,8 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
 
     private async Task<ShopOfferManagementResponse> CreateOfferAsync(
         HttpClient client,
-        long price = 1)
+        long price = 1,
+        int sortOrder = 0)
     {
         using var response = await client.PostAsJsonAsync(
             "/api/admin/shop/offers",
@@ -536,7 +618,8 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
                 price,
                 null,
                 null,
-                null),
+                null,
+                sortOrder),
             TestToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return await ReadManagementOfferAsync(response);
@@ -583,10 +666,10 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             """
             INSERT INTO shop_offers
                 (id, item_definition_id, display_name, description, price, is_enabled,
-                 available_from, available_until, purchase_limit_per_identity)
+                 available_from, available_until, purchase_limit_per_identity, sort_order)
             VALUES
                 (@id, @itemDefinitionId, @displayName, @description, @price, @isEnabled,
-                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity);
+                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
             """,
             connection);
         command.Parameters.AddWithValue("id", offer.Id);
@@ -604,6 +687,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         command.Parameters.AddWithValue(
             "purchaseLimitPerIdentity",
             (object?)offer.PurchaseLimitPerIdentity ?? DBNull.Value);
+        command.Parameters.AddWithValue("sortOrder", offer.SortOrder);
         await command.ExecuteNonQueryAsync(TestToken);
     }
 
@@ -613,7 +697,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         await using var command = new NpgsqlCommand(
             """
             SELECT id, item_definition_id, display_name, description, price, is_enabled,
-                   available_from, available_until, purchase_limit_per_identity
+                   available_from, available_until, purchase_limit_per_identity, sort_order
             FROM shop_offers
             WHERE id = @id;
             """,
@@ -634,7 +718,8 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             reader.GetBoolean(5),
             reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6),
             reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7),
-            reader.IsDBNull(8) ? null : reader.GetInt32(8));
+            reader.IsDBNull(8) ? null : reader.GetInt32(8),
+            reader.GetInt32(9));
     }
 
     private async Task InsertIdentityAsync(Guid identityId)
@@ -698,7 +783,8 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         bool IsEnabled,
         DateTimeOffset? AvailableFromUtc,
         DateTimeOffset? AvailableUntilUtc,
-        int? PurchaseLimitPerIdentity);
+        int? PurchaseLimitPerIdentity,
+        int SortOrder = 0);
 
     private sealed record PersistedOffer(
         Guid Id,
@@ -709,5 +795,6 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         bool IsEnabled,
         DateTimeOffset? AvailableFromUtc,
         DateTimeOffset? AvailableUntilUtc,
-        int? PurchaseLimitPerIdentity);
+        int? PurchaseLimitPerIdentity,
+        int SortOrder = 0);
 }

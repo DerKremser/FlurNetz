@@ -26,3 +26,8 @@ public sealed record ChangeShopOfferAvailabilityRequest(
 /// API-eigener Request-Vertrag zum Setzen oder Entfernen des Kauflimits.
 /// </summary>
 public sealed record ChangeShopOfferPurchaseLimitRequest(int? PurchaseLimitPerIdentity);
+
+/// <summary>
+/// API-eigener Request-Vertrag zum Ändern der fachlichen Reihenfolge eines Shop-Angebots.
+/// </summary>
+public sealed record ChangeShopOfferSortOrderRequest(int? SortOrder);

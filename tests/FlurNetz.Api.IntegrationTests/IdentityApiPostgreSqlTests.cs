@@ -99,14 +99,7 @@ public sealed class IdentityApiPostgreSqlTests(ApiPostgreSqlFixture database)
 
     private async Task ResetDatabaseAsync()
     {
-        await using var connection = await OpenConnectionAsync();
-        await using var command = new NpgsqlCommand(
-            """
-            DROP TABLE IF EXISTS public.community_identities;
-            DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
-            """,
-            connection);
-        await command.ExecuteNonQueryAsync(TestToken);
+        await database.ResetDatabaseAsync(TestToken);
     }
 
     private async Task<NpgsqlConnection> OpenConnectionAsync()

@@ -84,6 +84,7 @@ public sealed class ShopArchitectureTests
             typeof(ShopPrice),
             typeof(AvailabilityWindow),
             typeof(ShopPurchase),
+            typeof(ChangeShopOfferSortOrder),
             typeof(IShopOfferStore),
             typeof(IShopPurchaseHistoryStore),
             typeof(IShopPurchaseExecutor),
@@ -151,11 +152,11 @@ public sealed class ShopArchitectureTests
     }
 
     [Fact]
-    public void ShopMigrationKeepsCatalogV1AndAddsFocusedPurchaseV2()
+    public void ShopMigrationsKeepV1AndV2AndAddFocusedSortOrderV3()
     {
         var migrations = new ShopMigrationSource().GetMigrations().OrderBy(m => m.Version).ToArray();
 
-        Assert.Equal(2, migrations.Length);
+        Assert.Equal(3, migrations.Length);
 
         var catalog = migrations[0];
         Assert.Equal("Shop", catalog.Owner);
@@ -177,6 +178,19 @@ public sealed class ShopArchitectureTests
         Assert.DoesNotContain("REFERENCES community_identities", purchase.Sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("REFERENCES community_inventory", purchase.Sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("REFERENCES community_economies", purchase.Sql, StringComparison.OrdinalIgnoreCase);
+
+        var sortOrder = migrations[2];
+        Assert.Equal("Shop", sortOrder.Owner);
+        Assert.Equal(3, sortOrder.Version);
+        Assert.Equal("AddShopOfferSortOrder", sortOrder.Name);
+        Assert.Contains("ALTER TABLE shop_offers", sortOrder.Sql, StringComparison.Ordinal);
+        Assert.Contains("ADD COLUMN sort_order integer DEFAULT 0", sortOrder.Sql, StringComparison.Ordinal);
+        Assert.Contains("ALTER COLUMN sort_order SET NOT NULL", sortOrder.Sql, StringComparison.Ordinal);
+        Assert.Contains("ALTER COLUMN sort_order DROP DEFAULT", sortOrder.Sql, StringComparison.Ordinal);
+        Assert.Contains("ck_shop_offers_sort_order_non_negative", sortOrder.Sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("CREATE TABLE", sortOrder.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("REFERENCES", sortOrder.Sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("shop_purchases", sortOrder.Sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -187,7 +201,7 @@ public sealed class ShopArchitectureTests
         var result = services.AddShopModule();
 
         Assert.Same(services, result);
-        Assert.Equal(20, services.Count);
+        Assert.Equal(21, services.Count);
         AssertService<IClock, SystemClock>(services, ServiceLifetime.Singleton);
         AssertService<IShopOfferStore, ShopOfferStore>(services, ServiceLifetime.Scoped);
         AssertService<IShopPurchaseHistoryStore, ShopPurchaseHistoryStore>(services, ServiceLifetime.Scoped);
@@ -205,6 +219,7 @@ public sealed class ShopArchitectureTests
         AssertService<ChangeShopOfferPrice, ChangeShopOfferPrice>(services, ServiceLifetime.Scoped);
         AssertService<ChangeShopOfferAvailability, ChangeShopOfferAvailability>(services, ServiceLifetime.Scoped);
         AssertService<ChangeShopOfferPurchaseLimit, ChangeShopOfferPurchaseLimit>(services, ServiceLifetime.Scoped);
+        AssertService<ChangeShopOfferSortOrder, ChangeShopOfferSortOrder>(services, ServiceLifetime.Scoped);
         AssertService<EnableShopOffer, EnableShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<DisableShopOffer, DisableShopOffer>(services, ServiceLifetime.Scoped);
         AssertService<IMigrationSource, ShopMigrationSource>(services, ServiceLifetime.Singleton);
@@ -241,6 +256,7 @@ public sealed class ShopArchitectureTests
                 || descriptor.ServiceType == typeof(ChangeShopOfferPrice)
                 || descriptor.ServiceType == typeof(ChangeShopOfferAvailability)
                 || descriptor.ServiceType == typeof(ChangeShopOfferPurchaseLimit)
+                || descriptor.ServiceType == typeof(ChangeShopOfferSortOrder)
                 || descriptor.ServiceType == typeof(EnableShopOffer)
                 || descriptor.ServiceType == typeof(DisableShopOffer));
     }

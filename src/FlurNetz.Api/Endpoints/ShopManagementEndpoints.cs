@@ -42,6 +42,9 @@ public static class ShopManagementEndpoints
         endpoints.MapPut(
             $"{OffersRoute}/{{offerId}}/purchase-limit",
             ChangeShopOfferPurchaseLimitAsync);
+        endpoints.MapPut(
+            $"{OffersRoute}/{{offerId}}/sort-order",
+            ChangeShopOfferSortOrderAsync);
         endpoints.MapPost(
             $"{OffersRoute}/{{offerId}}/enable",
             EnableShopOfferAsync);
@@ -106,7 +109,8 @@ public static class ShopManagementEndpoints
                         request.AvailableFromUtc,
                         request.AvailableUntilUtc),
                     request.PurchaseLimitPerIdentity,
-                    cancellationToken)
+                    cancellationToken,
+                    request.SortOrder ?? 0)
                 .ConfigureAwait(false);
 
             return Results.Created(
@@ -256,6 +260,32 @@ public static class ShopManagementEndpoints
             .ConfigureAwait(false);
     }
 
+    private static async Task<IResult> ChangeShopOfferSortOrderAsync(
+        string offerId,
+        ChangeShopOfferSortOrderRequest? request,
+        ChangeShopOfferSortOrder useCase,
+        CancellationToken cancellationToken)
+    {
+        if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
+        {
+            return InvalidRequest("Die Route-ID des Shop-Angebots ist ungültig.");
+        }
+
+        if (request is null)
+        {
+            return InvalidRequest("Der Request-Body ist erforderlich.");
+        }
+
+        if (request.SortOrder is not int sortOrder)
+        {
+            return InvalidRequest("Die Sortierreihenfolge ist erforderlich.");
+        }
+
+        return await ExecuteMutationAsync(
+                () => useCase.ExecuteAsync(validOfferId, sortOrder, cancellationToken))
+            .ConfigureAwait(false);
+    }
+
     private static async Task<IResult> EnableShopOfferAsync(
         string offerId,
         EnableShopOffer useCase,
@@ -321,7 +351,8 @@ public static class ShopManagementEndpoints
             offer.IsEnabled,
             offer.Availability.AvailableFrom,
             offer.Availability.AvailableUntil,
-            offer.PurchaseLimitPerIdentity);
+            offer.PurchaseLimitPerIdentity,
+            offer.SortOrder);
 
     private static bool TryCreateId<TId>(
         string rawId,

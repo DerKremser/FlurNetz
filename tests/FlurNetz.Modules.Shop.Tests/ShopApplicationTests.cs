@@ -22,7 +22,8 @@ public sealed class ShopApplicationTests
             ShopPrice.Create(7),
             AvailabilityWindow.Create(null, null),
             2,
-            cancellationToken);
+            cancellationToken,
+            sortOrder: 7);
 
         Assert.NotEqual(Guid.Empty, offer.Id.Value);
         Assert.Equal(offer, store.AddedOffer);
@@ -32,7 +33,21 @@ public sealed class ShopApplicationTests
         Assert.Equal(ShopPrice.Create(7), offer.Price);
         Assert.False(offer.IsEnabled);
         Assert.Equal(2, offer.PurchaseLimitPerIdentity);
+        Assert.Equal(7, offer.SortOrder);
         Assert.Equal(cancellationToken, store.LastCancellationToken);
+    }
+
+    [Fact]
+    public async Task CreateDefaultsSortOrderToZero()
+    {
+        var store = new InMemoryShopOfferStore();
+
+        var offer = await new CreateShopOffer(store).ExecuteAsync(
+            ItemDefinitionId.New(),
+            "Angebot",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, offer.SortOrder);
     }
 
     [Fact]
@@ -55,6 +70,8 @@ public sealed class ShopApplicationTests
                 null),
             token));
         Assert.True(await new ChangeShopOfferPurchaseLimit(store).ExecuteAsync(id, 1, token));
+        Assert.True(await new ChangeShopOfferSortOrder(store).ExecuteAsync(id, 10, token));
+        Assert.False(await new ChangeShopOfferSortOrder(store).ExecuteAsync(id, 10, token));
         Assert.True(await new EnableShopOffer(store).ExecuteAsync(id, token));
         Assert.True(await new DisableShopOffer(store).ExecuteAsync(id, token));
 
@@ -62,6 +79,7 @@ public sealed class ShopApplicationTests
         Assert.Null(store.Offer.Description);
         Assert.Equal(ShopPrice.Create(2), store.Offer.Price);
         Assert.Equal(1, store.Offer.PurchaseLimitPerIdentity);
+        Assert.Equal(10, store.Offer.SortOrder);
         Assert.False(store.Offer.IsEnabled);
         Assert.Equal(id, store.LastExecutedId);
         Assert.Equal(token, store.LastCancellationToken);
@@ -90,6 +108,12 @@ public sealed class ShopApplicationTests
             new EnableShopOffer(store).ExecuteAsync(
                 ShopOfferId.New(),
                 TestContext.Current.CancellationToken));
+
+        await Assert.ThrowsAsync<ShopOfferNotFoundException>(() =>
+            new ChangeShopOfferSortOrder(store).ExecuteAsync(
+                ShopOfferId.New(),
+                1,
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -103,6 +127,7 @@ public sealed class ShopApplicationTests
         Assert.Throws<ArgumentNullException>(() => new ChangeShopOfferPrice(null!));
         Assert.Throws<ArgumentNullException>(() => new ChangeShopOfferAvailability(null!));
         Assert.Throws<ArgumentNullException>(() => new ChangeShopOfferPurchaseLimit(null!));
+        Assert.Throws<ArgumentNullException>(() => new ChangeShopOfferSortOrder(null!));
         Assert.Throws<ArgumentNullException>(() => new EnableShopOffer(null!));
         Assert.Throws<ArgumentNullException>(() => new DisableShopOffer(null!));
     }

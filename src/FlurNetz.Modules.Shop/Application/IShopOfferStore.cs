@@ -28,7 +28,8 @@ public interface IShopOfferStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lädt alle Angebote in technisch deterministischer ID-Reihenfolge.
+    /// Lädt alle Angebote in der fachlichen Katalogreihenfolge SortOrder aufsteigend und
+    /// ShopOfferId aufsteigend als deterministischem Tie-Breaker.
     /// </summary>
     Task<IReadOnlyList<ShopOffer>> ListAsync(
         CancellationToken cancellationToken = default);

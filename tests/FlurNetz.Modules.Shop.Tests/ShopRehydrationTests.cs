@@ -27,7 +27,8 @@ public sealed class ShopOfferRehydrationTests
             ShopPrice.Create(42),
             true,
             availability,
-            3);
+            3,
+            11);
 
         Assert.Equal(id, offer.Id);
         Assert.Equal(itemDefinitionId, offer.ItemDefinitionId);
@@ -37,6 +38,7 @@ public sealed class ShopOfferRehydrationTests
         Assert.True(offer.IsEnabled);
         Assert.Equal(availability, offer.Availability);
         Assert.Equal(3, offer.PurchaseLimitPerIdentity);
+        Assert.Equal(11, offer.SortOrder);
     }
 
     [Fact]
@@ -127,6 +129,8 @@ public sealed class ShopOfferRehydrationTests
             id, itemDefinitionId, "Angebot", null, validPrice, false, validAvailability, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => ShopOffer.Rehydrate(
             id, itemDefinitionId, "Angebot", null, validPrice, false, validAvailability, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ShopOffer.Rehydrate(
+            id, itemDefinitionId, "Angebot", null, validPrice, false, validAvailability, null, -1));
     }
 
     [Fact]

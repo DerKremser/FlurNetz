@@ -21,10 +21,10 @@ public sealed class ShopOfferStore : IShopOfferStore
     private const string AddSql = """
         INSERT INTO shop_offers
             (id, item_definition_id, display_name, description, price, is_enabled,
-             available_from, available_until, purchase_limit_per_identity)
+             available_from, available_until, purchase_limit_per_identity, sort_order)
         VALUES
             (@Id, @ItemDefinitionId, @DisplayName, @Description, @Price, @IsEnabled,
-             @AvailableFrom, @AvailableUntil, @PurchaseLimitPerIdentity);
+             @AvailableFrom, @AvailableUntil, @PurchaseLimitPerIdentity, @SortOrder);
         """;
 
     private const string GetSql = """
@@ -37,7 +37,8 @@ public sealed class ShopOfferStore : IShopOfferStore
             is_enabled AS IsEnabled,
             available_from AS AvailableFrom,
             available_until AS AvailableUntil,
-            purchase_limit_per_identity AS PurchaseLimitPerIdentity
+            purchase_limit_per_identity AS PurchaseLimitPerIdentity,
+            sort_order AS SortOrder
         FROM shop_offers
         WHERE id = @Id;
         """;
@@ -52,9 +53,10 @@ public sealed class ShopOfferStore : IShopOfferStore
             is_enabled AS IsEnabled,
             available_from AS AvailableFrom,
             available_until AS AvailableUntil,
-            purchase_limit_per_identity AS PurchaseLimitPerIdentity
+            purchase_limit_per_identity AS PurchaseLimitPerIdentity,
+            sort_order AS SortOrder
         FROM shop_offers
-        ORDER BY id;
+        ORDER BY sort_order ASC, id ASC;
         """;
 
     private const string GetForUpdateSql = """
@@ -67,7 +69,8 @@ public sealed class ShopOfferStore : IShopOfferStore
             is_enabled AS IsEnabled,
             available_from AS AvailableFrom,
             available_until AS AvailableUntil,
-            purchase_limit_per_identity AS PurchaseLimitPerIdentity
+            purchase_limit_per_identity AS PurchaseLimitPerIdentity,
+            sort_order AS SortOrder
         FROM shop_offers
         WHERE id = @Id
         FOR UPDATE;
@@ -82,7 +85,8 @@ public sealed class ShopOfferStore : IShopOfferStore
             is_enabled = @IsEnabled,
             available_from = @AvailableFrom,
             available_until = @AvailableUntil,
-            purchase_limit_per_identity = @PurchaseLimitPerIdentity
+            purchase_limit_per_identity = @PurchaseLimitPerIdentity,
+            sort_order = @SortOrder
         WHERE id = @Id;
         """;
 
@@ -213,7 +217,8 @@ public sealed class ShopOfferStore : IShopOfferStore
                                 after.IsEnabled,
                                 AvailableFrom = after.AvailableFrom,
                                 AvailableUntil = after.AvailableUntil,
-                                after.PurchaseLimitPerIdentity
+                                after.PurchaseLimitPerIdentity,
+                                after.SortOrder
                             },
                             transaction: transaction.Transaction,
                             cancellationToken: cancellationToken))
@@ -242,7 +247,8 @@ public sealed class ShopOfferStore : IShopOfferStore
         offer.IsEnabled,
         AvailableFrom = offer.Availability.AvailableFrom,
         AvailableUntil = offer.Availability.AvailableUntil,
-        offer.PurchaseLimitPerIdentity
+        offer.PurchaseLimitPerIdentity,
+        offer.SortOrder
     };
 
     private static ShopOffer Rehydrate(ShopOfferRow row)
@@ -255,7 +261,8 @@ public sealed class ShopOfferStore : IShopOfferStore
             ShopPrice.Create(row.Price),
             row.IsEnabled,
             AvailabilityWindow.Create(row.AvailableFrom, row.AvailableUntil),
-            row.PurchaseLimitPerIdentity);
+            row.PurchaseLimitPerIdentity,
+            row.SortOrder);
     }
 
     private static ShopOfferSnapshot Snapshot(ShopOffer offer) =>
@@ -266,7 +273,8 @@ public sealed class ShopOfferStore : IShopOfferStore
             offer.IsEnabled,
             offer.Availability.AvailableFrom,
             offer.Availability.AvailableUntil,
-            offer.PurchaseLimitPerIdentity);
+            offer.PurchaseLimitPerIdentity,
+            offer.SortOrder);
 
     private static void EnsureAffectedRows(int affectedRows, string operation)
     {
@@ -284,7 +292,8 @@ public sealed class ShopOfferStore : IShopOfferStore
         bool IsEnabled,
         DateTimeOffset? AvailableFrom,
         DateTimeOffset? AvailableUntil,
-        int? PurchaseLimitPerIdentity);
+        int? PurchaseLimitPerIdentity,
+        int SortOrder);
 
     private sealed class ShopOfferRow
     {
@@ -305,5 +314,7 @@ public sealed class ShopOfferStore : IShopOfferStore
         public DateTimeOffset? AvailableUntil { get; set; }
 
         public int? PurchaseLimitPerIdentity { get; set; }
+
+        public int SortOrder { get; set; }
     }
 }

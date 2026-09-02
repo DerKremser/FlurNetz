@@ -34,6 +34,7 @@ public static class ShopModule
         services.AddScoped<ChangeShopOfferPrice>();
         services.AddScoped<ChangeShopOfferAvailability>();
         services.AddScoped<ChangeShopOfferPurchaseLimit>();
+        services.AddScoped<ChangeShopOfferSortOrder>();
         services.AddScoped<EnableShopOffer>();
         services.AddScoped<DisableShopOffer>();
         services.AddScoped<PurchaseShopOffer>();

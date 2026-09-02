@@ -12,4 +12,5 @@ public sealed record ShopOfferManagementResponse(
     bool IsEnabled,
     DateTimeOffset? AvailableFromUtc,
     DateTimeOffset? AvailableUntilUtc,
-    int? PurchaseLimitPerIdentity);
+    int? PurchaseLimitPerIdentity,
+    int SortOrder = 0);

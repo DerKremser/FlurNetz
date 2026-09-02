@@ -115,6 +115,7 @@ public sealed class ApiArchitectureTests
             typeof(ChangeShopOfferPriceRequest),
             typeof(ChangeShopOfferAvailabilityRequest),
             typeof(ChangeShopOfferPurchaseLimitRequest),
+            typeof(ChangeShopOfferSortOrderRequest),
             typeof(ShopOfferManagementResponse),
             typeof(ShopOfferManagementListResponse)
         };

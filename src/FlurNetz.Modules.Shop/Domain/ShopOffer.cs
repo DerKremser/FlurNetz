@@ -34,8 +34,11 @@ public sealed class ShopOffer
         ShopPrice price,
         AvailabilityWindow availabilityWindow,
         int? purchaseLimitPerIdentity,
+        int sortOrder,
         bool isEnabled)
     {
+        EnsureValidSortOrder(sortOrder);
+
         Id = id;
         ItemDefinitionId = itemDefinitionId;
         DisplayName = displayName;
@@ -43,6 +46,7 @@ public sealed class ShopOffer
         Price = price;
         Availability = availabilityWindow;
         PurchaseLimitPerIdentity = purchaseLimitPerIdentity;
+        SortOrder = sortOrder;
         IsEnabled = isEnabled;
     }
 
@@ -107,6 +111,11 @@ public sealed class ShopOffer
     public int? PurchaseLimitPerIdentity { get; private set; }
 
     /// <summary>
+    /// Liefert die nicht-negative fachliche Reihenfolgeposition des Angebots.
+    /// </summary>
+    public int SortOrder { get; private set; }
+
+    /// <summary>
     /// Erstellt ein neues, zunächst deaktiviertes Shop-Angebot.
     /// </summary>
     /// <param name="id">Die nicht leere stabile Angebots-ID.</param>
@@ -116,6 +125,7 @@ public sealed class ShopOffer
     /// <param name="price">Der nicht-negative Preis.</param>
     /// <param name="availabilityWindow">Das optionale Verfügbarkeitsfenster.</param>
     /// <param name="purchaseLimitPerIdentity">Das optionale positive Kauflimit.</param>
+    /// <param name="sortOrder">Die nicht-negative fachliche Reihenfolgeposition.</param>
     /// <returns>Ein gültiges und deaktiviertes Shop-Angebot.</returns>
     public static ShopOffer Create(
         ShopOfferId id,
@@ -124,7 +134,8 @@ public sealed class ShopOffer
         string? description = null,
         ShopPrice price = default,
         AvailabilityWindow availabilityWindow = default,
-        int? purchaseLimitPerIdentity = null)
+        int? purchaseLimitPerIdentity = null,
+        int sortOrder = 0)
     {
         EnsureValidId(id);
         EnsureValidItemDefinitionId(itemDefinitionId);
@@ -137,6 +148,7 @@ public sealed class ShopOffer
             price,
             availabilityWindow,
             NormalizePurchaseLimit(purchaseLimitPerIdentity),
+            sortOrder,
             false);
     }
 
@@ -149,7 +161,8 @@ public sealed class ShopOffer
         string displayName,
         ShopPrice price,
         AvailabilityWindow availabilityWindow = default,
-        int? purchaseLimitPerIdentity = null)
+        int? purchaseLimitPerIdentity = null,
+        int sortOrder = 0)
     {
         return Create(
             id,
@@ -158,7 +171,8 @@ public sealed class ShopOffer
             null,
             price,
             availabilityWindow,
-            purchaseLimitPerIdentity);
+            purchaseLimitPerIdentity,
+            sortOrder);
     }
 
     /// <summary>
@@ -177,7 +191,8 @@ public sealed class ShopOffer
         ShopPrice price,
         bool isEnabled,
         AvailabilityWindow availabilityWindow,
-        int? purchaseLimitPerIdentity)
+        int? purchaseLimitPerIdentity,
+        int sortOrder = 0)
     {
         EnsureValidId(id);
         EnsureValidItemDefinitionId(itemDefinitionId);
@@ -190,6 +205,7 @@ public sealed class ShopOffer
             price,
             availabilityWindow,
             NormalizePurchaseLimit(purchaseLimitPerIdentity),
+            sortOrder,
             isEnabled);
     }
 
@@ -278,6 +294,21 @@ public sealed class ShopOffer
         }
 
         PurchaseLimitPerIdentity = normalizedLimit;
+        return true;
+    }
+
+    /// <summary>
+    /// Ändert die fachliche Reihenfolgeposition, sofern sie sich ändert.
+    /// </summary>
+    public bool ChangeSortOrder(int sortOrder)
+    {
+        EnsureValidSortOrder(sortOrder);
+        if (SortOrder == sortOrder)
+        {
+            return false;
+        }
+
+        SortOrder = sortOrder;
         return true;
     }
 
@@ -402,6 +433,17 @@ public sealed class ShopOffer
         }
 
         return purchaseLimitPerIdentity;
+    }
+
+    private static void EnsureValidSortOrder(int sortOrder)
+    {
+        if (sortOrder < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(sortOrder),
+                sortOrder,
+                "Die Sortierreihenfolge muss größer oder gleich null sein.");
+        }
     }
 
     private static void EnsureValidId(ShopOfferId id)

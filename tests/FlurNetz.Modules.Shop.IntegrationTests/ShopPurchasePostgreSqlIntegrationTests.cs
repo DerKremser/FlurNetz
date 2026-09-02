@@ -54,7 +54,8 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
             factory,
             itemDefinitionId,
             price: 25,
-            purchaseLimit: 2);
+            purchaseLimit: 2,
+            sortOrder: 5000);
         var requestId = ShopPurchaseRequestId.New();
         var useCase = CreateUseCase(factory, PurchaseTime);
 
@@ -123,6 +124,16 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
                 FROM flurnetz_messaging.outbox_messages;
                 """,
                 cancellationToken: TestToken));
+        var purchaseSortOrderColumnCount = await connection.QuerySingleAsync<long>(
+            new CommandDefinition(
+                """
+                SELECT COUNT(*)::bigint
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'shop_purchases'
+                  AND column_name = 'sort_order';
+                """,
+                cancellationToken: TestToken));
 
         Assert.Equal(75, balance);
         Assert.Equal(1, quantity);
@@ -139,6 +150,7 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
         Assert.Equal(ShopPurchaseCompletedIntegrationEvent.SchemaVersion, outbox.SchemaVersion);
         Assert.Equal(PurchaseTime, outbox.OccurredAtUtc);
         Assert.Equal(requestId.Value.ToString("D"), outbox.CorrelationId);
+        Assert.Equal(0L, purchaseSortOrderColumnCount);
     }
 
     [Fact]
@@ -850,7 +862,8 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
         PostgreSqlConnectionFactory factory,
         ItemDefinitionId itemDefinitionId,
         long price,
-        int? purchaseLimit = null)
+        int? purchaseLimit = null,
+        int sortOrder = 0)
     {
         var offer = ShopOffer.Create(
             ShopOfferId.New(),
@@ -859,7 +872,8 @@ public sealed class ShopPurchasePostgreSqlIntegrationTests(ShopPostgreSqlFixture
             null,
             ShopPrice.Create(price),
             AvailabilityWindow.Create(null, null),
-            purchaseLimit);
+            purchaseLimit,
+            sortOrder);
         offer.Enable();
         await new ShopOfferStore(factory).AddAsync(offer, TestToken);
         return offer;

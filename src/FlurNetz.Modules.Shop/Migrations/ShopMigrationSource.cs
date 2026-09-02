@@ -127,6 +127,21 @@ public sealed class ShopMigrationSource : IMigrationSource
             ON shop_purchases (community_identity_id, purchased_at);
         """;
 
+    private const string AddShopOfferSortOrderSql = """
+        ALTER TABLE shop_offers
+            ADD COLUMN sort_order integer DEFAULT 0;
+
+        ALTER TABLE shop_offers
+            ALTER COLUMN sort_order SET NOT NULL;
+
+        ALTER TABLE shop_offers
+            ALTER COLUMN sort_order DROP DEFAULT;
+
+        ALTER TABLE shop_offers
+            ADD CONSTRAINT ck_shop_offers_sort_order_non_negative
+                CHECK (sort_order >= 0);
+        """;
+
     /// <summary>
     /// Gibt den persistierten Angebotskatalog und die atomare Purchase-Persistenz zurück.
     /// </summary>
@@ -134,5 +149,6 @@ public sealed class ShopMigrationSource : IMigrationSource
     {
         yield return new Migration("Shop", 1, "CreateShopOffers", CreateShopOffersSql);
         yield return new Migration("Shop", 2, "CreateShopPurchases", CreateShopPurchasesSql);
+        yield return new Migration("Shop", 3, "AddShopOfferSortOrder", AddShopOfferSortOrderSql);
     }
 }

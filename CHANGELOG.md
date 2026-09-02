@@ -4,6 +4,31 @@
 
 ### Hinzugefügt
 
+- Slice 9 ergänzt eine persistierte, betreibersteuerbare `ShopOffer.SortOrder`-Reihenfolge.
+  `SortOrder` muss `>= 0` sein, neue Angebote starten mit `0`, gleiche Werte sind erlaubt und
+  es gibt keine automatische Umnummerierung. Die verbindliche Katalogreihenfolge lautet
+  `sort_order ASC, id ASC`; Store und öffentliche Storefront übernehmen diese Reihenfolge.
+- `ShopOffer.Create`, `ShopOffer.Rehydrate` und die gezielte Domainmutation
+  `ChangeSortOrder(int)` unterstützen den vollständigen SortOrder-Zustand einschließlich
+  No-op-Semantik. Der neue Application-Use-Case `ChangeShopOfferSortOrder` verwendet weiterhin
+  `IShopOfferStore.ExecuteAsync(...)`; `CreateShopOffer` reicht den optionalen Wert weiter.
+- `Shop:3:AddShopOfferSortOrder` ergänzt ausschließlich `shop_offers.sort_order` als
+  `integer NOT NULL` mit `sort_order >= 0`, backfillt vorhandene Angebote kontrolliert mit `0`
+  und entfernt den temporären Default. `Shop:1:CreateShopOffers` und
+  `Shop:2:CreateShopPurchases` bleiben unverändert; es gibt keinen Index, Unique Constraint,
+  Foreign Key oder eine neue Tabelle.
+- Die Shop-Management-Grenze ergänzt `PUT /api/admin/shop/offers/{offerId}/sort-order` und
+  ein API-eigenes `ChangeShopOfferSortOrderRequest`. Management-Create akzeptiert einen
+  optionalen SortOrder; Management-Responses enthalten ihn. Gültige Änderungen und No-ops
+  liefern `204`, bekannte Fehler bleiben `400`/`404` ProblemDetails.
+- Echte PostgreSQL-, API-, Domain-, Application- und Architekturtests decken Default,
+  Rehydration, Mutation, Migration-Upgrade, Constraint, No-op, Sortierung mit ID-Tie-Break,
+  Storefront-Filterung und Management-HTTP-Verhalten ab.
+- `Shop.Contracts` bleibt bei exakt vier öffentlichen Typen; `ShopPurchaseCompletedIntegrationEvent`
+  bleibt vollständig `shop.purchase-completed` v1. Purchase-Snapshot, Purchase-Semantik,
+  Outbox, Worker, Consumerlosigkeit, Administration und Security-Scope werden nicht erweitert.
+- Kein Admin-Frontend sowie kein Delete, Soft Delete oder Archive wird eingeführt.
+
 - Getrennte HTTP-Management-Grenze für den vollständigen Shop-Angebotskatalog unter
   `/api/admin/shop/offers` mit Create, Get, List, gezielten Feldmutationen sowie Enable und
   Disable ergänzt.

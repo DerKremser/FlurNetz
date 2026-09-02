@@ -10,4 +10,5 @@ public sealed record CreateShopOfferRequest(
     long? Price,
     DateTimeOffset? AvailableFromUtc,
     DateTimeOffset? AvailableUntilUtc,
-    int? PurchaseLimitPerIdentity);
+    int? PurchaseLimitPerIdentity,
+    int? SortOrder = null);

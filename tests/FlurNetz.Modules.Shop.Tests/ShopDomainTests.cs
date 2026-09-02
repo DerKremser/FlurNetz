@@ -239,7 +239,8 @@ public sealed class ShopOfferTests
             "  Beschreibung  ",
             ShopPrice.Create(25),
             AvailabilityWindow.Create(From, Until),
-            2);
+            2,
+            7);
 
         Assert.Equal(id, offer.Id);
         Assert.Equal(id, offer.ShopOfferId);
@@ -251,6 +252,7 @@ public sealed class ShopOfferTests
         Assert.Equal(AvailabilityWindow.Create(From, Until), offer.Availability);
         Assert.Equal(offer.Availability, offer.AvailabilityWindow);
         Assert.Equal(2, offer.PurchaseLimitPerIdentity);
+        Assert.Equal(7, offer.SortOrder);
     }
 
     [Fact]
@@ -259,6 +261,34 @@ public sealed class ShopOfferTests
         var offer = CreateOffer();
 
         Assert.False(offer.IsEnabled);
+    }
+
+    [Fact]
+    public void Create_DefaultsSortOrderToZero()
+    {
+        var offer = CreateOffer();
+
+        Assert.Equal(0, offer.SortOrder);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5)]
+    [InlineData(5000)]
+    public void Create_AcceptsZeroAndPositiveSortOrders(int sortOrder)
+    {
+        var offer = CreateOffer(sortOrder: sortOrder);
+
+        Assert.Equal(sortOrder, offer.SortOrder);
+    }
+
+    [Fact]
+    public void Create_RejectsNegativeSortOrder()
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            CreateOffer(sortOrder: -1));
+
+        Assert.Equal("sortOrder", exception.ParamName);
     }
 
     [Fact]
@@ -743,6 +773,51 @@ public sealed class ShopOfferTests
     }
 
     [Fact]
+    public void ChangeSortOrder_ChangesDifferentValueAndPreservesOtherState()
+    {
+        var offer = CreateOffer(sortOrder: 5);
+        var id = offer.Id;
+        var itemDefinitionId = offer.ItemDefinitionId;
+        var displayName = offer.DisplayName;
+        var description = offer.Description;
+        var price = offer.Price;
+        var availability = offer.Availability;
+        var purchaseLimit = offer.PurchaseLimitPerIdentity;
+        var isEnabled = offer.IsEnabled;
+
+        Assert.True(offer.ChangeSortOrder(10));
+
+        Assert.Equal(10, offer.SortOrder);
+        Assert.Equal(id, offer.Id);
+        Assert.Equal(itemDefinitionId, offer.ItemDefinitionId);
+        Assert.Equal(displayName, offer.DisplayName);
+        Assert.Equal(description, offer.Description);
+        Assert.Equal(price, offer.Price);
+        Assert.Equal(availability, offer.Availability);
+        Assert.Equal(purchaseLimit, offer.PurchaseLimitPerIdentity);
+        Assert.Equal(isEnabled, offer.IsEnabled);
+    }
+
+    [Fact]
+    public void ChangeSortOrder_IsNoOpForTheSameValue()
+    {
+        var offer = CreateOffer(sortOrder: 5);
+
+        Assert.False(offer.ChangeSortOrder(5));
+        Assert.Equal(5, offer.SortOrder);
+    }
+
+    [Fact]
+    public void ChangeSortOrder_RejectsNegativeValuesWithoutChangingState()
+    {
+        var offer = CreateOffer(sortOrder: 5);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => offer.ChangeSortOrder(-1));
+
+        Assert.Equal(5, offer.SortOrder);
+    }
+
+    [Fact]
     public void EnableAndDisableChangeStateIdempotently()
     {
         var offer = CreateOffer();
@@ -778,6 +853,7 @@ public sealed class ShopOfferTests
             nameof(ShopOffer.ChangePrice),
             nameof(ShopOffer.ChangeAvailability),
             nameof(ShopOffer.ChangePurchaseLimit),
+            nameof(ShopOffer.ChangeSortOrder),
             nameof(ShopOffer.Enable),
             nameof(ShopOffer.Disable)
         };
@@ -814,6 +890,7 @@ public sealed class ShopOfferTests
         var isEnabled = typeof(ShopOffer).GetProperty(nameof(ShopOffer.IsEnabled));
         var availability = typeof(ShopOffer).GetProperty(nameof(ShopOffer.Availability));
         var purchaseLimit = typeof(ShopOffer).GetProperty(nameof(ShopOffer.PurchaseLimitPerIdentity));
+        var sortOrder = typeof(ShopOffer).GetProperty(nameof(ShopOffer.SortOrder));
 
         Assert.NotNull(displayName);
         Assert.Null(displayName!.GetSetMethod());
@@ -827,6 +904,8 @@ public sealed class ShopOfferTests
         Assert.Null(availability!.GetSetMethod());
         Assert.NotNull(purchaseLimit);
         Assert.Null(purchaseLimit!.GetSetMethod());
+        Assert.NotNull(sortOrder);
+        Assert.Null(sortOrder!.GetSetMethod());
     }
 
     [Fact]
@@ -837,7 +916,8 @@ public sealed class ShopOfferTests
 
     private static ShopOffer CreateOffer(
         string? description = "Beschreibung",
-        int? purchaseLimitPerIdentity = 2) =>
+        int? purchaseLimitPerIdentity = 2,
+        int sortOrder = 0) =>
         ShopOffer.Create(
             ShopOfferId.New(),
             ItemDefinitionId.New(),
@@ -845,7 +925,8 @@ public sealed class ShopOfferTests
             description,
             ShopPrice.Create(25),
             AvailabilityWindow.Create(From, Until),
-            purchaseLimitPerIdentity);
+            purchaseLimitPerIdentity,
+            sortOrder);
 
     private static string RepeatUnicodeScalar(string scalar, int count) =>
         string.Concat(Enumerable.Repeat(scalar, count));

@@ -57,7 +57,8 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
                 ("Inventory", 1L, "CreateCommunityInventoryEntries"),
                 ("Messaging", 1L, "CreateOutboxAndInbox"),
                 ("Shop", 1L, "CreateShopOffers"),
-                ("Shop", 2L, "CreateShopPurchases")
+                ("Shop", 2L, "CreateShopPurchases"),
+                ("Shop", 3L, "AddShopOfferSortOrder")
             },
             history);
     }
@@ -71,16 +72,39 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
         using var client = factory.CreateClient();
 
         var now = CurrentUtc();
-        var visible = new OfferSeed(
+        var firstVisible = new OfferSeed(
+            Guid.Parse("00000000-0000-0000-0000-000000000001"),
             Guid.NewGuid(),
-            Guid.NewGuid(),
-            "Sichtbar",
+            "Sichtbar zuerst",
             "Beschreibung",
             42,
             true,
             now.AddHours(-1),
             now.AddHours(1),
-            3);
+            3,
+            10);
+        var secondVisible = new OfferSeed(
+            Guid.Parse("00000000-0000-0000-0000-000000000002"),
+            Guid.NewGuid(),
+            "Sichtbar gleich sortiert",
+            null,
+            43,
+            true,
+            null,
+            null,
+            null,
+            10);
+        var laterVisible = new OfferSeed(
+            Guid.Parse("00000000-0000-0000-0000-000000000003"),
+            Guid.NewGuid(),
+            "Sichtbar später",
+            null,
+            44,
+            true,
+            null,
+            null,
+            null,
+            20);
         var disabled = new OfferSeed(
             Guid.NewGuid(),
             Guid.NewGuid(),
@@ -110,8 +134,11 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
             true,
             null,
             now.AddHours(-1),
-            null);
-        await InsertOfferAsync(visible);
+            null,
+            0);
+        await InsertOfferAsync(firstVisible);
+        await InsertOfferAsync(secondVisible);
+        await InsertOfferAsync(laterVisible);
         await InsertOfferAsync(disabled);
         await InsertOfferAsync(future);
         await InsertOfferAsync(expired);
@@ -121,15 +148,17 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(body);
-        var item = Assert.Single(body!.Items);
-        Assert.Equal(visible.Id, item.Id);
-        Assert.Equal(visible.ItemDefinitionId, item.ItemDefinitionId);
-        Assert.Equal(visible.DisplayName, item.DisplayName);
-        Assert.Equal(visible.Description, item.Description);
-        Assert.Equal(visible.Price, item.Price);
-        Assert.Equal(visible.AvailableFromUtc, item.AvailableFromUtc);
-        Assert.Equal(visible.AvailableUntilUtc, item.AvailableUntilUtc);
-        Assert.Equal(visible.PurchaseLimitPerIdentity, item.PurchaseLimitPerIdentity);
+        Assert.Equal(
+            new[] { firstVisible.Id, secondVisible.Id, laterVisible.Id },
+            body!.Items.Select(item => item.Id).ToArray());
+        var firstItem = body.Items[0];
+        Assert.Equal(firstVisible.ItemDefinitionId, firstItem.ItemDefinitionId);
+        Assert.Equal(firstVisible.DisplayName, firstItem.DisplayName);
+        Assert.Equal(firstVisible.Description, firstItem.Description);
+        Assert.Equal(firstVisible.Price, firstItem.Price);
+        Assert.Equal(firstVisible.AvailableFromUtc, firstItem.AvailableFromUtc);
+        Assert.Equal(firstVisible.AvailableUntilUtc, firstItem.AvailableUntilUtc);
+        Assert.Equal(firstVisible.PurchaseLimitPerIdentity, firstItem.PurchaseLimitPerIdentity);
     }
 
     [Fact]
@@ -538,10 +567,10 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
             """
             INSERT INTO shop_offers
                 (id, item_definition_id, display_name, description, price, is_enabled,
-                 available_from, available_until, purchase_limit_per_identity)
+                 available_from, available_until, purchase_limit_per_identity, sort_order)
             VALUES
                 (@id, @itemDefinitionId, @displayName, @description, @price, @isEnabled,
-                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity);
+                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
             """,
             connection);
         command.Parameters.AddWithValue("id", offer.Id);
@@ -555,6 +584,7 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
         command.Parameters.AddWithValue(
             "purchaseLimitPerIdentity",
             (object?)offer.PurchaseLimitPerIdentity ?? DBNull.Value);
+        command.Parameters.AddWithValue("sortOrder", offer.SortOrder);
         await command.ExecuteNonQueryAsync(TestToken);
     }
 
@@ -625,7 +655,8 @@ public sealed class ShopApiPostgreSqlTests(ApiPostgreSqlFixture database)
         bool IsEnabled,
         DateTimeOffset? AvailableFromUtc,
         DateTimeOffset? AvailableUntilUtc,
-        int? PurchaseLimitPerIdentity);
+        int? PurchaseLimitPerIdentity,
+        int SortOrder = 0);
 
     private sealed record PurchaseSeed(
         Guid Id,

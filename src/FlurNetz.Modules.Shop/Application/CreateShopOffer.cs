@@ -30,7 +30,8 @@ public sealed class CreateShopOffer
         ShopPrice price = default,
         AvailabilityWindow availabilityWindow = default,
         int? purchaseLimitPerIdentity = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int sortOrder = 0)
     {
         var offer = ShopOffer.Create(
             ShopOfferId.New(),
@@ -39,7 +40,8 @@ public sealed class CreateShopOffer
             description,
             price,
             availabilityWindow,
-            purchaseLimitPerIdentity);
+            purchaseLimitPerIdentity,
+            sortOrder);
 
         await store.AddAsync(offer, cancellationToken).ConfigureAwait(false);
         return offer;

@@ -503,10 +503,10 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
             """
             INSERT INTO shop_offers
                 (id, item_definition_id, display_name, price, is_enabled,
-                 available_from, available_until, purchase_limit_per_identity)
+                 available_from, available_until, purchase_limit_per_identity, sort_order)
             VALUES
                 (@id, @itemDefinitionId, @displayName, @price, @isEnabled,
-                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity);
+                 @availableFromUtc, @availableUntilUtc, @purchaseLimitPerIdentity, @sortOrder);
             """,
             connection);
         command.Parameters.AddWithValue("id", offer.Id);
@@ -523,6 +523,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         command.Parameters.AddWithValue(
             "purchaseLimitPerIdentity",
             (object?)offer.PurchaseLimitPerIdentity ?? DBNull.Value);
+        command.Parameters.AddWithValue("sortOrder", offer.SortOrder);
         await command.ExecuteNonQueryAsync(TestToken);
     }
 
@@ -668,7 +669,8 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         bool IsEnabled,
         DateTimeOffset? AvailableFromUtc,
         DateTimeOffset? AvailableUntilUtc,
-        int? PurchaseLimitPerIdentity);
+        int? PurchaseLimitPerIdentity,
+        int SortOrder = 0);
 
     private sealed record OutboxSnapshot(
         string MessageType,

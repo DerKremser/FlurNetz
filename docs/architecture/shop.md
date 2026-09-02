@@ -44,7 +44,15 @@ Die Query-Typen `IShopPurchaseHistoryStore`, `GetShopPurchase`,
 `DisplayName` mit höchstens 200 Unicode-Skalarwerten, eine optionale nicht-leere
 `Description` mit höchstens 2000 Unicode-Skalarwerten, `ShopPrice`, `IsEnabled`, das
 halboffene `AvailabilityWindow` sowie ein optionales positives
-`PurchaseLimitPerIdentity`.
+`PurchaseLimitPerIdentity` und den nicht-negativen `SortOrder`.
+
+`SortOrder` muss größer oder gleich `0` sein. Neue Angebote verwenden standardmäßig `0`;
+explizit gesetzte positive Werte und mehrere gleiche Werte sind gültig. Es gibt keine
+automatische Umnummerierung, keine lückenlose Positionspflicht und keinen eigenen Value-Type.
+Die verbindliche Katalogreihenfolge lautet `sort_order ASC, id ASC`, wobei `ShopOfferId` nur
+der deterministische Tie-Breaker ist. `ChangeSortOrder(int)` ändert nur einen abweichenden
+Wert und liefert bei identischem Wert `false`; negative Werte werden als Argumentfehler
+abgewiesen. `ShopOfferId` und `ItemDefinitionId` bleiben unveränderlich.
 
 U+0000 und nicht wohlgeformtes UTF-16 werden an der Domain-Grenze abgewiesen. Availability
 verwendet `[AvailableFrom, AvailableUntil)`; gesetzte Grenzen sind kanonische UTC-Instants
@@ -64,6 +72,7 @@ Die internen Katalog-Use-Cases bleiben:
 - `ChangeShopOfferPrice`
 - `ChangeShopOfferAvailability`
 - `ChangeShopOfferPurchaseLimit`
+- `ChangeShopOfferSortOrder`
 - `EnableShopOffer`
 - `DisableShopOffer`
 
@@ -133,7 +142,8 @@ der öffentlichen Storefront getrennt.
 Die Storefront-Reads verwenden weiterhin die bestehenden Read-Use-Cases und Stores:
 
 - `GET /api/shop/offers` listet ausschließlich aktivierte Angebote, die zum einmal ermittelten
-  aktuellen Zeitpunkt in ihrem `AvailabilityWindow` liegen.
+  aktuellen Zeitpunkt in ihrem `AvailabilityWindow` liegen. Mehrere sichtbare Angebote werden
+  in der vom Store gelieferten fachlichen Reihenfolge `sort_order ASC, id ASC` ausgegeben.
 - `GET /api/shop/offers/{offerId}` liefert nur ein existierendes und aktuell sichtbares Angebot;
   unbekannte, deaktivierte, zukünftige und abgelaufene Angebote liefern `404 Not Found`.
 - `GET /api/shop/purchases/{purchaseId}` liefert den vollständigen historischen Snapshot oder
@@ -172,7 +182,8 @@ weiterhin bewusst keinen fachlichen Shop-Consumer.
 Die Katalogverwaltung verwendet ausschließlich die bereits registrierten Application-Use-Cases
 `CreateShopOffer`, `GetShopOffer`, `ListShopOffers`, `RenameShopOffer`,
 `ChangeShopOfferDescription`, `ChangeShopOfferPrice`, `ChangeShopOfferAvailability`,
-`ChangeShopOfferPurchaseLimit`, `EnableShopOffer` und `DisableShopOffer`:
+`ChangeShopOfferPurchaseLimit`, `ChangeShopOfferSortOrder`, `EnableShopOffer` und
+`DisableShopOffer`:
 
 ```text
 GET  /api/admin/shop/offers
@@ -183,16 +194,24 @@ PUT  /api/admin/shop/offers/{offerId}/description
 PUT  /api/admin/shop/offers/{offerId}/price
 PUT  /api/admin/shop/offers/{offerId}/availability
 PUT  /api/admin/shop/offers/{offerId}/purchase-limit
+PUT  /api/admin/shop/offers/{offerId}/sort-order
 POST /api/admin/shop/offers/{offerId}/enable
 POST /api/admin/shop/offers/{offerId}/disable
 ```
 
 Der Create-Request enthält die bestehenden fachlichen Werte `itemDefinitionId`, `displayName`,
 optionale `description`, `price`, optionale Availability-Grenzen und ein optionales
-`purchaseLimitPerIdentity`; die ID vergibt der Use-Case serverseitig. Ein neues Angebot bleibt
-deaktiviert. Die Management-Lesesicht besitzt ein eigenes API-Response-DTO inklusive
-`IsEnabled` und verwendet nicht den Storefront-Vertrag. Deshalb kann sie den vollständigen
-internen Katalog einschließlich deaktivierter, zukünftiger und abgelaufener Angebote sehen.
+`purchaseLimitPerIdentity` und `sortOrder`; fehlt `sortOrder`, wird `0` verwendet. Negative
+Werte liefern `400 ProblemDetails`. Die ID vergibt der Use-Case serverseitig. Ein neues Angebot
+bleibt deaktiviert. Die Management-Lesesicht besitzt ein eigenes API-Response-DTO inklusive
+`IsEnabled` und `SortOrder` und verwendet nicht den Storefront-Vertrag. Deshalb kann sie den
+vollständigen internen Katalog einschließlich deaktivierter, zukünftiger und abgelaufener
+Angebote sehen. Die Management-Liste folgt ebenfalls `sort_order ASC, id ASC`.
+
+`PUT /api/admin/shop/offers/{offerId}/sort-order` verwendet den API-eigenen
+`ChangeShopOfferSortOrderRequest`. Ein gültiger Wert und ein fachlicher No-op liefern `204 No
+Content`; unbekannte gültige IDs liefern `404 ProblemDetails`, ungültige IDs, fehlende oder
+malformed Bodies sowie negative Werte `400 ProblemDetails`.
 
 Der HTTP-Adapter öffnet keine eigene Transaktion und greift nicht direkt auf Store, Dapper,
 Npgsql oder Tabellen zu. Die vorhandene `ShopOfferStore.ExecuteAsync`-Grenze mit
@@ -202,8 +221,10 @@ Request`, jeweils als ProblemDetails. Wiederholtes Enable oder Disable bleibt ei
 Die Storefront bleibt ausschließlich auf aktivierte und aktuell verfügbare Offers beschränkt.
 Die API verfügt derzeit bewusst noch über keine Authentication/Authorization; vor externem
 Produktivbetrieb muss ein separater Security-/Host-Slice diese Management-Routen schützen. Der
-Adapter führt keine neue Migration ein, veröffentlicht keine Management-Events und registriert
-keinen Shop-Consumer; der Worker bleibt unverändert.
+Der API-Adapter führt Migrationen nicht selbst aus; `Shop:3:AddShopOfferSortOrder` wird wie
+die übrigen Shop-Migrationen über `ShopMigrationSource` registriert. Die Management-Grenze
+veröffentlicht keine Events und registriert keinen Shop-Consumer; der Worker bleibt
+unverändert.
 
 ## Minimale Cross-Module-Capabilities
 
@@ -327,10 +348,20 @@ Zusätzliche Indizes:
 - `community_identity_id uuid NOT NULL`
 - Composite Primary Key über beide Spalten.
 
+### Shop:3:AddShopOfferSortOrder
+
+Die unveränderte V1-Tabelle `shop_offers` wird ausschließlich um
+`sort_order integer NOT NULL` erweitert. Die Migration verwendet beim Hinzufügen temporär
+`DEFAULT 0`, damit alle bestehenden Angebote fachlich mit `SortOrder = 0` backfillt werden,
+setzt danach `NOT NULL`, entfernt den Default wieder und ergänzt ausschließlich den Check
+`sort_order >= 0`. Es gibt keinen permanenten Default, keinen Index, keinen Unique Constraint,
+keinen Foreign Key und keine weitere Tabelle. V1 und V2 werden inhaltlich nicht verändert.
+
 Für die Kaufhistorie wird keine weitere Migration, Tabelle oder Pagination-Struktur
 angelegt. Der vorhandene Index `(community_identity_id, purchased_at)` wird für die
 Keyset-Abfrage weiterverwendet; `Shop:1:CreateShopOffers` und `Shop:2:CreateShopPurchases`
-bleiben unverändert.
+bleiben unverändert. `SortOrder` gehört nicht zu `ShopPurchase`, zum Purchase-Snapshot oder
+zu `shop.purchase-completed` v1.
 
 ## Outbox und Runtime
 
@@ -363,13 +394,15 @@ Reads, `GetAvailableShopOffer`, `ListAvailableShopOffers` sowie `ShopMigrationSo
 Registration umfasst zehn Services und enthält keinen Purchase-Executor und keine Mutation.
 `ShopModule.AddShopModule(...)` verwendet diese Read-Basis und ergänzt weiterhin alle
 Katalogmutationen, `IShopPurchaseExecutor` und `PurchaseShopOffer`; der vollständige Umfang
-umfasst damit 20 Services.
+umfasst damit 21 Services. `AddShopReadOnlyModule(...)` bleibt bei zehn Services und
+registriert weiterhin keine Katalogmutation.
 
 Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory, API- und
 Worker-Komposition bleiben außerhalb des Shop-Moduls. Der API-Host bindet `AddShopModule()`
 zusammen mit der Identity- sowie den schmalen Economy-/Inventory-Capabilities ein und führt
-dadurch die sechs bereits vorhandenen Identity-, Economy-, Inventory-, Shop- und Messaging-
-Migrationen aus. Die internen Katalogmutationen sind registriert und werden vom API-Host über
+dadurch die sieben Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen aus,
+einschließlich `Shop:3:AddShopOfferSortOrder`. Die internen Katalogmutationen sind registriert
+und werden vom API-Host über
 die getrennte Management-Endpoint-Gruppe auf die bestehenden Use-Cases abgebildet.
 Der Worker referenziert für das Contract-Wiring ausschließlich `Shop.Contracts`; er registriert
 keine `ShopMigrationSource` und führt keine Shop-Migration aus.
@@ -392,7 +425,8 @@ und die drei Cross-Module-Capabilities.
 
 Die PostgreSQL-Integrationstests prüfen zusätzlich:
 
-- beide Shop-Migrationen und deren Idempotenz;
+- alle drei Shop-Migrationen und deren Idempotenz einschließlich des V3-Backfills und der
+  fehlenden permanenten Spalten-Default;
 - den vollständigen Shop-Relationsumfang;
 - den bestehenden Katalog einschließlich Unicode-, Zeit-, Rollback- und Concurrency-Garantien;
 - erfolgreichen Kauf mit gemeinsamem Economy-, Inventory-, Purchase-, Request-, Guard- und
@@ -422,7 +456,8 @@ Die PostgreSQL-Integrationstests prüfen zusätzlich:
 - einen zwischen Seiten neu persistierten, zeitlich neueren Kauf ohne Rückwärtsbewegung
   des bereits ausgegebenen Cursors.
 - den echten API-Host mit serverseitigem Management-Create, vollständiger interner
-  Kataloglesesicht, allen gezielten Katalogmutationen, No-op-Enable/Disable und gezielter
+  Kataloglesesicht, allen gezielten Katalogmutationen einschließlich SortOrder, der
+  autoritativen `sort_order ASC, id ASC`-Reihenfolge, No-op-Enable/Disable und gezielter
   ProblemDetails-Abbildung;
 - die unveränderte Trennung der Management-Lesesicht von der Storefront sowie spätere
   Purchase-Wirkungen von Preis-, Availability- und Kauflimit-Mutationen.
@@ -438,3 +473,6 @@ Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger, Saga/Compensation,
 Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische Repositories,
 generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/
 Achievement-Ausführung oder eine generische `OfferTarget`-Abstraktion.
+Auch kein Admin-Frontend, kein Drag & Drop, kein Bulk-Reorder, kein Delete, kein Soft Delete
+und kein Archive gehören zu Slice 9. Authentication/Authorization bleibt ein separater
+Security-/Host-Scope; Worker, Consumer, Contracts und Event-Versionen werden nicht erweitert.

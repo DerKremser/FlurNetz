@@ -176,7 +176,8 @@ Kaufhistorie. `Shop.Contracts` veröffentlicht
 `shop.purchase-completed` und Schema-Version `1`. `ShopOffer` verwendet die gemeinsame `ItemDefinitionId` aus
 `Inventory.Contracts`, einen `ShopPrice`, einen kanonischen Anzeigenamen, eine optionale
 Beschreibung, ein halboffenes `AvailabilityWindow`, ein optionales positives Kauflimit pro
-Identität und einen Aktivierungszustand. Neue Angebote starten deaktiviert; Ziel-IDs bleiben
+Identität, einen nicht-negativen `SortOrder` und einen Aktivierungszustand. Neue Angebote
+starten deaktiviert und standardmäßig mit `SortOrder = 0`; Ziel-IDs bleiben
 unveränderlich, Änderungen erfolgen über gezielte Domainmethoden. `ShopOffer.Rehydrate` stellt
 persistierte Angebote mit denselben Domaininvarianten wieder her. Textgrenzen werden nach
 Unicode-Skalarwerten passend zur PostgreSQL-Zeichensemantik bewertet; U+0000 und nicht
@@ -187,7 +188,15 @@ Instants mit exakt PostgreSQL-kompatibler Mikrosekundenpräzision.
 verwendet gezieltes PostgreSQL-/Dapper-SQL und `SELECT FOR UPDATE` für Mutationen.
 `Shop:2:CreateShopPurchases` ergänzt `shop_purchase_requests`,
 `shop_purchase_guards` und `shop_purchases`; der einzige Foreign Key ist Shop-intern von
-Purchase auf Offer.
+Purchase auf Offer. `Shop:3:AddShopOfferSortOrder` ergänzt ausschließlich die bestehende
+Tabelle `shop_offers` um `sort_order integer NOT NULL` mit `sort_order >= 0`. Der temporäre
+Migration-Default `0` backfillt bestehende Angebote und wird anschließend entfernt; V1 und V2
+bleiben unverändert.
+
+`ShopOffer` erlaubt gleiche SortOrder-Werte und nimmt keine automatische Umnummerierung vor.
+Die verbindliche Katalogreihenfolge ist `sort_order ASC, id ASC`. Der Store liefert diese
+Reihenfolge autoritativ; die öffentliche Storefront übernimmt sie nach ihrem Enabled-/Availability-
+Filter unverändert.
 
 `PurchaseShopOffer` erzeugt die Purchase-ID serverseitig. Der
 `PostgreSqlShopPurchaseExecutor` koordiniert innerhalb einer gemeinsamen
@@ -230,13 +239,22 @@ Die interne Katalogverwaltung ist zusätzlich als klar getrennte HTTP-Management
 `/api/admin/shop/offers` verfügbar. Sie verwendet ausschließlich die vorhandenen
 `CreateShopOffer`, `GetShopOffer`, `ListShopOffers`, `RenameShopOffer`,
 `ChangeShopOfferDescription`, `ChangeShopOfferPrice`, `ChangeShopOfferAvailability`,
-`ChangeShopOfferPurchaseLimit`, `EnableShopOffer` und `DisableShopOffer`-Use-Cases.
+`ChangeShopOfferPurchaseLimit`, `ChangeShopOfferSortOrder`, `EnableShopOffer` und
+`DisableShopOffer`-Use-Cases. Der Management-Create kann `SortOrder` optional setzen; fehlt der
+Wert, wird `0` verwendet. Die Sortierung kann später über
+`PUT /api/admin/shop/offers/{offerId}/sort-order` geändert werden. Ein negativer Wert ist
+ungültig; gleiche Werte sind ein No-op und liefern ebenfalls `204 No Content`. Die Management-
+Responses enthalten den aktuellen SortOrder.
 Die Management-Sicht enthält auch deaktivierte, zukünftige und abgelaufene Angebote; die
 öffentliche Storefront bleibt unverändert auf aktivierte und aktuell verfügbare Angebote
-beschränkt. Die API führt dafür keine eigene Transaktion ein, erzeugt keine neue Migration,
-keine Events und keinen Consumer. Die Management-Routen besitzen aktuell bewusst noch keine
+beschränkt. Die API führt dafür keine eigene Transaktion ein, erzeugt keine Events und keinen
+Consumer. Es gibt keine neuen Shop.Contracts, keine neue Event-Version und keine Worker-
+Änderung. Die Management-Routen besitzen aktuell bewusst noch keine
 Authentication/Authorization und müssen vor externem Produktivbetrieb durch einen separaten
 Security-/Host-Slice geschützt werden.
+
+Ein Admin-Frontend, Drag & Drop, Bulk-Reorder, Archive, Soft Delete und Delete sind nicht Teil
+dieses Slices.
 
 Echte PostgreSQL-Integrationstests prüfen zusätzlich erfolgreichen gemeinsamen Commit,
 Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und vollständigen
@@ -283,9 +301,15 @@ produktiv exponiert werden. Der erste
 Ende-zu-Ende-Workflow läuft über Outbox, Worker, Inbox und Progression-Consumer. Der Worker ist
 kein Fachmodul. Die Grenzen und die spätere Reihenfolge sind in [docs/architecture/modules.md](docs/architecture/modules.md) beschrieben.
 
+Slice 9 ergänzt `SortOrder >= 0` für den Shop-Katalog. Mehrere gleiche Werte sind erlaubt,
+es gibt keine automatische Umnummerierung und die Reihenfolge bleibt `sort_order ASC, id ASC`.
+Management-Create und die neue SortOrder-PUT-Route steuern diesen Zustand; Storefront und
+Management-Liste verwenden dieselbe autoritative Reihenfolge. Shop.Contracts, das Event
+`shop.purchase-completed` v1, Worker, Administration und Security bleiben unverändert.
+
 ## Lokale API-Ausführung
 
-Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die sechs bestehenden Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen beim Start aus. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
+Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die sieben Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen beim Start aus, darunter `Shop:3:AddShopOfferSortOrder`. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
 
 ```text
 dotnet user-secrets set "ConnectionStrings:FlurNetz" "Host=localhost;Port=5432;Database=<datenbank>;Username=<benutzer>;Password=<passwort>" --project src/FlurNetz.Api

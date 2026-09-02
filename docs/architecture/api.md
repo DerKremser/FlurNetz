@@ -52,7 +52,7 @@ Listeners löst der Host den bestehenden `MigrationRunner` auf und führt die re
 Migrationsquellen aus. In diesem Host sind die Identity-, Economy-, Inventory-, Shop- und
 Messaging-Quellen registriert; dadurch werden genau `Identity:1:CreateCommunityIdentities`,
 `Economy:1:CreateCommunityEconomies`, `Inventory:1:CreateCommunityInventoryEntries`,
-`Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases` und
+`Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder` und
 `Messaging:1:CreateOutboxAndInbox` ausgeführt. Die technische
 `flurnetz_persistence.migration_history` wird vom Runner selbst verwaltet. Schlägt die
 Verbindung oder eine Migration fehl, wird der Fehler mit ASP.NET-Core-Logging auf Critical-
@@ -94,7 +94,8 @@ GET /api/shop/identities/{communityIdentityId}/purchases?pageSize={pageSize}&cur
 ```
 
 Die Offer-Storefront liefert ausschließlich `IsEnabled == true` und zum einmal ermittelten
-aktuellen Zeitpunkt verfügbare Angebote. Der Einzel-Lookup antwortet für unbekannte,
+aktuellen Zeitpunkt verfügbare Angebote und behält dabei die fachliche Reihenfolge
+`sort_order ASC, id ASC` des Stores. Der Einzel-Lookup antwortet für unbekannte,
 deaktivierte, zukünftige oder abgelaufene Offers mit `404 Not Found`. Purchases werden mit
 ihrem historischen Snapshot als API-eigenes DTO geliefert.
 
@@ -151,17 +152,25 @@ PUT  /api/admin/shop/offers/{offerId}/description
 PUT  /api/admin/shop/offers/{offerId}/price
 PUT  /api/admin/shop/offers/{offerId}/availability
 PUT  /api/admin/shop/offers/{offerId}/purchase-limit
+PUT  /api/admin/shop/offers/{offerId}/sort-order
 POST /api/admin/shop/offers/{offerId}/enable
 POST /api/admin/shop/offers/{offerId}/disable
 ```
 
 Create bildet `itemDefinitionId`, `displayName`, die optionale `description`, `price`,
-optionale Availability-Grenzen und das optionale `purchaseLimitPerIdentity` ab. Die Offer-ID
-wird durch `CreateShopOffer` serverseitig erzeugt; neue Angebote bleiben deaktiviert. Für
-Leseantworten verwendet die Management-Grenze ein eigenes API-DTO einschließlich `IsEnabled`.
-Sie ruft `GetShopOffer` und `ListShopOffers` auf und sieht daher auch deaktivierte, zukünftige
-und abgelaufene Angebote. Die Mutationsrouten rufen jeweils genau den passenden vorhandenen
+optionale Availability-Grenzen, das optionale `purchaseLimitPerIdentity` und den optionalen
+`sortOrder` ab. Fehlt `sortOrder`, wird `0` verwendet; nur Werte `>= 0` sind gültig. Die
+Offer-ID wird durch `CreateShopOffer` serverseitig erzeugt; neue Angebote bleiben deaktiviert.
+Für Leseantworten verwendet die Management-Grenze ein eigenes API-DTO einschließlich
+`IsEnabled` und `sortOrder`. Sie ruft `GetShopOffer` und `ListShopOffers` auf und sieht daher
+auch deaktivierte, zukünftige und abgelaufene Angebote. Die Management-Liste folgt
+`sort_order ASC, id ASC`. Die Mutationsrouten rufen jeweils genau den passenden vorhandenen
 Use-Case auf und antworten bei Erfolg mit `204 No Content`.
+
+Die SortOrder-Mutation verwendet den API-eigenen Request `ChangeShopOfferSortOrderRequest`.
+`PUT /api/admin/shop/offers/{offerId}/sort-order` liefert für gültige Änderungen und fachliche
+No-ops `204 No Content`, für unbekannte gültige IDs `404 ProblemDetails` und für ungültige
+Route-IDs, fehlende oder malformed Bodies sowie negative Werte `400 ProblemDetails`.
 
 Der Adapter greift weder auf `IShopOfferStore` noch auf Dapper, Npgsql oder Tabellen zu und
 öffnet keine eigene Transaktion. Unbekannte gültige Offer-IDs liefern `404 Not Found`,
@@ -170,6 +179,13 @@ bekannten Fehlerantworten sind `ProblemDetails`. Ein erneutes Enable oder Disabl
 fachlicher No-op und wird nicht als Conflict behandelt. Die Storefront-Routen bleiben
 semantisch unverändert und zeigen weiterhin ausschließlich aktivierte und aktuell verfügbare
 Offers.
+
+SortOrder ist ausschließlich implementation-owned beziehungsweise API-eigener Management-
+Zustand. `FlurNetz.Modules.Shop.Contracts` wird nicht erweitert; der Purchase-Snapshot und
+`shop.purchase-completed` v1 bleiben unverändert. Es gibt keinen neuen Consumer, keine
+Worker-Änderung, keine Verschiebung in das Administration-Modul, kein Admin-Frontend und
+keine Archive-/Delete-Route. Authentication/Authorization bleibt ein separater späterer
+Security-/Host-Scope.
 
 ## Messaging-Producer-Runtime
 
@@ -206,7 +222,7 @@ ASP.NET-Core-Testhost; Produktionskonfiguration und Secrets werden nicht veränd
 
 Die Tests prüfen:
 
-- Startup gegen eine leere PostgreSQL-Datenbank inklusive aller sechs registrierten Identity-,
+- Startup gegen eine leere PostgreSQL-Datenbank inklusive aller sieben registrierten Identity-,
   Economy-, Inventory-, Shop- und Messaging-Migrationen
 - `POST /api/identities` mit `201 Created` und gültiger ID
 - Übereinstimmung zwischen Response-ID und `community_identities`
@@ -222,7 +238,8 @@ Die Tests prüfen:
   mit gezieltem Status und vollständigem Rollback
 - ungültige Route-/Request-Identifier und malformed JSON mit `400 Bad Request`
 - die getrennte Shop-Management-Grenze mit Create, vollständiger Katalogsicht, allen gezielten
-  Mutationen, Enable/Disable, No-op-Stabilität, 404/400-ProblemDetails und serverseitiger ID
+  Mutationen einschließlich SortOrder, autoritativer Katalogreihenfolge, Enable/Disable,
+  No-op-Stabilität, 404/400-ProblemDetails und serverseitiger ID
 - unveränderte Storefront-/Purchase-Semantik nach Management-Mutationen einschließlich
   Preis-Snapshot, Availability und Kauflimit
 - Producer-only-Verhalten: pending Outbox, kein API-Processing und kein Inbox-Eintrag
