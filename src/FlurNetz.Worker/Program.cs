@@ -5,6 +5,8 @@ using FlurNetz.Messaging.Serialization;
 using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Progression;
 using FlurNetz.Modules.Progression.Application;
+using FlurNetz.Modules.Notifications;
+using NotificationsShopPurchaseHandler = FlurNetz.Modules.Notifications.Application.ShopPurchaseCompletedIntegrationEventHandler;
 using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
@@ -96,6 +98,8 @@ public sealed class Program
         services.AddScoped<OutboxProcessor>();
         services.AddSingleton<IMigrationSource, MessagingMigrationSource>();
         services.AddProgressionModule();
+        services.AddNotificationsModule();
+        services.AddNotificationsConsumer();
         services.AddSingleton<MigrationRunner>(serviceProvider =>
             new MigrationRunner(
                 serviceProvider.GetRequiredService<IPostgreSqlConnectionFactory>(),
@@ -148,8 +152,9 @@ public sealed class Program
 
                 ValidateComposition();
                 logger.LogInformation(
-                    "Worker-Komposition validiert: Registry für Engagement- und Shop-Event, Progression-Consumer und OutboxProcessor sind bereit; für {ShopMessageType} ist aktuell kein Consumer registriert.",
-                    ShopPurchaseCompletedIntegrationEvent.MessageType);
+                    "Worker-Komposition validiert: Registry für Engagement- und Shop-Event, Progression-Consumer, Notifications-Consumer und OutboxProcessor sind bereit; {ShopMessageType} wird durch {NotificationsConsumer} konsumiert.",
+                    ShopPurchaseCompletedIntegrationEvent.MessageType,
+                    NotificationsShopPurchaseHandler.ConsumerName);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -199,11 +204,12 @@ public sealed class Program
                     $"The Progression consumer registration for {MessageEngagementRecordedIntegrationEvent.MessageType} is missing.");
             }
 
-            if (registrations.Any(registration =>
-                    registration.EventType == typeof(ShopPurchaseCompletedIntegrationEvent)))
+            if (!registrations.Any(registration =>
+                    registration.EventType == typeof(ShopPurchaseCompletedIntegrationEvent)
+                    && registration.ConsumerName == NotificationsShopPurchaseHandler.ConsumerName))
             {
                 throw new InvalidOperationException(
-                    $"A consumer for {ShopPurchaseCompletedIntegrationEvent.MessageType} must not be registered yet.");
+                    $"The Notifications consumer registration for {ShopPurchaseCompletedIntegrationEvent.MessageType} is missing.");
             }
 
             _ = scope.ServiceProvider.GetRequiredService<OutboxProcessor>();

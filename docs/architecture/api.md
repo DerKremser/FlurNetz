@@ -5,9 +5,9 @@
 `FlurNetz.Api` ist ein eigenständiger ausführbarer FlurNetz-Host und ausschließlich Composition
 Root und HTTP-Adapter. Er konfiguriert den ASP.NET-Core-Host, liest die PostgreSQL-
 Konfiguration, registriert die technische Persistence Foundation, bindet das Identity-Modul,
-den vollständigen Shop-V1-Purchase sowie die schmalen Economy-/Inventory-Capabilities ein,
-führt die Startmigrationen aus und ordnet Storefront-, Purchase- und Shop-Management-
-HTTP-Endpunkte zu. Der unabhängige
+den vollständigen Shop-V1-Purchase, die persönliche Notifications-Inbox sowie die schmalen
+Economy-/Inventory-Capabilities ein, führt die Startmigrationen aus und ordnet Storefront-,
+Purchase-, Notifications- und Shop-Management-HTTP-Endpunkte zu. Der unabhängige
 `FlurNetz.Worker` ist der separate Runtime-Host für Messaging und wird vom API-Host weder
 referenziert noch gestartet.
 
@@ -29,6 +29,7 @@ Der API-Host referenziert für die Shop-V1-Komposition:
   Management-Create
 - `FlurNetz.Modules.Shop` für `AddShopModule()` und die bestehenden Shop-Use-Cases
 - `FlurNetz.Modules.Shop.Contracts` für die Shop-Identifier
+- `FlurNetz.Modules.Notifications` für `AddNotificationsModule()` und die Inbox-Use-Cases
 
 Die erlaubte Richtung lautet:
 
@@ -49,11 +50,11 @@ oder die Umgebungsvariable `ConnectionStrings__FlurNetz` bereitgestellt.
 Der Host verwendet die vorhandene `PostgreSqlConnectionFactory` und erzeugt keine zweite
 `NpgsqlDataSource`-, Connection- oder Transaction-Infrastruktur. Vor dem Start des HTTP-
 Listeners löst der Host den bestehenden `MigrationRunner` auf und führt die registrierten
-Migrationsquellen aus. In diesem Host sind die Identity-, Economy-, Inventory-, Shop- und
-Messaging-Quellen registriert; dadurch werden genau `Identity:1:CreateCommunityIdentities`,
+Migrationsquellen aus. In diesem Host sind die Identity-, Economy-, Inventory-, Shop-,
+Notifications- und Messaging-Quellen registriert; dadurch werden genau `Identity:1:CreateCommunityIdentities`,
 `Economy:1:CreateCommunityEconomies`, `Inventory:1:CreateCommunityInventoryEntries`,
 `Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder`,
-`Shop:4:AddShopOfferArchiveState` und
+`Shop:4:AddShopOfferArchiveState`, `Notifications:1:CreateCommunityNotifications` und
 `Messaging:1:CreateOutboxAndInbox` ausgeführt. Die technische
 `flurnetz_persistence.migration_history` wird vom Runner selbst verwaltet. Schlägt die
 Verbindung oder eine Migration fehl, wird der Fehler mit ASP.NET-Core-Logging auf Critical-
@@ -108,6 +109,23 @@ enthält als UTF-8-JSON mit interner Version `1` die Identity, den Kaufzeitpunkt
 Purchase-ID; anschließend wird er Base64Url-kodiert. Malformed, unvollständige,
 unbekannt versionierte oder fremde Cursor liefern `400 Bad Request`.
 
+Die persönliche Notifications-Inbox ist über folgende API-eigene DTO-Grenze erreichbar:
+
+```text
+GET  /api/identities/{communityIdentityId}/notifications?pageSize={pageSize}&cursor={cursor}&unreadOnly={bool}
+GET  /api/identities/{communityIdentityId}/notifications/unread-count
+GET  /api/identities/{communityIdentityId}/notifications/{notificationId}
+POST /api/identities/{communityIdentityId}/notifications/{notificationId}/read
+POST /api/identities/{communityIdentityId}/notifications/{notificationId}/unread
+POST /api/identities/{communityIdentityId}/notifications/read-all
+```
+
+Die Liste verwendet `created_at_utc DESC, id DESC`, `pageSize` 1 bis 100 und einen an Identity
+und `unreadOnly` gebundenen API-Cursor. Einzel- und Mutationszugriffe sind identity-isoliert;
+malformed IDs, Cursor, Filter oder Page Sizes liefern `400`, unbekannte oder fremde Notifications
+`404`. Es gibt keinen öffentlichen Create-Endpunkt. Authentifizierung und Authorization bleiben
+ein späterer Security-/Host-Scope.
+
 Der Purchase ist über folgenden zusätzlichen Endpunkt erreichbar:
 
 ```text
@@ -137,7 +155,8 @@ ProblemDetails. Unerwartete Fehler, insbesondere sonstige `InvalidOperationExcep
 bleiben `500 Internal Server Error`.
 
 Der separate Worker kennt `shop.purchase-completed` v1 weiterhin über
-`FlurNetz.Modules.Shop.Contracts`, registriert aber bewusst keinen fachlichen Shop-Consumer.
+`FlurNetz.Modules.Shop.Contracts` und registriert den Notifications-Consumer
+`notifications.shop-purchase`.
 Der API-Host ist nur Producer: Er kann die Outbox beschreiben, startet aber keinen
 `OutboxProcessor`, keinen Messaging-Worker und keinen Inbox-Consumer.
 
@@ -191,8 +210,8 @@ Offers.
 Archivierung ist terminal und ausschließlich über die Management-Mutation möglich. SortOrder
 ist ausschließlich implementation-owned beziehungsweise API-eigener Management-
 Zustand. `FlurNetz.Modules.Shop.Contracts` wird nicht erweitert; der Purchase-Snapshot und
-`shop.purchase-completed` v1 bleiben unverändert. Es gibt keinen neuen Consumer, keine
-Worker-Änderung, keine Verschiebung in das Administration-Modul, kein Admin-Frontend und
+`shop.purchase-completed` v1 bleiben unverändert. Die Notifications-Inbox ist ein separates
+Modul; es gibt keine Verschiebung in das Administration-Modul, kein Admin-Frontend und
 keine Delete-, Unarchive- oder Restore-Route. Authentication/Authorization bleibt ein separater späterer
 Security-/Host-Scope.
 
@@ -233,8 +252,8 @@ ASP.NET-Core-Testhost; Produktionskonfiguration und Secrets werden nicht veränd
 
 Die Tests prüfen:
 
-- Startup gegen eine leere PostgreSQL-Datenbank inklusive aller acht registrierten Identity-,
-  Economy-, Inventory-, Shop- und Messaging-Migrationen
+- Startup gegen eine leere PostgreSQL-Datenbank inklusive aller neun registrierten Identity-,
+  Economy-, Inventory-, Shop-, Notifications- und Messaging-Migrationen
 - `POST /api/identities` mit `201 Created` und gültiger ID
 - Übereinstimmung zwischen Response-ID und `community_identities`
 - mehrere Requests mit unterschiedlichen IDs und persistierten Datensätzen
@@ -254,6 +273,8 @@ Die Tests prüfen:
 - unveränderte Storefront-/Purchase-Semantik nach Management-Mutationen einschließlich
   Preis-Snapshot, Availability und Kauflimit
 - Producer-only-Verhalten: pending Outbox, kein API-Processing und kein Inbox-Eintrag
+- Notifications-Inbox mit vollständiger DTO-Abbildung, Einzel-Lookup, Cursor-/Filterbindung,
+  Identity-Isolation, Unread Count und Read-/Unread-/Read-All-Mutationen
 - Startup-Abbruch bei nicht erreichbarer PostgreSQL-Datenbank
 
 Die Architekturtests prüfen zusätzlich die erlaubten Host-Referenzen, die verbotene Richtung

@@ -49,6 +49,7 @@ public sealed class ApiPostgreSqlFixture : IAsyncLifetime
             DROP TABLE IF EXISTS public.community_inventory_entries;
             DROP TABLE IF EXISTS public.community_economies;
             DROP TABLE IF EXISTS public.community_identities;
+            DROP TABLE IF EXISTS public.community_notifications;
             DROP SCHEMA IF EXISTS flurnetz_messaging CASCADE;
             DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
             """,

@@ -4,7 +4,8 @@
 Modulgrenzen. Der erste vollständige Producer/Consumer-Workflow verbindet Engagement und
 Progression über Outbox, Processor und Inbox. Der Shop-V1-Purchase ist der zweite reale
 Outbox-Produzent und veröffentlicht `shop.purchase-completed` v1 atomar mit dem Kauf.
-Die Foundation bleibt fachlich neutral und kennt weder die Module noch deren Contracts.
+Die Foundation bleibt fachlich neutral und kennt weder die Module noch deren Contracts. Die
+konkrete Notifications-Policy ist ausschließlich im Notifications-Modul verankert.
 
 ## Domain Events und Integration Events
 
@@ -72,12 +73,13 @@ Nach dem letzten erlaubten Versuch erhält die Nachricht den Status `failed` (Po
 Die Messaging Foundation definiert nur die technischen Outbox-/Inbox- und Processor-
 Verträge. Sie startet keinen Prozess und kennt weder Progression noch andere Fachmodule.
 `FlurNetz.Worker` ist der separate Runtime-Host: Er registriert die benötigten
-Contracts und Consumer explizit, führt die Messaging- und Progression-Migrationen beim
+Contracts und Consumer explizit, führt die Messaging-, Progression- und Notifications-Migrationen beim
 Startup aus und ruft danach `OutboxProcessor.ProcessBatchAsync` kontinuierlich auf. Seine
 Registry enthält `engagement.message-recorded` v1 und `shop.purchase-completed` v1; dafür
 referenziert er `FlurNetz.Modules.Shop.Contracts`, nicht die Shop-Implementierung. Für das
-Shop-Event ist bewusst kein fachlicher Consumer registriert, sodass die oben beschriebene
-consumerlose Erfolgssemantik greift.
+Shop-Event ist der Notifications-Consumer `notifications.shop-purchase` registriert. Der
+Consumer verwendet die vom Processor bereitgestellte Connection/Transaction für Inbox und
+Notification gemeinsam.
 Die Worker-spezifischen Idle-/Failure-Delays und der Scope pro Batch gehören zum Host, nicht
 zur Foundation. Message-Level-Retry und Lease-Semantik bleiben beim Processor.
 
@@ -92,7 +94,7 @@ explizit ausschließlich `ShopPurchaseCompletedIntegrationEvent` mit den Contrac
 dem `AddShopModule()`-Wiring.
 
 Der API-Prozess registriert keinen `OutboxProcessor`, keinen Messaging-Worker, keinen
-Hosted-Service, keinen Inbox-Handler und keinen Shop-Consumer. Ein erfolgreicher
+Hosted-Service und keinen Inbox- oder Notifications-Handler. Ein erfolgreicher
 `POST /api/shop/offers/{offerId}/purchases` schreibt das unveränderte
 `shop.purchase-completed` v1 als `pending` in die Outbox; der separate Worker ist für die
 spätere Verarbeitung zuständig.
@@ -101,7 +103,7 @@ spätere Verarbeitung zuständig.
 
 `MessagingMigrationSource` registriert die technischen Tabellen unter dem eindeutigen Migration-Owner `Messaging` beim vorhandenen SQL-first `MigrationRunner`. Es gibt keine fachlichen Migrationen.
 
-Die Unit Tests prüfen Domain-Dispatcher, Registry und Serialisierung. Architecture Tests sichern Namespace, Abhängigkeitsrichtung, fachliche Neutralität und das Fehlen generischer Repositories. Die PostgreSQL-Integrationstests verwenden Testcontainers und prüfen Migration/Idempotenz, atomaren Commit und Rollback, Processor, Inbox-Deduplizierung, transactional Inbox, Retry, Poison, unbekannte Typen, Duplicate Redelivery, bekannte Eventtypen ohne Consumer und paralleles Claiming. Die Worker-Integrationstests prüfen zusätzlich die echte Host-Schleife, Startup-Migrationen, Verarbeitung von Engagement nach dem Hoststart, die consumerlose Verarbeitung von `shop.purchase-completed` ohne Inbox-Eintrag und Graceful Shutdown. SQLite und In-Memory-Datenbanken werden nicht verwendet.
+Die Unit Tests prüfen Domain-Dispatcher, Registry und Serialisierung. Architecture Tests sichern Namespace, Abhängigkeitsrichtung, fachliche Neutralität und das Fehlen generischer Repositories. Die PostgreSQL-Integrationstests verwenden Testcontainers und prüfen Migration/Idempotenz, atomaren Commit und Rollback, Processor, Inbox-Deduplizierung, transactional Inbox, Retry, Poison, unbekannte Typen, Duplicate Redelivery und paralleles Claiming. Die Notifications- und Worker-Integrationstests prüfen zusätzlich den Shop-Purchase-zu-Notification-Weg, gemeinsame Inbox-/Notification-Atomicity, Duplicate Delivery, Startup-Migrationen und Graceful Shutdown. SQLite und In-Memory-Datenbanken werden nicht verwendet.
 
 ## Erster fachlicher Workflow
 
@@ -140,9 +142,9 @@ Die `ShopPurchaseRequestId` gehört nicht in die Event-Payload; sie wird als tec
 `CorrelationId` des Envelopes verwendet. Die fachliche Payload enthält ausschließlich den
 unveränderlichen Kauf-Snapshot.
 
-Der Worker macht den Eventtyp explizit bekannt, ergänzt aber bewusst keinen Consumer.
-Der Worker verarbeitet eine gültige `shop.purchase-completed`-Nachricht deshalb erfolgreich
-ohne Inbox-Eintrag. Ein späterer echter Consumer muss seinen Eventtyp und seine stabile
-Consumer-Identity ausdrücklich registrieren und kann dann die vorhandene Inbox-/Retry-
-Infrastruktur verwenden; bereits verarbeitete Outbox-Nachrichten werden dadurch nicht
+Der Worker macht den Eventtyp explizit bekannt und registriert dafür den stabilen
+Notifications-Consumer `notifications.shop-purchase`. Eine gültige Nachricht führt über den
+transaction-aware Notifications-Insert zu genau einer persönlichen Notification und einem
+Inbox-Eintrag. Ein Handler-Fehler rollt beide Writes zurück und nutzt die vorhandene
+Inbox-/Retry-Infrastruktur; bereits verarbeitete Outbox-Nachrichten werden dadurch nicht
 rückwirkend replaybar.

@@ -6,6 +6,7 @@ using FlurNetz.Messaging.Serialization;
 using FlurNetz.Modules.Economy;
 using FlurNetz.Modules.Identity;
 using FlurNetz.Modules.Inventory;
+using FlurNetz.Modules.Notifications;
 using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Modules.Shop;
 using FlurNetz.Persistence.Configuration;
@@ -59,6 +60,7 @@ public sealed class Program
         builder.Services.AddEconomyDebitCapability();
         builder.Services.AddInventoryGrantCapability();
         builder.Services.AddShopModule();
+        builder.Services.AddNotificationsModule();
 
         // Der API-Host ist in diesem Slice ausschließlich Producer. Es werden nur der vom
         // Shop-Purchase erzeugte Contract und die dafür benötigten Outbox-Komponenten verdrahtet.
@@ -109,6 +111,7 @@ public sealed class Program
         app.MapIdentityEndpoints();
         app.MapShopEndpoints();
         app.MapShopManagementEndpoints();
+        app.MapNotificationEndpoints();
         await app.RunAsync();
     }
 }

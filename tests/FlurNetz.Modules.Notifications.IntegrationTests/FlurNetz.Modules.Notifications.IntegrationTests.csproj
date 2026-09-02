@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <RootNamespace>FlurNetz.Workflows.IntegrationTests</RootNamespace>
+    <RootNamespace>FlurNetz.Modules.Notifications.IntegrationTests</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -12,19 +12,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Engagement.Contracts\FlurNetz.Modules.Engagement.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Engagement\FlurNetz.Modules.Engagement.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Economy\FlurNetz.Modules.Economy.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity\FlurNetz.Modules.Identity.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Inventory\FlurNetz.Modules.Inventory.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Notifications\FlurNetz.Modules.Notifications.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Shop\FlurNetz.Modules.Shop.csproj" />
-    <ProjectReference Include="..\..\src\FlurNetz.Modules.Progression\FlurNetz.Modules.Progression.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
     <PackageReference Include="Dapper" />
+    <PackageReference Include="Npgsql" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>

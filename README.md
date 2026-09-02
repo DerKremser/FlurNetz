@@ -4,9 +4,10 @@ FlurNetz ist ein modular aufgebautes .NET-Projekt. Der aktuelle Stand enthält n
 atomarem Shop-Inventory-Kauf, persistierter Shop-Kaufhistorie und Shop-HTTP-API
 mit read-only Storefront, HTTP-Purchase und HTTP-Katalogverwaltung sowie unabhängige API- und Worker-Hosts. Der Cross-Module-Workflow ist
 Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet
-werden; eine Engagement-HTTP-Schnittstelle, eine Economy-API, Rewards-Runtime-Trigger,
-Titles-API, Achievement-Runtime-Trigger, ein Shop-Admin-Frontend, fachliche Shop-Event-Consumer und
-externe Integrationen sind noch nicht implementiert.
+werden; die persönliche Notifications-Inbox V1 ist über HTTP lesbar und wird im Worker aus
+`shop.purchase-completed` v1 befüllt. Eine Engagement-HTTP-Schnittstelle, eine Economy-API,
+Rewards-Runtime-Trigger, Titles-API, Achievement-Runtime-Trigger, ein Shop-Admin-Frontend und
+externe Delivery-Integrationen sind noch nicht implementiert.
 
 ## Technische Basis
 
@@ -28,10 +29,10 @@ Die Persistence Foundation stellt asynchrone PostgreSQL-Verbindungen und technis
 Die PostgreSQL-Outbox wird über dieselbe `PostgreSqlTransaction` wie ein fachlicher Datenbank-Write befüllt. Dadurch sind Business Write und Outbox Insert gemeinsam commit- oder rollbackfähig. Ein aufrufbarer Outbox Processor verwendet PostgreSQL-Leases, Inbox-Deduplizierung pro stabiler Consumer Identity, Retry und einen isolierten Failed/Poison-Status. `FlurNetz.Worker` ruft diesen Processor als erster dauerhaft laufender Runtime-Host kontinuierlich auf; es gibt keinen externen Broker.
 
 Der Worker registriert `engagement.message-recorded` v1 und `shop.purchase-completed` v1
-explizit über ihre Contracts. Für den bekannten Shop-Event ist aktuell bewusst kein fachlicher
-Consumer registriert: Nach erfolgreicher Deserialisierung wird die Outbox-Nachricht ohne Handler
-und ohne Inbox-Eintrag als `processed` markiert. Die Outbox ist deshalb kein Event Store und kein
-Replay-Log für Consumer, die erst später registriert werden.
+explizit über ihre Contracts. Der stabile Notifications-Consumer
+`notifications.shop-purchase` schreibt die persönliche Notification zusammen mit seinem
+Messaging-Inbox-Eintrag atomar. Die Outbox ist kein Event Store und kein Replay-Log: Bereits
+früher ohne diesen Consumer verarbeitete Shop-Events werden nicht historisch backgefüllt.
 
 Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](docs/architecture/messaging.md). Die Tests in `FlurNetz.Messaging.IntegrationTests` verwenden echtes PostgreSQL über Testcontainers; Docker oder alternativ `FLURNETZ_TEST_CONNECTION_STRING` ist dafür erforderlich.
 
@@ -229,12 +230,12 @@ Der POST-Adapter validiert nur Route und Request, erzeugt daraus die vorhandenen
 und ruft `PurchaseShopOffer` auf. Der atomare bestehende Shop-Flow bleibt die einzige Stelle für
 Identity-Prüfung, Offer-Snapshot, Kauflimit, Economy-Debit, Inventory-Grant, Purchase und Outbox.
 Bekannte Client-/Fachfehler werden als `400`, `404` oder `409` ProblemDetails abgebildet;
-unerwartete Fehler bleiben `500`. Der API-Host ist dafür ein reiner Shop-Event-Producer: Er
-registriert `shop.purchase-completed` v1 und schreibt die Nachricht als Teil des Purchases in
-die Outbox, führt aber keinen Processor oder Consumer aus. Der separate Worker kennt den Eventtyp
-weiterhin über `Shop.Contracts`, verarbeitet ihn ohne fachlichen Shop-Consumer und erzeugt dabei
-keinen Inbox-Eintrag. Ein späterer Consumer und ein eventueller historischer Backfill sind separate
-Anforderungen.
+unerwartete Fehler bleiben `500`. Der API-Host ist für den Shop ein reiner Event-Producer und
+bindet zusätzlich die persönliche Notifications-Inbox ein: Er registriert
+`shop.purchase-completed` v1, schreibt die Nachricht als Teil des Purchases in die Outbox und
+führt keinen Processor oder Consumer aus. Der separate Worker verarbeitet den Eventtyp über
+`Shop.Contracts` und den stabilen Notifications-Consumer `notifications.shop-purchase`.
+Bereits verarbeitete Outbox-Nachrichten werden nicht historisch backgefüllt.
 
 Die interne Katalogverwaltung ist zusätzlich als klar getrennte HTTP-Management-Grenze unter
 `/api/admin/shop/offers` verfügbar. Sie verwendet ausschließlich die vorhandenen
@@ -252,9 +253,9 @@ erstmaliger und wiederholter Archivierung `204 No Content`. Ein archiviertes Ang
 der Management-Sicht sichtbar, aber aus der öffentlichen Storefront und dem Kauf ausgeschlossen.
 Die Management-Sicht enthält auch deaktivierte, zukünftige und abgelaufene Angebote; die
 öffentliche Storefront bleibt auf `IsEnabled && !IsArchived && IsAvailableAt(now)` beschränkt.
-Die API führt dafür keine eigene Transaktion ein, erzeugt keine Events und keinen
-Consumer. Es gibt keine neuen Shop.Contracts, keine neue Event-Version und keine Worker-
-Änderung. Die Management-Routen besitzen bewusst noch keine
+Die API führt dafür keine eigene Transaktion ein und erzeugt aus der Management-Grenze keine
+Events oder Consumer. Es gibt keine neuen Shop.Contracts und keine neue Event-Version; der
+separate Notifications-Consumer verarbeitet das bestehende Event im Worker. Die Management-Routen besitzen bewusst noch keine
 Authentication/Authorization und müssen vor externem Produktivbetrieb durch einen separaten
 Security-/Host-Auftrag geschützt werden.
 
@@ -271,13 +272,29 @@ Metadaten, Discounts, Coupons, Refunds und Purchase-Cancellation gehören bewuss
 Shop-V1-Scope. Die V1-Entscheidungen und der Abschlussaudit stehen in
 [docs/architecture/shop.md](docs/architecture/shop.md).
 
+## Notifications V1
+
+Notifications besitzt eine persistente persönliche In-App-Inbox mit Snapshot-Daten, stabiler
+Keyset-Pagination, Unread Count sowie Read-/Unread- und Mark-All-Read-Lifecycle. Die HTTP-Grenze
+liegt unter `/api/identities/{communityIdentityId}/notifications`. Der Worker konsumiert
+`shop.purchase-completed` v1 mit der stabilen Consumer Identity `notifications.shop-purchase`;
+Notification und Messaging-Inbox werden gemeinsam transaktional persistiert. Der API-Host
+führt keinen Consumer und bietet bewusst keinen öffentlichen Notification-Create-Endpunkt.
+Details stehen in [docs/architecture/notifications.md](docs/architecture/notifications.md).
+
 ## Persistence Foundation
 
 `FlurNetz.Persistence` verwendet PostgreSQL, Npgsql und Dapper ohne ORM und ohne Generic Repository. Migrationen werden als explizite SQL-Texte von ihren jeweiligen Besitzern bereitgestellt, deterministisch ausgeführt und in `flurnetz_persistence.migration_history` nachverfolgt. Bereits angewendete Migrationen sind unveränderlich; eine abweichende SQL-Checksum führt zu einem Fehler.
 
 `FlurNetz.Persistence.IntegrationTests` testet Verbindungen, Commit/Rollback und den Migration Runner gegen PostgreSQL. Für den automatischen Testlauf wird Docker für Testcontainers benötigt. Alternativ kann `FLURNETZ_TEST_CONNECTION_STRING` auf eine isolierte PostgreSQL-Testdatenbank zeigen.
 
-Identity, Engagement, Progression, Economy, Rewards, Inventory, Titles, Achievements und Shop besitzen jeweils eigene fachliche Tabellen und gezielte Adapter; die fachlichen Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity und Outbox atomar. Progression, Economy, Rewards, Inventory und Titles verwenden für konkurrierende beziehungsweise verpflichtende Mutationen atomare Transaktionen und gezielte Zeilensperren; Achievements verwendet einen atomaren Composite-Key-Insert für idempotente Unlocks. Rewards und Economy koordinieren ihre Writes über eine gemeinsame Connection/Transaction.
+Identity, Engagement, Progression, Economy, Rewards, Inventory, Titles, Achievements, Shop und
+Notifications besitzen jeweils eigene fachliche Tabellen und gezielte Adapter; die fachlichen
+Migrationen laufen über dieselbe technische Persistence Foundation. Engagement persistiert Activity
+und Outbox atomar. Progression, Economy, Rewards, Inventory, Titles und Notifications verwenden
+für konkurrierende beziehungsweise verpflichtende Mutationen atomare Transaktionen und gezielte
+Zeilensperren; Achievements verwendet einen atomaren Composite-Key-Insert für idempotente Unlocks.
+Rewards und Economy koordinieren ihre Writes über eine gemeinsame Connection/Transaction.
 Der Shop-Purchase koordiniert Request-, Guard- und Purchase-Writes mit Identity-Existenzprüfung,
 Economy-Debit, Inventory-Grant und Outbox in einer zweiten konkreten gemeinsamen
 PostgreSQL-Transaktion. Die read-only Kaufhistorie nutzt dagegen gezielte Einzel-Reads gegen
@@ -297,7 +314,8 @@ Purchase-Request enthält nur `requestId` und `communityIdentityId`; der bestehe
 `ShopPurchaseResponse` wird mit `201 Created` und Purchase-Location geliefert. Die
 `ShopPurchaseRequestId` bildet die globale Idempotenzgrenze. Der API-Host ist Producer für
 `shop.purchase-completed` v1 und verarbeitet die Outbox nicht selbst. Der Worker kennt das
-Shop-Event über `Shop.Contracts`, registriert aber keinen fachlichen Consumer. Die
+Shop-Event über `Shop.Contracts` und registriert den Notifications-Consumer
+`notifications.shop-purchase`. Die
 HTTP-Katalogverwaltung für den Shop ist über die separate
 `/api/admin/shop/offers`-Management-Grenze bereit. Ein Administration-Frontend ist weiterhin
 nicht Bestandteil des Shop-V1-Scope. Die Management-Routen besitzen weiterhin noch keine
@@ -316,7 +334,7 @@ vollständigen V1-Scope-Entscheidungen und der Abschlussaudit stehen in
 
 ## Lokale API-Ausführung
 
-Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die acht Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen beim Start aus, darunter `Shop:4:AddShopOfferArchiveState`. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
+Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die neun Identity-, Economy-, Inventory-, Shop-, Notifications- und Messaging-Migrationen beim Start aus, darunter `Shop:4:AddShopOfferArchiveState` und `Notifications:1:CreateCommunityNotifications`. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
 
 ```text
 dotnet user-secrets set "ConnectionStrings:FlurNetz" "Host=localhost;Port=5432;Database=<datenbank>;Username=<benutzer>;Password=<passwort>" --project src/FlurNetz.Api
@@ -343,15 +361,14 @@ Der Entwicklungsstand enthält noch kein Authentifizierungssystem und keine Twit
 
 Der unabhängige Worker-Host verwendet dieselbe Konfigurationskonvention
 ConnectionStrings:FlurNetz und benötigt eine erreichbare PostgreSQL-Datenbank. Beim Start führt
-er ausschließlich die Messaging- und Progression-Migrationen aus, validiert die explizite
+er ausschließlich die Messaging-, Progression- und Notifications-Migrationen aus, validiert die explizite
 Registry-/Consumer-Komposition und verarbeitet die Outbox danach kontinuierlich. Die Registry
 enthält zusätzlich `shop.purchase-completed` v1 aus `FlurNetz.Modules.Shop.Contracts`; die
 Shop-Implementierung und Shop-Migrationen werden nicht referenziert beziehungsweise ausgeführt.
 engagement_activities wird vom Worker nicht angelegt; der Worker referenziert nur den
-Engagement- und den Shop-Contract. Für den bekannten Shop-Event gibt es aktuell bewusst keinen
-Consumer. Solche Nachrichten werden nach erfolgreicher Deserialisierung als `processed`
-markiert, ohne Inbox-Eintrag und ohne Retry; die Outbox ist kein Replay- oder Event-Store für
-später hinzukommende Consumer.
+Engagement- und den Shop-Contract sowie die Notifications-Implementierung. Der Notifications-
+Consumer erzeugt für erfolgreiche Shop-Purchases eine persönliche Notification atomar mit dem
+Inbox-Eintrag; bereits verarbeitete Nachrichten werden nicht nachträglich backgefüllt.
 
 Start:
 

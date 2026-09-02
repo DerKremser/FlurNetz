@@ -24,7 +24,8 @@ public sealed class ApiArchitectureTests
         "FlurNetz.Modules.Inventory",
         "FlurNetz.Modules.Inventory.Contracts",
         "FlurNetz.Modules.Shop",
-        "FlurNetz.Modules.Shop.Contracts"
+        "FlurNetz.Modules.Shop.Contracts",
+        "FlurNetz.Modules.Notifications"
     ];
 
     private static Assembly ApiAssembly => typeof(Program).Assembly;
@@ -43,6 +44,7 @@ public sealed class ApiArchitectureTests
         Assert.Contains("FlurNetz.Modules.Inventory.Contracts", references);
         Assert.Contains("FlurNetz.Modules.Shop", references);
         Assert.Contains("FlurNetz.Modules.Shop.Contracts", references);
+        Assert.Contains("FlurNetz.Modules.Notifications", references);
         Assert.DoesNotContain("FlurNetz.Worker", references);
     }
 

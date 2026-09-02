@@ -12,10 +12,12 @@ Der Worker referenziert ausschließlich:
 - FlurNetz.Messaging für Registry, Serializer, Migration und OutboxProcessor;
 - FlurNetz.Persistence für PostgreSQL-Konfiguration, Connection Factory und MigrationRunner;
 - FlurNetz.Modules.Progression für den vorhandenen Consumer, Store und die Progression-Migration;
+- FlurNetz.Modules.Notifications für den persönlichen Inbox-Store, die Migration und den
+  `shop.purchase-completed`-Consumer;
 - FlurNetz.Modules.Engagement.Contracts für den bereits bestehenden Event-Vertrag;
 - FlurNetz.Modules.Shop.Contracts für den bekannten `shop.purchase-completed`-Vertrag.
 
-Die Engagement-Implementierung, Identity-Implementierung, API und alle übrigen Fachmodule
+Die Engagement-Implementierung, Identity-Implementierung, Shop-Implementierung, API und alle übrigen Fachmodule
 werden nicht geladen. Insbesondere referenziert der Worker nicht `FlurNetz.Modules.Shop` und
 zieht keine Shop-Implementierung oder Shop-Migration nach. Der Worker erzeugt keine
 Engagement-Aktivitäten; Engagement bleibt der Besitzer des Events engagement.message-recorded.
@@ -24,8 +26,8 @@ Der API-Host ist im Shop-Slice der getrennte Producer: Sein
 `POST /api/shop/offers/{offerId}/purchases` führt den bestehenden atomaren Purchase aus und
 hinterlässt `shop.purchase-completed` v1 zunächst `pending` in der PostgreSQL-Outbox. Der
 API-Prozess startet dafür keinen Processor und keinen Consumer. Dieser Worker bleibt die
-separate Processor-Runtime, die die Nachricht später verarbeitet; ein fachlicher Shop-Consumer
-ist weiterhin nicht registriert.
+separate Processor-Runtime, die die Nachricht später verarbeitet; der Notifications-Consumer
+ist im Worker registriert.
 
 ## PostgreSQL und Startup
 
@@ -36,11 +38,12 @@ User Secrets, Umgebungsvariablen oder eine andere normale .NET-Konfigurationsque
 bereitgestellt und nicht in Repository-Dateien versioniert.
 
 Vor dem Start des Processing-Loops führt der Worker den bestehenden MigrationRunner aus.
-Registriert werden genau die Migrationsquellen der Messaging Foundation und des
-Progression-Moduls:
+Registriert werden genau die Migrationsquellen der Messaging Foundation, des Progression- und
+des Notifications-Moduls:
 
 - Messaging:1:CreateOutboxAndInbox;
-- Progression:1:CreateCommunityProgressions.
+- Progression:1:CreateCommunityProgressions;
+- Notifications:1:CreateCommunityNotifications.
 
 EngagementMigrationSource wird bewusst nicht registriert. Der Worker benötigt
 engagement_activities für das Consuming nicht. Ebenso werden `Shop:1:CreateShopOffers` und
@@ -57,7 +60,8 @@ Event-Typ `engagement.message-recorded` v1 explizit über
 `ShopPurchaseCompletedIntegrationEvent.SchemaVersion`. Es gibt kein Assembly Scanning.
 `IntegrationEventJsonSerializer` verwendet dieselbe Singleton-Registry wie der
 `OutboxProcessor`. Die Progression-Consumer-Registration, das bewusste Fehlen eines Shop-
-Consumers und der vollständig auflösbare `OutboxProcessor` werden vor dem Loop geprüft.
+Consumers, der Notifications-Consumer und der vollständig auflösbare `OutboxProcessor` werden
+vor dem Loop geprüft.
 
 ## Runtime-Verarbeitung
 
@@ -87,11 +91,11 @@ Eine Nachricht engagement.message-recorded mit Schema-Version 1 wird vom bestehe
 Progression-Consumer als genau 1 XP interpretiert. Inbox-Eintrag und XP-Write bleiben in der
 vom Processor bereitgestellten PostgreSQL-Transaktion atomar.
 
-Eine gültige `shop.purchase-completed`-Nachricht ist im Worker ebenfalls bekannt. Da aktuell
-kein fachlicher Shop-Consumer registriert ist, wird sie nach erfolgreicher Deserialisierung
-ohne Handler und ohne Inbox-Eintrag als `processed` abgeschlossen. Sie wird dadurch weder
-retrybar noch als Poison-/Failed-Nachricht behandelt. Bereits verarbeitete Outbox-Nachrichten
-werden nicht zu einem späteren Replay-Log für neu hinzukommende Consumer.
+Eine gültige `shop.purchase-completed`-Nachricht wird nach erfolgreicher Deserialisierung durch
+den Notifications-Consumer verarbeitet. Notification-Insert und Inbox-Eintrag verwenden die
+gleiche Processor-Transaktion; ein Fehler rollt beide zurück und die Outbox bleibt für Retry-
+beziehungsweise Poison-Behandlung zuständig. Bereits verarbeitete Outbox-Nachrichten werden
+nicht zu einem späteren Replay-Log für neu hinzukommende Consumer.
 
 ## Shutdown und Betriebsindikatoren
 
@@ -119,5 +123,7 @@ Testcontainers oder FLURNETZ_TEST_CONNECTION_STRING. Die Tests prüfen Startup-M
 das Ausbleiben der Engagement-Tabelle, den leeren Queue-Zustand, ein nach dem Startup
 eingereihtes Engagement-Event ohne direkten ProcessBatchAsync-Aufruf, genau 1 XP, processed
 Outbox, Inbox-Deduplizierung für den Progression-Consumer, ein nach dem Startup eingereihtes
-`shop.purchase-completed` ohne Consumer und Inbox-Eintrag, das Ausbleiben aller Shop-
-Fachtabellen, kontinuierliches Polling und Graceful Shutdown.
+`shop.purchase-completed` mit genau einer Notification und einem Inbox-Eintrag, das Ausbleiben
+aller Shop-Fachtabellen, kontinuierliches Polling und Graceful Shutdown. Der separate
+Notifications-PostgreSQL-Test prüft zusätzlich transaction-aware Commit/Rollback und die
+fachliche Inbox.

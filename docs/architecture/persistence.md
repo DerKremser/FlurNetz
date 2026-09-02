@@ -114,6 +114,15 @@ Cross-Module-Foreign-Key. Der Purchase-Executor verwendet einen `FOR SHARE`-Lock
 Angebot und einen `FOR UPDATE`-Guard pro Offer/Identity, bevor er die transaction-aware
 Capabilities der fremden Module aufruft.
 
+Notifications besitzt mit `Notifications:1:CreateCommunityNotifications` eine eigene fachliche
+Migration und die Tabelle `community_notifications`. Die Tabelle speichert den vollständigen
+Notification-Snapshot einschließlich optionaler SourceReference sowie `timestamptz(6)`-Zeitpunkte.
+Sie besitzt keinen Foreign Key auf Identity, Shop oder andere Module. Der gezielte
+`CommunityNotificationStore` verwendet Dapper/Npgsql; Inbox-Listen laufen über den
+Identity-/Zeit-/ID-Index und den partiellen Unread-Index. Für den Messaging-Consumer nimmt der
+Store `DbConnection` und `DbTransaction` entgegen und committed nicht selbst, damit Notification
+und Inbox gemeinsam atomar bleiben.
+
 Die API verwendet für den Shop keine eigene Connection- oder SQL-Infrastruktur. Ihr
 `AddShopModule()`-Wiring greift über die bestehenden Shop-Stores und den unveränderten Purchase-
 Executor auf die vorhandenen Tabellen zu; die Economy-/Inventory-Capabilities bleiben schmal,
@@ -137,8 +146,11 @@ Docker muss für diese Testvariante verfügbar sein; alternativ kann
 realen Identity-, Economy-, Inventory- und Messaging-Adapter: erfolgreicher gemeinsamer
 Commit, Duplicate-Request-Idempotenz, Idempotency-Conflict, konkurrierendes Kauflimit und
 vollständiger Rollback bei unzureichendem Saldo.
-`FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, alle acht
-registrierten Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen, die read-only
+`FlurNetz.Modules.Notifications.IntegrationTests` prüft Migration, Idempotenz, History und
+Checksum, Tabellen-/Constraint-Grenzen, Snapshot-Roundtrip, Identity-Isolation, newest-first-
+Keyset-Pagination, Unread-Lifecycle sowie transaction-aware Commit und Rollback gegen echtes
+PostgreSQL. `FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, alle neun
+registrierten Identity-, Economy-, Inventory-, Shop-, Notifications- und Messaging-Migrationen, die read-only
 Offer-Storefront, vollständige DTO-Abbildung, den HTTP-Purchase mit Snapshot, Location,
 Idempotenz, Fehler-Rollback und Producer-only-Outbox sowie den Purchase-Lookup und die
 identity-isolierte newest-first History mit mehrseitigem API-Keyset-Cursor. Die Testdaten werden

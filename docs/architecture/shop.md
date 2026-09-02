@@ -25,7 +25,7 @@ folgende Tabelle hält die Entscheidungen für die aktuell vorgesehene FlurNetz-
 | Zeitpreise/Discounts/Coupons | Nicht erforderlich | Der aktuelle Preis und das Availability-Fenster sind ausreichend. Es gibt keine verdeckte oder zeitgesteuerte Rabattlogik und keine Coupon-Einlösung. |
 | Warenkorb | Nicht erforderlich | Der verbindliche V1-Kauf ist ein direkter Offer-Purchase. Ein Cart würde ohne Mehrangebots- oder Checkout-Anforderung nur zusätzliche Transaktions- und Idempotenzsemantik einführen. |
 | Refund/Cancellation | Nicht erforderlich | Erfolgreiche Purchases bleiben unveränderliche Historie. Eine Rückabwicklung müsste Economy, Inventory, History und gegebenenfalls Messaging gemeinsam kompensieren; dafür gibt es im vorgesehenen V1-Einsatz keinen Bedarf. |
-| `shop.purchase-completed`-Consumer | Nicht erforderlich | Es gibt aktuell keinen konkreten Shop-owned Folgeeffekt. Der Worker registriert und deserialisiert das Event, verarbeitet es aber bewusst ohne fachlichen Consumer und ohne Inbox-Eintrag. |
+| `shop.purchase-completed`-Consumer | Kein Shop-owned Consumer erforderlich | Das Event wird im Worker durch das eigenständige Notifications-Modul konsumiert. Shop bleibt ausschließlich Eigentümer von Purchase und Event und kennt keine Notification-Implementierung. |
 | Authentication/Authorization | Nicht Shop-owned | Die Management-Grenze bleibt bis zum systemweiten Security-/Host-Auftrag ungeschützt und darf nicht als extern produktionssicher betrachtet werden. Eine isolierte Shop-Security wird nicht erfunden. |
 
 Damit sind `ShopOfferId`, `ItemDefinitionId`, Anzeigename, Beschreibung, Preis, Availability,
@@ -203,9 +203,9 @@ Ungültige Route-/Request-Identifier und malformed JSON liefern `400 Bad Request
 Offer oder unbekannte Identity `404 Not Found`, nicht kaufbares Offer, Kauflimit,
 Idempotenzkonflikt und unzureichender Saldo `409 Conflict`; alle bekannten Antworten sind
 ProblemDetails. Sonstige, insbesondere technische `InvalidOperationException`-Fälle, bleiben
-`500 Internal Server Error`. Der separate Worker
-kennt `shop.purchase-completed` v1 über `FlurNetz.Modules.Shop.Contracts`, registriert aber
-weiterhin bewusst keinen fachlichen Shop-Consumer.
+`500 Internal Server Error`. Der separate Worker kennt `shop.purchase-completed` v1 über
+`FlurNetz.Modules.Shop.Contracts`; er registriert dafür den Notifications-Consumer
+`notifications.shop-purchase`, aber keinen Shop-owned Consumer.
 
 ### HTTP-Management-Grenze für den Angebotskatalog
 
@@ -261,8 +261,8 @@ Die API verfügt derzeit bewusst noch über keine Authentication/Authorization; 
 Produktivbetrieb muss ein separater Security-/Host-Auftrag diese Management-Routen schützen.
 Der API-Adapter führt Migrationen nicht selbst aus; `Shop:4:AddShopOfferArchiveState` wird wie
 die übrigen Shop-Migrationen über `ShopMigrationSource` registriert. Die Management-Grenze
-veröffentlicht keine Events und registriert keinen Shop-Consumer; der Worker bleibt
-unverändert.
+veröffentlicht keine Events und registriert keinen Shop-owned Consumer; der separate Worker
+verarbeitet das unveränderte Purchase-Event über Notifications.
 
 ## Minimale Cross-Module-Capabilities
 
@@ -425,12 +425,11 @@ durch denselben PostgreSQL-Commit sichtbar.
 
 Der Shop-Purchase veröffentlicht das Event weiterhin ausschließlich als atomaren Outbox-
 Bestandteil des Kaufs. Der separate Worker registriert `shop.purchase-completed` v1 explizit
-über `Shop.Contracts`, ohne die Shop-Implementierung oder Shop-Migrationen zu referenzieren. Es
-existiert weiterhin kein fachlicher Shop-Event-Consumer. Der bekannte Eventtyp
-wird vom Worker nach erfolgreicher Deserialisierung ohne Handler und ohne Inbox-Eintrag als
-`processed` markiert; er wird weder als Retry/Poison behandelt noch über bereits verarbeitete
-Outbox-Nachrichten später replaybar. Die bestehende Engagement→Progression-Runtime bleibt
-unverändert.
+über `Shop.Contracts`, ohne die Shop-Implementierung oder Shop-Migrationen zu referenzieren.
+Das eigenständige Notifications-Modul verarbeitet den Eventtyp als Consumer
+`notifications.shop-purchase`; Shop besitzt weiterhin keinen eigenen Event-Consumer. Die
+Notification und der Inbox-Eintrag werden in der Processor-Transaktion gemeinsam persistiert.
+Die bestehende Engagement→Progression-Runtime bleibt unverändert.
 
 Der API-Host ist zusätzlich ein Producer für dieses Event. Er registriert explizit nur
 `ShopPurchaseCompletedIntegrationEvent` v1 über die Contract-Konstanten, den vorhandenen
@@ -454,7 +453,7 @@ registriert weiterhin keine Katalogmutation.
 Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory, API- und
 Worker-Komposition bleiben außerhalb des Shop-Moduls. Der API-Host bindet `AddShopModule()`
 zusammen mit der Identity- sowie den schmalen Economy-/Inventory-Capabilities ein und führt
-dadurch die acht Identity-, Economy-, Inventory-, Shop- und Messaging-Migrationen aus,
+dadurch die neun Identity-, Economy-, Inventory-, Shop-, Notifications- und Messaging-Migrationen aus,
 einschließlich `Shop:4:AddShopOfferArchiveState`. Die internen Katalogmutationen sind registriert
 und werden vom API-Host über
 die getrennte Management-Endpoint-Gruppe auf die bestehenden Use-Cases abgebildet.
@@ -523,9 +522,9 @@ Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Rou
 `shop.purchase-completed` v1 über die bestehende explizite Messaging-Registry.
 
 Die Worker-Integration prüft zusätzlich die Verarbeitung des bekannten Events durch den echten
-Worker ohne fachlichen Consumer und ohne Inbox-Eintrag. Bewusst aus diesem Shop-V1-Scope
+Worker und den Notifications-Inbox-Eintrag. Bewusst aus diesem Shop-V1-Scope
 ausgeschlossen bleiben ein Admin-Frontend und produktive Authentication/Authorization,
-ein fachlicher Shop-Event-Consumer, Warenkorb, variable Purchase-Menge, Stock, Kategorien,
+ein Shop-owned Event-Consumer, Warenkorb, variable Purchase-Menge, Stock, Kategorien,
 zusätzliche Metadaten, Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger,
 Saga/Compensation, Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische
 Repositories, generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/
@@ -546,7 +545,7 @@ Der Abschlussaudit des zusammenhängenden Shop-V1-Auftrags bestätigt folgende Z
 | Persistence | Vier unveränderliche Shop-Migrationen, ausschließlich Shop-eigene Tabellen, gezielte Indizes, Row-Locks, Guard-Semantik, atomarer Commit/Rollback und historische Integrität. Eine Schema-Evolution ist für den beschlossenen Scope nicht erforderlich. |
 | API/Storefront | Öffentliche sichtbare Katalogliste, Einzelangebot, direkter Purchase, Purchase-Lookup und identity-isolierte Keyset-History mit API-eigenen DTOs und ProblemDetails. Interne Zustände bleiben in der Management-Antwort. |
 | Management | Create, vollständige interne Katalogsicht, alle fachlichen Mutationen, Enable/Disable und terminale Archivierung sind HTTP-erreichbar. Die noch ungeschützte Grenze ist als systemweiter Security-Befund dokumentiert. |
-| Messaging/Worker | `shop.purchase-completed` v1 bleibt unverändert, wird atomar über die vorhandene Outbox erzeugt und im Worker ohne künstlichen No-op-Consumer behandelt. |
+| Messaging/Worker | `shop.purchase-completed` v1 bleibt unverändert, wird atomar über die vorhandene Outbox erzeugt und im Worker vom eigenständigen Notifications-Consumer verarbeitet. |
 | Modulgrenzen | Shop referenziert nur erlaubte Contracts und technische Foundations; kein Cross-Module-SQL und keine fremde Modulimplementierung. |
 | Tests | Domain-, Application-, PostgreSQL-, API-, Messaging-, Worker- und Architekturabdeckung für den vollständigen Scope ist vorhanden. |
 | Dokumentation | README, API-, Modul-, Persistence-, Messaging- und diese Shop-Dokumentation beschreiben den realen V1-Zustand sowie die bewussten Ausschlüsse. |

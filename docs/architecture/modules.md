@@ -171,17 +171,33 @@ stellt Storefront-, History-, Purchase- und eine getrennte
 vorhandenen Katalog-Use-Cases und eigene API-Verträge; sie sieht den vollständigen internen
 Katalog, während die Storefront weiterhin nur `IsEnabled && !IsArchived && IsAvailableAt(now)`
 erfüllt.
-Der HTTP-Adapter führt dafür keine neue Migration oder fachliche Shop-Änderung ein; es gibt
-keine neuen Events und keinen Shop-Consumer. Die Management-Routen besitzen bewusst noch keine
+Der HTTP-Adapter führt dafür keine neue Migration oder fachliche Shop-Änderung ein; er führt
+selbst keine Events oder Consumer aus. Die Management-Routen besitzen bewusst noch keine
 Authentication/Authorization und benötigen vor externem Produktivbetrieb einen separaten
 Security-/Host-Auftrag.
 Der separate Worker referenziert
 für `shop.purchase-completed` v1 nur `Shop.Contracts`, kennt den Eventtyp explizit und
-registriert bewusst keinen fachlichen Consumer. Shop-Implementierung und Shop-Migrationen werden
-dort nicht geladen. Warenkorb, variable Kaufmengen, Stock, Kategorien, zusätzliche Metadaten,
+registriert den fachlichen Notifications-Consumer `notifications.shop-purchase`. Die Shop-
+Implementierung und Shop-Migrationen werden dort nicht geladen. Warenkorb, variable Kaufmengen, Stock, Kategorien, zusätzliche Metadaten,
 Discounts, Coupons, Refunds und Cancellation bleiben ebenfalls bewusst außerhalb des
 Shop-V1-Scope. Details stehen in
 [shop.md](shop.md).
+
+## Notifications-V1-Endzustand
+
+Notifications besitzt mit `CommunityNotification` eine persistente persönliche In-App-Inbox.
+Die Domain speichert NotificationType, Title, Message und SourceReference als historischen
+Snapshot und erzwingt kanonische Unicode- und UTC-/Mikrosekundenwerte. Die eigene Migration
+`Notifications:1:CreateCommunityNotifications` erstellt `community_notifications` ohne
+Cross-Module-Foreign-Keys. Application-Use-Cases decken Create, Get, identity-isolierte
+Keyset-Liste, Unread Count, Mark Read, Mark Unread und Mark All Read ab.
+
+Der Worker konsumiert `shop.purchase-completed` v1 ausschließlich aus `Shop.Contracts` und
+schreibt die Notification über den transaction-aware Store-Insert gemeinsam mit dem
+Messaging-Inbox-Eintrag. Der API-Host bindet die persönliche Inbox mit eigenen HTTP-DTOs ein,
+führt aber keinen Consumer aus. `Notifications.Contracts` bleibt leer; externe Delivery-
+Kanäle, Preferences, Templates, Delete/Archive/Retention und historischer Shop-Backfill sind
+nicht Teil von V1. Details stehen in [notifications.md](notifications.md).
 
 ## Aktueller Stand des Titles-Moduls
 
@@ -314,8 +330,10 @@ die Purchase-History-Stores, vier fachliche Migrationen sowie `ShopModule` mit R
 der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt. Der API-Host verdrahtet
 `AddShopModule()`, mappt Storefront-, History-, Purchase- und die getrennte Management-
 Endpoint-Gruppe auf die vorhandenen Use-Cases. Der Worker kennt `shop.purchase-completed` v1 über
-`Shop.Contracts`, registriert aber keinen fachlichen Consumer und lädt weder die Shop-
-Implementierung noch ihre Migrationen. Titles nutzt Domain, Rehydration, Application, getrennte
+`Shop.Contracts`, registriert den Notifications-Consumer und lädt weder die Shop-
+Implementierung noch ihre Migrationen. Notifications nutzt Domain, Application, einen gezielten
+PostgreSQL-Store, eine Migration und Registrierung; die API mappt die persönliche Inbox, der
+Worker registriert zusätzlich die Consumer-Policy. Titles nutzt Domain, Rehydration, Application, getrennte
 Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt
 Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und
 Registrierung; Titles und Achievements sind nicht in API oder Worker verdrahtet. Die übrigen
@@ -331,7 +349,10 @@ Capability-Contract verwenden; Rewards darf zusätzlich `Identity.Contracts` und
 zusätzlich `Identity.Contracts` und die technische Persistence-Assembly verwenden; Rewards und
 Messaging bleiben verboten. Shop verwendet `Shop.Contracts`, `Identity.Contracts`,
 `Economy.Contracts`, `Inventory.Contracts`, Messaging und die technische
-`FlurNetz.Persistence`-Assembly, aber keine fremde Modulimplementierung. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
+`FlurNetz.Persistence`-Assembly, aber keine fremde Modulimplementierung. Notifications verwendet
+zusätzlich `Identity.Contracts`, `Shop.Contracts`, Messaging und `FlurNetz.Persistence`; die
+Notifications-Implementierung bleibt ohne fremde Modulimplementierung und
+`Notifications.Contracts` bleibt leer. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
 und die technische Persistence-Assembly verwenden; Achievements verwendet außerdem
 `FlurNetz.BuildingBlocks` für `IClock`. Messaging und alle fachlichen Modulimplementierungen bleiben
 verboten.
@@ -351,7 +372,10 @@ Inventory besitzt Domain- und Application-Unit-Tests, eigene Architekturgrenzen 
 Das separate `FlurNetz.Workflows.IntegrationTests`-Projekt prüft
 den vollständigen Outbox-/Inbox-Weg sowie Producer- und Consumer-Atomicity gegen PostgreSQL.
 Die Architecture Tests prüfen zusätzlich Event Ownership, Contract-Minimalität, erlaubte
-Messaging-Kanten, die Rewards- und Inventory-Abhängigkeitsgrenzen sowie die Consumer-Grenzen automatisiert.
+Messaging-Kanten, die Rewards-, Inventory- und Notifications-Abhängigkeitsgrenzen sowie die
+Consumer-Grenzen automatisiert. Notifications besitzt eigene Unit-, PostgreSQL-, Workflow-,
+API- und Architekturtests für Snapshot, Pagination, Identity-Isolation, Read-/Unread-Lifecycle,
+Atomicity und Inbox-Deduplizierung.
 
 ## Verbindliche spätere Implementierungsreihenfolge
 

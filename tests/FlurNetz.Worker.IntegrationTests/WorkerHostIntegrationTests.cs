@@ -24,7 +24,7 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
     : IClassFixture<WorkerPostgreSqlFixture>
 {
     [Fact]
-    public async Task StartupRunsOnlyMessagingAndProgressionMigrationsAndEmptyQueueStaysHealthy()
+    public async Task StartupRunsMessagingProgressionAndNotificationsMigrationsAndEmptyQueueStaysHealthy()
     {
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
@@ -55,6 +55,13 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
                 SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name = 'community_progressions';
+                """,
+                timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'community_notifications';
                 """,
                 timeout.Token));
             Assert.Equal(0, await CountAsync(
@@ -146,7 +153,7 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
     }
 
     [Fact]
-    public async Task ShopPurchaseCompletedMessageIsProcessedWithoutConsumerOrInboxEntry()
+    public async Task ShopPurchaseCompletedMessageCreatesOneNotificationAndInboxEntry()
     {
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
@@ -166,15 +173,19 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
             Assert.NotEqual("failed", status);
             Assert.Equal(1, await ReadOutboxAttemptCountAsync(messageId, timeout.Token));
             Assert.Equal(
-                0,
+                1,
                 await CountAsync(
                     """
                     SELECT COUNT(*)
                     FROM flurnetz_messaging.inbox_messages
-                    WHERE message_id = @MessageId;
+                    WHERE message_id = @MessageId
+                      AND consumer_name = 'notifications.shop-purchase';
                     """,
                     new { MessageId = messageId },
                     timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                "SELECT COUNT(*) FROM community_notifications;",
+                timeout.Token));
 
             await StopHostAsync(host, timeout.Token);
         }
@@ -253,6 +264,7 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
             """
             DROP SCHEMA IF EXISTS flurnetz_messaging CASCADE;
             DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
+            DROP TABLE IF EXISTS community_notifications CASCADE;
             DROP TABLE IF EXISTS shop_purchase_requests CASCADE;
             DROP TABLE IF EXISTS shop_purchase_guards CASCADE;
             DROP TABLE IF EXISTS shop_purchases CASCADE;
