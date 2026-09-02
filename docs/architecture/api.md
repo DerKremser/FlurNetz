@@ -65,11 +65,12 @@ Der Host verwendet die vorhandene `PostgreSqlConnectionFactory` und erzeugt kein
 `NpgsqlDataSource`-, Connection- oder Transaction-Infrastruktur. Vor dem Start des HTTP-
 Listeners löst der Host den bestehenden `MigrationRunner` auf und führt die registrierten
 Migrationsquellen aus. In diesem Host sind die Identity-, Economy-, Inventory-, Shop-,
-Notifications-, Overlay- und Messaging-Quellen registriert; dadurch werden genau `Identity:1:CreateCommunityIdentities`,
+Notifications-, Overlay-, Integrations- und Messaging-Quellen registriert; dadurch werden genau `Identity:1:CreateCommunityIdentities`,
 `Economy:1:CreateCommunityEconomies`, `Inventory:1:CreateCommunityInventoryEntries`,
 `Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder`,
-`Shop:4:AddShopOfferArchiveState`, `Notifications:1:CreateCommunityNotifications` und
-`Messaging:1:CreateOutboxAndInbox` und `Overlay:1:CreateOverlayChannelsAndAlerts` ausgeführt. Die technische
+`Shop:4:AddShopOfferArchiveState`, `Notifications:1:CreateCommunityNotifications`,
+`Integrations:1:CreateExternalIdentityMappings`, `Messaging:1:CreateOutboxAndInbox` und
+`Overlay:1:CreateOverlayChannelsAndAlerts` ausgeführt. Die technische
 `flurnetz_persistence.migration_history` wird vom Runner selbst verwaltet. Schlägt die
 Verbindung oder eine Migration fehl, wird der Fehler mit ASP.NET-Core-Logging auf Critical-
 Ebene geloggt und der Startup abgebrochen.
@@ -238,6 +239,28 @@ Die API registriert explizit genau `ShopPurchaseCompletedIntegrationEvent` mit
 `PostgreSqlOutboxPublisher` und die bestehende `MessagingMigrationSource`. Die vom Shop-Modul
 über `TryAddSingleton` bereitgestellte `IClock` wird wiederverwendet. Es gibt kein Assembly
 Scanning und keine Registrierung anderer Eventtypen.
+
+## Integrations-Management
+
+Integrations V1 verwendet die interne Management-Grenze:
+
+    POST   /api/admin/integrations/external-identities
+    GET    /api/admin/integrations/external-identities/{provider}/{externalUserId}
+    GET    /api/admin/integrations/external-identities/community/{communityIdentityId}
+    DELETE /api/admin/integrations/external-identities/{provider}/{externalUserId}
+
+Der POST verknüpft eine bereits vorhandene CommunityIdentityId mit einem validierten
+Provider-Key und einer opaque externen User-ID. Ein identischer Link ist idempotent;
+eine Verknüpfung derselben externen Identität mit einer anderen Community-Identität
+liefert 409. Eine unbekannte Zielidentität liefert 404. GET und DELETE liefern für
+unbekannte Mappings 404, ungültige Eingaben werden mit 400 und ProblemDetails
+beantwortet. Die Response-DTOs gehören ausschließlich zur API und enthalten nur
+Provider, externe User-ID und CommunityIdentityId.
+
+Die Endpunkte besitzen derzeit bewusst keine allgemeine Authentication/Authorization,
+weil FlurNetz noch keine Security-/Administration-Foundation hat. Sie dürfen vor einem
+separaten Security-Slice nicht ungeschützt extern produktiv exponiert werden. Die API
+führt keine Twitch-Verbindung und keine automatische Identity-Erstellung aus.
 
 ## Fehlerbehandlung und Shop-V1-Umfang
 

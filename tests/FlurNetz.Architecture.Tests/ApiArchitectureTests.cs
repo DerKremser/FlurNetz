@@ -21,6 +21,8 @@ public sealed class ApiArchitectureTests
         "FlurNetz.Persistence",
         "FlurNetz.Modules.Identity",
         "FlurNetz.Modules.Identity.Contracts",
+        "FlurNetz.Modules.Integrations",
+        "FlurNetz.Modules.Integrations.Contracts",
         "FlurNetz.Modules.Inventory",
         "FlurNetz.Modules.Inventory.Contracts",
         "FlurNetz.Modules.Shop",
@@ -44,6 +46,8 @@ public sealed class ApiArchitectureTests
         Assert.Contains("FlurNetz.Persistence", references);
         Assert.Contains("FlurNetz.Modules.Identity", references);
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
+        Assert.Contains("FlurNetz.Modules.Integrations", references);
+        Assert.Contains("FlurNetz.Modules.Integrations.Contracts", references);
         Assert.Contains("FlurNetz.Modules.Inventory", references);
         Assert.Contains("FlurNetz.Modules.Inventory.Contracts", references);
         Assert.Contains("FlurNetz.Modules.Shop", references);

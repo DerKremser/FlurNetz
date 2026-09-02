@@ -5,6 +5,7 @@ using FlurNetz.Messaging.Persistence;
 using FlurNetz.Messaging.Serialization;
 using FlurNetz.Modules.Economy;
 using FlurNetz.Modules.Identity;
+using FlurNetz.Modules.Integrations;
 using FlurNetz.Modules.Inventory;
 using FlurNetz.Modules.Notifications;
 using FlurNetz.Modules.Automation;
@@ -59,6 +60,7 @@ public sealed class Program
 
         // Die Module registrieren ihre Use Cases, Adapter und bestehenden Migrationsquellen.
         builder.Services.AddIdentityModule();
+        builder.Services.AddIntegrationsModule();
         builder.Services.AddEconomyDebitCapability();
         builder.Services.AddInventoryGrantCapability();
         builder.Services.AddShopModule();
@@ -113,6 +115,7 @@ public sealed class Program
         }
 
         app.MapIdentityEndpoints();
+        app.MapIntegrationsManagementEndpoints();
         app.MapShopEndpoints();
         app.MapShopManagementEndpoints();
         app.MapNotificationEndpoints();

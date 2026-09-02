@@ -72,7 +72,7 @@ Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](
 
 `FlurNetz.BuildingBlocks` enthält ausschließlich kleine, domain-neutrale Primitives für eine spätere gemeinsame Nutzung. Dazu gehören Result-/Error-Typen, generische Guards, die minimale `IClock`-Abstraktion und deren neutrale `SystemClock`-Implementierung.
 
-Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Modules.Progression.IntegrationTests`, `FlurNetz.Modules.Economy.Tests`, `FlurNetz.Modules.Economy.IntegrationTests`, `FlurNetz.Modules.Rewards.Tests`, `FlurNetz.Modules.Rewards.IntegrationTests`, `FlurNetz.Modules.Inventory.Tests`, `FlurNetz.Modules.Inventory.IntegrationTests`, `FlurNetz.Modules.Titles.Tests`, `FlurNetz.Modules.Titles.IntegrationTests`, `FlurNetz.Modules.Achievements.Tests`, `FlurNetz.Modules.Achievements.IntegrationTests`, `FlurNetz.Modules.Shop.Tests`, `FlurNetz.Modules.Shop.IntegrationTests`, `FlurNetz.Workflows.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den Rewards-Katalog und die atomare Rewards-Ausführung, die persistierten Inventory-, Progression-, Economy-, Titles-, Achievements- und Shop-Slices einschließlich Nebenläufigkeit, den Ende-zu-Ende-Workflow gegen PostgreSQL, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
+Die Projekte `FlurNetz.BuildingBlocks.Tests`, `FlurNetz.Persistence.Tests`, `FlurNetz.Messaging.Tests`, `FlurNetz.Messaging.IntegrationTests`, `FlurNetz.Modules.Identity.Tests`, `FlurNetz.Modules.Identity.IntegrationTests`, `FlurNetz.Modules.Engagement.Tests`, `FlurNetz.Modules.Engagement.IntegrationTests`, `FlurNetz.Modules.Progression.Tests`, `FlurNetz.Modules.Progression.IntegrationTests`, `FlurNetz.Modules.Economy.Tests`, `FlurNetz.Modules.Economy.IntegrationTests`, `FlurNetz.Modules.Rewards.Tests`, `FlurNetz.Modules.Rewards.IntegrationTests`, `FlurNetz.Modules.Inventory.Tests`, `FlurNetz.Modules.Inventory.IntegrationTests`, `FlurNetz.Modules.Titles.Tests`, `FlurNetz.Modules.Titles.IntegrationTests`, `FlurNetz.Modules.Achievements.Tests`, `FlurNetz.Modules.Achievements.IntegrationTests`, `FlurNetz.Modules.Integrations.Tests`, `FlurNetz.Modules.Integrations.IntegrationTests`, `FlurNetz.Modules.Shop.Tests`, `FlurNetz.Modules.Shop.IntegrationTests`, `FlurNetz.Workflows.IntegrationTests`, `FlurNetz.Api.IntegrationTests` und `FlurNetz.Architecture.Tests` prüfen Primitives, Persistence- und Messaging-Logik, Identity- und Engagement-Vertical-Slices, den Rewards-Katalog und die atomare Rewards-Ausführung, die persistierten Inventory-, Progression-, Economy-, Titles-, Achievements- und Shop-Slices einschließlich Nebenläufigkeit, den Ende-zu-Ende-Workflow gegen PostgreSQL, den HTTP-zu-PostgreSQL-Weg sowie Projekt-, Namespace- und Typgrenzen.
 
 ## Identity Foundation und erster Vertical Slice
 
@@ -80,7 +80,7 @@ Identity ist das erste Referenzmodul und besitzt die zentrale interne Identität
 `CommunityIdentityId` sowie die schmale transaction-aware
 `ICommunityIdentityExistence`-Capability; `FlurNetz.Modules.Identity` enthält die minimale Domain-Identität `CommunityIdentity` mit dieser ID.
 
-Der erste Identity-Use-Case erzeugt eine neue `CommunityIdentityId`, bildet die Domain-Identity und persistiert sie in PostgreSQL. Der Dapper-/Npgsql-Adapter arbeitet gegen die Identity-eigene Tabelle `community_identities`, die ausschließlich `id uuid primary key` enthält; Laden über die interne ID ist ebenfalls enthalten. Externe Plattformkennungen werden später über Auflösung und Mapping auf die interne FlurNetz-Identität bezogen. Sie ersetzen `CommunityIdentityId` nicht.
+Der erste Identity-Use-Case erzeugt eine neue `CommunityIdentityId`, bildet die Domain-Identity und persistiert sie in PostgreSQL. Der Dapper-/Npgsql-Adapter arbeitet gegen die Identity-eigene Tabelle `community_identities`, die ausschließlich `id uuid primary key` enthält; Laden über die interne ID ist ebenfalls enthalten. Externe Plattformkennungen werden über Integrations-Auflösung und Mapping auf die interne FlurNetz-Identität bezogen. Sie ersetzen `CommunityIdentityId` nicht.
 
 Der bestehende `CreateCommunityIdentity`-Use-Case ist über `FlurNetz.Api` als `POST /api/identities` erreichbar. Der HTTP-Adapter akzeptiert keinen Request-Body und gibt bei Erfolg ausschließlich ein API-Response-DTO mit der erzeugten ID zurück. Plattformkonten, Authentifizierung, Profile und fachliche Domain- oder Integration Events sind weiterhin nicht enthalten. Details stehen in [docs/architecture/identity.md](docs/architecture/identity.md) und [docs/architecture/api.md](docs/architecture/api.md).
 
@@ -331,7 +331,7 @@ Der Shop-Purchase koordiniert Request-, Guard- und Purchase-Writes mit Identity-
 Economy-Debit, Inventory-Grant und Outbox in einer zweiten konkreten gemeinsamen
 PostgreSQL-Transaktion. Die read-only Kaufhistorie nutzt dagegen gezielte Einzel-Reads gegen
 `shop_purchases` ohne zusätzliche Transaktion, Locks, Identity-Existenzprüfung oder neue
-Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; der API-Host bindet für den Shop-Purchase nur Economy-Debit- und Inventory-Grant-Capabilities ein, nicht die vollständigen fachlichen HTTP-Module. Der Worker bindet für Automation zusätzlich Economy-Credit und Notification-Create-Capabilities ein. Rewards, Titles und Achievements sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression, Economy und Automation sind weiterhin nicht als öffentliche Fach-HTTP-Endpunkte registriert, Inventory besitzt keinen eigenen HTTP-Endpunkt. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; der API-Host bindet für den Shop-Purchase nur Economy-Debit- und Inventory-Grant-Capabilities ein, nicht die vollständigen fachlichen HTTP-Module. Der Worker bindet für Automation zusätzlich Economy-Credit und Notification-Create-Capabilities ein. Rewards, Titles und Achievements sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression, Economy und Automation sind weiterhin nicht als öffentliche Fach-HTTP-Endpunkte registriert, Inventory besitzt keinen eigenen HTTP-Endpunkt. Live-Plattformverbindungen sind weiterhin nicht implementiert; Integrations V1 bietet die persistierte External-Identity-Mapping-Grenze. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
@@ -364,9 +364,33 @@ Shop-Fehler ab; Storefront und Purchase prüfen den Archivierungszustand ausdrü
 vollständigen V1-Scope-Entscheidungen und der Abschlussaudit stehen in
 [docs/architecture/shop.md](docs/architecture/shop.md).
 
+## Integrations V1
+
+Integrations V1 implementiert die persistierte External-Identity-Mapping- und
+Resolution-Grenze. Eine kanonische Provider-Kennung und eine opaque externe
+Benutzerkennung werden genau einer internen CommunityIdentityId zugeordnet. Externe
+Kennungen ersetzen die zentrale Identity nie; unbekannte externe IDs erzeugen keine neue
+Community-Identity.
+
+Der Slice besitzt die Use Cases für Link, Resolve, Get, List und Unlink. Identisches
+Linken ist idempotent, ein Reassignment zu einer anderen Community-Identity wird als
+Konflikt abgelehnt. Identity-Existenz wird ausschließlich über den öffentlichen
+Identity.Contracts-Contract geprüft. Die eigene Tabelle
+integration_external_identity_mappings besitzt einen Primary Key auf
+provider_key plus external_user_id und keinen Cross-Module-Foreign-Key.
+
+Der API-Host registriert AddIntegrationsModule() und bietet die interne
+Management-Grenze unter /api/admin/integrations/external-identities. Sie besitzt bis
+zum späteren Security-/Administration-Slice noch keine vollständige
+Authentication/Authorization und darf nicht ungeschützt extern produktiv exponiert
+werden. Twitch OAuth/EventSub, Streamer.bot, OBS, Razor/MVC, Sidebar, RBAC,
+Notifications und Automation sind nicht Bestandteil dieses Slices; Streamer.bot bleibt
+ein späterer externer Adapter. Details stehen in
+[docs/architecture/integrations.md](docs/architecture/integrations.md).
+
 ## Lokale API-Ausführung
 
-Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die zehn Identity-, Economy-, Inventory-, Shop-, Notifications-, Automation- und Messaging-Migrationen beim Start aus, darunter `Shop:4:AddShopOfferArchiveState`, `Notifications:1:CreateCommunityNotifications` und `Automation:1:CreateAutomationRulesAndExecutions`. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
+Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie alle registrierten Identity-, Economy-, Inventory-, Shop-, Notifications-, Automation-, Overlay-, Integrations- und Messaging-Migrationen beim Start aus, darunter `Shop:4:AddShopOfferArchiveState`, `Notifications:1:CreateCommunityNotifications` und `Automation:1:CreateAutomationRulesAndExecutions`. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
 
 ```text
 dotnet user-secrets set "ConnectionStrings:FlurNetz" "Host=localhost;Port=5432;Database=<datenbank>;Username=<benutzer>;Password=<passwort>" --project src/FlurNetz.Api
@@ -387,7 +411,9 @@ Die erfolgreiche Antwort hat den Status `201 Created` und die Form:
 }
 ```
 
-Der Entwicklungsstand enthält noch kein Authentifizierungssystem und keine Twitch-, Streamer.bot- oder sonstige Plattformintegration.
+Der Entwicklungsstand enthält noch kein Authentifizierungssystem und keine Live-Twitch-,
+Streamer.bot- oder sonstige Plattformverbindung. Integrations V1 unterstützt lediglich
+das persistierte externe Identity-Mapping.
 
 ## Lokale Worker-Ausführung
 

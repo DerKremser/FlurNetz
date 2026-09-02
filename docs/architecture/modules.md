@@ -36,6 +36,30 @@ Der bestehende Create-Use-Case bleibt über `FlurNetz.Api` erreichbar. Plattform
 Authentifizierung, Profile sowie Identity-eigene Domain- oder Integration Events sind weiterhin
 nicht enthalten. Details stehen in [identity.md](identity.md).
 
+## Aktueller Stand des Integrations-Moduls
+
+Integrations V1 ist der erste vollständige External-Identity-Mapping- und
+Resolution-Slice. IntegrationProviderKey und ExternalUserId sind kleine, validierte
+Contract-Value-Types; die Kombination aus Provider-Key und opaque externer User-ID wird
+in ExternalIdentityMapping genau einer CommunityIdentityId zugeordnet.
+
+LinkExternalIdentity prüft die Zielidentität über ICommunityIdentityExistence in der
+Mapping-Transaktion. Identisches Linken ist idempotent, ein Link auf eine andere
+Community-Identity ein kontrollierter Konflikt. ResolveExternalIdentity,
+GetExternalIdentityMapping, ListExternalIdentityMappings und UnlinkExternalIdentity
+bilden die interne Application-Grenze. Unlink löscht nur die Integrations-owned
+Mappingzeile; unbekannte externe IDs erzeugen keine Community-Identity.
+
+Integrations:1:CreateExternalIdentityMappings besitzt ausschließlich die Tabelle
+integration_external_identity_mappings. Ihr Primary Key auf provider_key plus
+external_user_id schützt die Eindeutigkeit auch bei parallelen Link-Versuchen. Es gibt
+keinen Foreign Key auf community_identities oder andere Modultabellen. Der API-Host
+bindet AddIntegrationsModule() und die vier Routen unter
+/api/admin/integrations/external-identities ein. Diese Management-Grenze besitzt bis zu
+einem späteren Security-/Administration-Slice noch keine Authentication/Authorization.
+Twitch OAuth/EventSub, Streamer.bot, OBS, Razor/MVC, RBAC und Plugin-Infrastruktur sind
+nicht Bestandteil dieses Slices. Details stehen in [integrations.md](integrations.md).
+
 ## Aktueller Stand des Engagement-Moduls
 
 Der erste vollständige Engagement-Recording-Vertical-Slice ist vorhanden. `RecordMessageEngagement`
@@ -411,7 +435,7 @@ Atomicity und Inbox-Deduplizierung.
 10. Notifications
 11. Automation
 12. Overlay
-13. Integrations
+13. Integrations (umgesetzt: External-Identity-Mapping V1)
 14. Administration
 
 Diese Reihenfolge dokumentiert die Umsetzung. Identity ist als erstes Referenzmodul mit einem
