@@ -2,6 +2,7 @@ using FlurNetz.Api.Contracts;
 using FlurNetz.Api.Cursors;
 using FlurNetz.Modules.Automation.Application;
 using FlurNetz.Modules.Automation.Domain;
+using FlurNetz.Modules.Overlay.Contracts;
 
 namespace FlurNetz.Api.Endpoints;
 
@@ -150,7 +151,8 @@ public static class AutomationManagementEndpoints
         return requests.Select((request, index) =>
         {
             if (request is null) throw new ArgumentException("Eine Action darf nicht null sein.", nameof(requests));
-            return AutomationAction.Create(index, request.Type!, request.Amount, request.Title, request.Message);
+            OverlayChannelId? channelId = request.OverlayChannelId is Guid value ? OverlayChannelId.Create(value) : null;
+            return AutomationAction.Create(index, request.Type!, request.Amount, request.Title, request.Message, channelId, request.Variant, request.DurationMilliseconds);
         }).ToArray();
     }
 
@@ -161,7 +163,7 @@ public static class AutomationManagementEndpoints
             rule.Description,
             rule.TriggerType,
             rule.Conditions.Select(condition => new AutomationConditionResponse(condition.Position, condition.ConditionType, condition.CommunityIdentityId, condition.ShopOfferId, condition.ItemDefinitionId, condition.Amount)).ToArray(),
-            rule.Actions.Select(action => new AutomationActionResponse(action.Position, action.ActionType, action.Amount, action.Title, action.Message)).ToArray(),
+            rule.Actions.Select(action => new AutomationActionResponse(action.Position, action.ActionType, action.Amount, action.Title, action.Message, action.OverlayChannelId?.Value, action.Variant, action.DurationMilliseconds)).ToArray(),
             rule.SortOrder,
             rule.IsEnabled,
             rule.IsArchived,

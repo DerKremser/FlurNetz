@@ -1,6 +1,7 @@
 using Dapper;
 using FlurNetz.Modules.Automation.Application;
 using FlurNetz.Modules.Automation.Domain;
+using FlurNetz.Modules.Overlay.Contracts;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Transactions;
 using System.Data.Common;
@@ -54,7 +55,9 @@ public sealed class PostgreSqlAutomationRuleStore : IAutomationRuleStore
     private const string ActionsSql = """
         SELECT position AS Position, action_type AS ActionType,
                amount AS Amount, notification_title AS Title,
-               notification_message AS Message
+               notification_message AS Message, overlay_channel_id AS OverlayChannelIdValue,
+               overlay_title AS OverlayTitle, overlay_message AS OverlayMessage,
+               overlay_variant AS Variant, overlay_duration_milliseconds AS DurationMilliseconds
         FROM automation_rule_actions
         WHERE automation_rule_id = @AutomationRuleId
         ORDER BY position ASC;
@@ -94,10 +97,12 @@ public sealed class PostgreSqlAutomationRuleStore : IAutomationRuleStore
     private const string InsertActionSql = """
         INSERT INTO automation_rule_actions
             (automation_rule_id, position, action_type, amount,
-             notification_title, notification_message)
+             notification_title, notification_message, overlay_channel_id,
+             overlay_title, overlay_message, overlay_variant, overlay_duration_milliseconds)
         VALUES
             (@AutomationRuleId, @Position, @ActionType, @Amount,
-             @Title, @Message);
+             @NotificationTitle, @NotificationMessage, @OverlayChannelId,
+             @OverlayTitle, @OverlayMessage, @Variant, @DurationMilliseconds);
         """;
 
     private readonly IPostgreSqlConnectionFactory connectionFactory;
@@ -198,7 +203,7 @@ public sealed class PostgreSqlAutomationRuleStore : IAutomationRuleStore
             row.Description,
             row.TriggerType,
             conditions.Select(condition => AutomationCondition.Rehydrate(condition.Position, condition.ConditionType, condition.CommunityIdentityId, condition.ShopOfferId, condition.ItemDefinitionId, condition.Amount)),
-            actions.Select(action => AutomationAction.Rehydrate(action.Position, action.ActionType, action.Amount, action.Title, action.Message)),
+            actions.Select(action => AutomationAction.Rehydrate(action.Position, action.ActionType, action.Amount, action.TitleForAction, action.MessageForAction, action.OverlayChannelId, action.Variant, action.DurationMilliseconds)),
             row.SortOrder,
             row.IsEnabled,
             row.IsArchived,
@@ -249,8 +254,13 @@ public sealed class PostgreSqlAutomationRuleStore : IAutomationRuleStore
                 action.Position,
                 action.ActionType,
                 action.Amount,
-                Title = action.Title,
-                Message = action.Message
+                NotificationTitle = action.ActionType == AutomationActionTypes.NotificationCreate ? action.Title : null,
+                NotificationMessage = action.ActionType == AutomationActionTypes.NotificationCreate ? action.Message : null,
+                OverlayChannelId = action.OverlayChannelId?.Value,
+                OverlayTitle = action.ActionType == AutomationActionTypes.OverlayAlert ? action.Title : null,
+                OverlayMessage = action.ActionType == AutomationActionTypes.OverlayAlert ? action.Message : null,
+                action.Variant,
+                action.DurationMilliseconds
             }, transaction: transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
         }
     }
@@ -298,5 +308,13 @@ public sealed class PostgreSqlAutomationRuleStore : IAutomationRuleStore
         public long? Amount { get; set; }
         public string? Title { get; set; }
         public string? Message { get; set; }
+        public Guid? OverlayChannelIdValue { get; set; }
+        public OverlayChannelId? OverlayChannelId => OverlayChannelIdValue is Guid value ? FlurNetz.Modules.Overlay.Contracts.OverlayChannelId.Create(value) : null;
+        public string? OverlayTitle { get; set; }
+        public string? OverlayMessage { get; set; }
+        public string? Variant { get; set; }
+        public int? DurationMilliseconds { get; set; }
+        public string? TitleForAction => ActionType == AutomationActionTypes.OverlayAlert ? OverlayTitle : Title;
+        public string? MessageForAction => ActionType == AutomationActionTypes.OverlayAlert ? OverlayMessage : Message;
     }
 }

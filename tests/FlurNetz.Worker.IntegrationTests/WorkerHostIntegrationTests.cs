@@ -26,7 +26,7 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
     : IClassFixture<WorkerPostgreSqlFixture>
 {
     [Fact]
-    public async Task StartupRunsMessagingProgressionNotificationsAutomationAndEconomyMigrationsAndEmptyQueueStaysHealthy()
+    public async Task StartupRunsMessagingProgressionNotificationsAutomationOverlayAndEconomyMigrationsAndEmptyQueueStaysHealthy()
     {
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
@@ -78,6 +78,20 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
                 SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name = 'automation_executions';
+                """,
+                timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'overlay_channels';
+                """,
+                timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'overlay_alerts';
                 """,
                 timeout.Token));
             Assert.Equal(1, await CountAsync(
@@ -377,6 +391,8 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
             DROP TABLE IF EXISTS automation_rule_actions CASCADE;
             DROP TABLE IF EXISTS automation_rule_conditions CASCADE;
             DROP TABLE IF EXISTS automation_rules CASCADE;
+            DROP TABLE IF EXISTS overlay_alerts CASCADE;
+            DROP TABLE IF EXISTS overlay_channels CASCADE;
             DROP TABLE IF EXISTS community_notifications CASCADE;
             DROP TABLE IF EXISTS shop_purchase_requests CASCADE;
             DROP TABLE IF EXISTS shop_purchase_guards CASCADE;

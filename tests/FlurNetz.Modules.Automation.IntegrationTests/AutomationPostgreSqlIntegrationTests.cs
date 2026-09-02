@@ -3,6 +3,8 @@ using FlurNetz.Modules.Automation.Application;
 using FlurNetz.Modules.Automation.Domain;
 using FlurNetz.Modules.Automation.Migrations;
 using FlurNetz.Modules.Automation.Persistence;
+using FlurNetz.Modules.Overlay.Application;
+using FlurNetz.Modules.Overlay.Contracts;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Migrations;
@@ -28,8 +30,8 @@ public sealed class AutomationPostgreSqlIntegrationTests(AutomationPostgreSqlFix
         var first = await runner.RunAsync(TestToken);
         var second = await runner.RunAsync(TestToken);
 
-        Assert.Equal(new MigrationRunResult(1, 0), first);
-        Assert.Equal(new MigrationRunResult(0, 1), second);
+        Assert.Equal(new MigrationRunResult(2, 0), first);
+        Assert.Equal(new MigrationRunResult(0, 2), second);
 
         await using var connection = await factory.OpenConnectionAsync(TestToken);
         var tables = (await connection.QueryAsync<string>(new CommandDefinition(
@@ -62,7 +64,7 @@ public sealed class AutomationPostgreSqlIntegrationTests(AutomationPostgreSqlFix
         Assert.Equal("Automation", history.Owner);
         Assert.Equal(1, history.Version);
         Assert.Equal("CreateAutomationRulesAndExecutions", history.Name);
-        Assert.Equal(MigrationChecksum.Compute(Assert.Single(source.GetMigrations()).Sql), history.Checksum);
+        Assert.Equal(MigrationChecksum.Compute(source.GetMigrations().First().Sql), history.Checksum);
     }
 
     [Fact]
@@ -117,6 +119,44 @@ public sealed class AutomationPostgreSqlIntegrationTests(AutomationPostgreSqlFix
         var persisted = Assert.Single(page);
         Assert.Equal(execution.Id, persisted.Id);
         Assert.Equal(snapshot.TriggerMessageId, persisted.TriggerMessageId);
+    }
+
+    [Fact]
+    public async Task RuleStoreRehydratesOverlayActionFromExplicitPostgreSqlColumns()
+    {
+        SkipIfUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareAsync(factory);
+        var rule = AutomationRule.Create(
+            AutomationRuleId.New(),
+            "Overlay",
+            null,
+            AutomationTriggerTypes.EngagementMessageRecorded,
+            [],
+            [AutomationAction.Create(
+                0,
+                AutomationActionTypes.OverlayAlert,
+                title: "Overlay-Titel",
+                message: "Overlay-Nachricht",
+                overlayChannelId: OverlayChannelId.New(),
+                variant: OverlayAlertVariant.Warning,
+                durationMilliseconds: OverlayAlertDurationRules.DefaultMilliseconds)],
+            0,
+            Now);
+
+        var store = new PostgreSqlAutomationRuleStore(factory);
+        await store.AddAsync(rule, TestToken);
+
+        var loaded = await store.GetAsync(rule.Id, TestToken);
+        Assert.NotNull(loaded);
+        var action = Assert.Single(loaded!.Actions);
+        Assert.Equal(AutomationActionTypes.OverlayAlert, action.ActionType);
+        Assert.Equal(rule.Actions[0].OverlayChannelId, action.OverlayChannelId);
+        Assert.Equal("Overlay-Titel", action.Title);
+        Assert.Equal("Overlay-Nachricht", action.Message);
+        Assert.Equal(OverlayAlertVariant.Warning, action.Variant);
+        Assert.Equal(OverlayAlertDurationRules.DefaultMilliseconds, action.DurationMilliseconds);
+        Assert.Null(action.Amount);
     }
 
     [Fact]
@@ -208,7 +248,7 @@ public sealed class AutomationPostgreSqlIntegrationTests(AutomationPostgreSqlFix
             DROP TABLE IF EXISTS automation_rule_actions CASCADE;
             DROP TABLE IF EXISTS automation_rule_conditions CASCADE;
             DROP TABLE IF EXISTS automation_rules CASCADE;
-            DELETE FROM {MigrationRunner.MigrationHistoryTableName} WHERE owner = 'Automation' AND version = 1;
+            DELETE FROM {MigrationRunner.MigrationHistoryTableName} WHERE owner = 'Automation' AND version IN (1, 2);
             """,
             cancellationToken: TestToken));
     }

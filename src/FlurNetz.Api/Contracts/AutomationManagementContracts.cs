@@ -27,7 +27,10 @@ public sealed record AutomationActionRequest(
     string? Type,
     long? Amount,
     string? Title,
-    string? Message);
+    string? Message,
+    Guid? OverlayChannelId = null,
+    string? Variant = null,
+    int? DurationMilliseconds = null);
 
 /// <summary>API-Darstellung einer Automation-Condition.</summary>
 public sealed record AutomationConditionResponse(
@@ -44,7 +47,10 @@ public sealed record AutomationActionResponse(
     string Type,
     long? Amount,
     string? Title,
-    string? Message);
+    string? Message,
+    Guid? OverlayChannelId = null,
+    string? Variant = null,
+    int? DurationMilliseconds = null);
 
 /// <summary>API-Darstellung einer Automation-Rule.</summary>
 public sealed record AutomationRuleResponse(

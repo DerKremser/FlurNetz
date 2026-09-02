@@ -37,4 +37,7 @@ public static class AutomationActionTypes
 
     /// <summary>Erzeugt eine Notification.</summary>
     public const string NotificationCreate = "notification.create";
+
+    /// <summary>Erzeugt einen Overlay-Alert.</summary>
+    public const string OverlayAlert = "overlay.alert";
 }

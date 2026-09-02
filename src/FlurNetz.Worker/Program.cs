@@ -10,6 +10,8 @@ using FlurNetz.Modules.Automation;
 using AutomationEngagementConsumer = FlurNetz.Modules.Automation.Application.EngagementMessageRecordedAutomationConsumer;
 using AutomationShopConsumer = FlurNetz.Modules.Automation.Application.ShopPurchaseCompletedAutomationConsumer;
 using FlurNetz.Modules.Economy;
+using FlurNetz.Modules.Overlay;
+using FlurNetz.Modules.Overlay.Contracts;
 using NotificationsShopPurchaseHandler = FlurNetz.Modules.Notifications.Application.ShopPurchaseCompletedIntegrationEventHandler;
 using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Persistence.Configuration;
@@ -106,6 +108,7 @@ public sealed class Program
         services.AddNotificationsConsumer();
         services.AddEconomyCreditCapability();
         services.AddAutomationModule();
+        services.AddOverlayModule();
         services.AddAutomationConsumers();
         services.AddSingleton<MigrationRunner>(serviceProvider =>
             new MigrationRunner(
@@ -159,7 +162,7 @@ public sealed class Program
 
                 ValidateComposition();
                 logger.LogInformation(
-                    "Worker-Komposition validiert: Registry für Engagement- und Shop-Event, Progression-, Notifications- und Automation-Consumer sowie OutboxProcessor sind bereit.");
+                    "Worker-Komposition validiert: Registry für Engagement- und Shop-Event, Progression-, Notifications- und Automation-Consumer, Overlay-Publish-Capability sowie OutboxProcessor sind bereit.");
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -237,6 +240,7 @@ public sealed class Program
             _ = scope.ServiceProvider.GetRequiredService<FlurNetz.Modules.Economy.Contracts.IEconomyBalanceCredit>();
             _ = scope.ServiceProvider.GetRequiredService<FlurNetz.Modules.Notifications.Contracts.ICommunityNotificationCreate>();
             _ = scope.ServiceProvider.GetRequiredService<FlurNetz.Modules.Automation.Application.ExecuteAutomationTrigger>();
+            _ = scope.ServiceProvider.GetRequiredService<IOverlayAlertPublish>();
         }
     }
 }

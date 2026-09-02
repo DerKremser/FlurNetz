@@ -1,6 +1,7 @@
 using Dapper;
 using FlurNetz.Modules.Automation.Application;
 using FlurNetz.Modules.Automation.Domain;
+using FlurNetz.Modules.Overlay.Contracts;
 using System.Data.Common;
 
 namespace FlurNetz.Modules.Automation.Persistence;
@@ -32,7 +33,9 @@ public sealed class PostgreSqlAutomationRuntimeStore : IAutomationRuntimeStore
     private const string ActionsSql = """
         SELECT position AS Position, action_type AS ActionType,
                amount AS Amount, notification_title AS Title,
-               notification_message AS Message
+               notification_message AS Message, overlay_channel_id AS OverlayChannelIdValue,
+               overlay_title AS OverlayTitle, overlay_message AS OverlayMessage,
+               overlay_variant AS Variant, overlay_duration_milliseconds AS DurationMilliseconds
         FROM automation_rule_actions
         WHERE automation_rule_id = @AutomationRuleId
         ORDER BY position ASC;
@@ -67,7 +70,7 @@ public sealed class PostgreSqlAutomationRuntimeStore : IAutomationRuntimeStore
                 row.Description,
                 row.TriggerType,
                 conditions.Select(value => AutomationCondition.Rehydrate(value.Position, value.ConditionType, value.CommunityIdentityId, value.ShopOfferId, value.ItemDefinitionId, value.Amount)),
-                actions.Select(value => AutomationAction.Rehydrate(value.Position, value.ActionType, value.Amount, value.Title, value.Message)),
+                actions.Select(value => AutomationAction.Rehydrate(value.Position, value.ActionType, value.Amount, value.TitleForAction, value.MessageForAction, value.OverlayChannelId, value.Variant, value.DurationMilliseconds)),
                 row.SortOrder,
                 row.IsEnabled,
                 row.IsArchived,
@@ -132,5 +135,13 @@ public sealed class PostgreSqlAutomationRuntimeStore : IAutomationRuntimeStore
         public long? Amount { get; set; }
         public string? Title { get; set; }
         public string? Message { get; set; }
+        public Guid? OverlayChannelIdValue { get; set; }
+        public OverlayChannelId? OverlayChannelId => OverlayChannelIdValue is Guid value ? FlurNetz.Modules.Overlay.Contracts.OverlayChannelId.Create(value) : null;
+        public string? OverlayTitle { get; set; }
+        public string? OverlayMessage { get; set; }
+        public string? Variant { get; set; }
+        public int? DurationMilliseconds { get; set; }
+        public string? TitleForAction => ActionType == AutomationActionTypes.OverlayAlert ? OverlayTitle : Title;
+        public string? MessageForAction => ActionType == AutomationActionTypes.OverlayAlert ? OverlayMessage : Message;
     }
 }

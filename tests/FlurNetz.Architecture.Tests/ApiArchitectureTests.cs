@@ -26,7 +26,10 @@ public sealed class ApiArchitectureTests
         "FlurNetz.Modules.Shop",
         "FlurNetz.Modules.Shop.Contracts",
         "FlurNetz.Modules.Notifications"
-        ,"FlurNetz.Modules.Automation"
+        ,"FlurNetz.Modules.Automation",
+        "FlurNetz.Modules.Overlay",
+        "FlurNetz.Modules.Overlay.Contracts",
+        "FlurNetz.BuildingBlocks"
     ];
 
     private static Assembly ApiAssembly => typeof(Program).Assembly;

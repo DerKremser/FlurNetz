@@ -26,6 +26,10 @@ using FlurNetz.Modules.Notifications.Application;
 using FlurNetz.Modules.Notifications.Contracts;
 using FlurNetz.Modules.Notifications.Migrations;
 using FlurNetz.Modules.Notifications.Persistence;
+using FlurNetz.Modules.Overlay.Application;
+using FlurNetz.Modules.Overlay.Contracts;
+using FlurNetz.Modules.Overlay.Migrations;
+using FlurNetz.Modules.Overlay.Persistence;
 using FlurNetz.Modules.Shop.Application;
 using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Modules.Shop.Domain;
@@ -112,6 +116,79 @@ public sealed class AutomationWorkflowIntegrationTests(WorkflowPostgreSqlFixture
         Assert.Equal(1, duplicate.DuplicateDeliveryCount);
         Assert.Equal(11, await ReadBalanceAsync(factory, identityId));
         Assert.Equal(1, await CountAsync(factory, "SELECT COUNT(*) FROM automation_executions;"));
+    }
+
+    [Fact]
+    public async Task EngagementEventRunsOverlayActionIntoPostgreSqlAndDuplicateDeliveryHasNoSecondAlert()
+    {
+        SkipIfUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareEngagementDatabaseAsync(factory);
+
+        var channelSecret = await new CreateOverlayChannel(
+            new PostgreSqlOverlayChannelStore(factory),
+            new FixedClock(Now)).ExecuteAsync("Workflow-Overlay", null, TestToken);
+        var channel = new PostgreSqlOverlayChannelStore(factory);
+        _ = await channel.MutateAsync(channelSecret.Channel.Id, current => current.Enable(Now.AddMinutes(1)), cancellationToken: TestToken);
+
+        var ruleStore = new PostgreSqlAutomationRuleStore(factory);
+        var rule = AutomationRule.Create(
+            AutomationRuleId.New(),
+            "Overlay-Benachrichtigung",
+            null,
+            AutomationTriggerTypes.EngagementMessageRecorded,
+            [],
+            [AutomationAction.Create(
+                0,
+                AutomationActionTypes.OverlayAlert,
+                title: "Workflow erfolgreich",
+                message: "Der Alert kam aus der Outbox-Runtime.",
+                overlayChannelId: channelSecret.Channel.Id,
+                variant: OverlayAlertVariant.Success,
+                durationMilliseconds: OverlayAlertDurationRules.DefaultMilliseconds)],
+            0,
+            Now);
+        await ruleStore.AddAsync(rule, TestToken);
+        _ = await ruleStore.MutateAsync(rule.Id, current => current.Enable(Now.AddMinutes(1)), TestToken);
+
+        var (publisher, serializer, registry) = CreatePublisher<MessageEngagementRecordedIntegrationEvent>(
+            MessageEngagementRecordedIntegrationEvent.MessageType,
+            MessageEngagementRecordedIntegrationEvent.SchemaVersion);
+        var messageId = Guid.NewGuid();
+        await EnqueueAsync(factory, publisher, CreateEngagementEnvelope(messageId, Guid.NewGuid()));
+        var processor = CreateAutomationProcessor(
+            factory,
+            serializer,
+            registry,
+            new IntegrationEventHandlerRegistration<MessageEngagementRecordedIntegrationEvent>(
+                EngagementMessageRecordedAutomationConsumer.ConsumerName,
+                new EngagementMessageRecordedAutomationConsumer(CreateEngine(
+                    factory,
+                    overlayAlertPublish: new OverlayAlertPublishCapability(
+                        new PostgreSqlOverlayChannelStore(factory),
+                        new PostgreSqlOverlayAlertStore(factory),
+                        new FixedClock(Now))))));
+
+        var first = await processor.ProcessBatchAsync(TestToken);
+
+        Assert.Equal(1, first.ProcessedCount);
+        Assert.Equal(1, await CountAsync(factory, "SELECT COUNT(*) FROM automation_executions;"));
+        Assert.Equal(1, await CountAsync(factory, "SELECT COUNT(*) FROM overlay_alerts;"));
+        Assert.Equal(1, await CountAsync(factory,
+            "SELECT COUNT(*) FROM overlay_alerts WHERE overlay_channel_id = @ChannelId AND title = @Title;",
+            new { ChannelId = channelSecret.Channel.Id.Value, Title = "Workflow erfolgreich" }));
+
+        await using (var connection = await factory.OpenConnectionAsync(TestToken))
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                "UPDATE flurnetz_messaging.outbox_messages SET status = 'pending', processed_at_utc = NULL, next_attempt_at_utc = @Now;",
+                new { Now },
+                cancellationToken: TestToken));
+        }
+
+        var duplicate = await processor.ProcessBatchAsync(TestToken);
+        Assert.Equal(1, duplicate.DuplicateDeliveryCount);
+        Assert.Equal(1, await CountAsync(factory, "SELECT COUNT(*) FROM overlay_alerts;"));
     }
 
     [Fact]
@@ -413,13 +490,15 @@ public sealed class AutomationWorkflowIntegrationTests(WorkflowPostgreSqlFixture
 
     private ExecuteAutomationTrigger CreateEngine(
         PostgreSqlConnectionFactory factory,
-        ICommunityNotificationCreate? notificationCreate = null) =>
+        ICommunityNotificationCreate? notificationCreate = null,
+        IOverlayAlertPublish? overlayAlertPublish = null) =>
         new(
             new PostgreSqlAutomationRuntimeStore(),
             new EconomyBalanceCredit(new CommunityEconomyStore(factory)),
             notificationCreate ?? new CommunityNotificationCreateCapability(
                 new CreateNotification(new CommunityNotificationStore(factory), new FixedClock(Now))),
-            new FixedClock(Now));
+            new FixedClock(Now),
+            overlayAlertPublish);
 
     private static OutboxProcessor CreateAutomationProcessor(
         PostgreSqlConnectionFactory factory,
@@ -441,6 +520,7 @@ public sealed class AutomationWorkflowIntegrationTests(WorkflowPostgreSqlFixture
             new MessagingMigrationSource(),
             new EconomyMigrationSource(),
             new NotificationsMigrationSource(),
+            new OverlayMigrationSource(),
             new AutomationMigrationSource()
         ]).RunAsync(TestToken);
     }
@@ -455,6 +535,7 @@ public sealed class AutomationWorkflowIntegrationTests(WorkflowPostgreSqlFixture
             new InventoryMigrationSource(),
             new ShopMigrationSource(),
             new NotificationsMigrationSource(),
+            new OverlayMigrationSource(),
             new AutomationMigrationSource()
         ]).RunAsync(TestToken);
     }
@@ -466,6 +547,8 @@ public sealed class AutomationWorkflowIntegrationTests(WorkflowPostgreSqlFixture
             """
             DROP SCHEMA IF EXISTS flurnetz_messaging CASCADE;
             DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
+            DROP TABLE IF EXISTS overlay_alerts CASCADE;
+            DROP TABLE IF EXISTS overlay_channels CASCADE;
             DROP TABLE IF EXISTS community_notifications CASCADE;
             DROP TABLE IF EXISTS automation_executions CASCADE;
             DROP TABLE IF EXISTS automation_rule_actions CASCADE;

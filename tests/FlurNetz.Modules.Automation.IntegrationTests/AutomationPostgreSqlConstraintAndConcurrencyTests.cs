@@ -416,7 +416,7 @@ public sealed class AutomationPostgreSqlConstraintAndConcurrencyTests(Automation
             DROP TABLE IF EXISTS automation_rule_actions CASCADE;
             DROP TABLE IF EXISTS automation_rule_conditions CASCADE;
             DROP TABLE IF EXISTS automation_rules CASCADE;
-            DELETE FROM flurnetz_persistence.migration_history WHERE owner = 'Automation' AND version = 1;
+            DELETE FROM flurnetz_persistence.migration_history WHERE owner = 'Automation' AND version IN (1, 2);
             """,
             cancellationToken: TestToken));
         await new MigrationRunner(factory, new AutomationMigrationSource()).RunAsync(TestToken);

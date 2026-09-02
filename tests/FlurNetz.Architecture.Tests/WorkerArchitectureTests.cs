@@ -18,7 +18,8 @@ public sealed class WorkerArchitectureTests
         "FlurNetz.Modules.Automation",
         "FlurNetz.Modules.Economy",
         "FlurNetz.Modules.Engagement.Contracts",
-        "FlurNetz.Modules.Shop.Contracts"
+        "FlurNetz.Modules.Shop.Contracts",
+        "FlurNetz.Modules.Overlay"
     ];
 
     private static readonly string[] ForbiddenWorkerReferences =
@@ -31,7 +32,6 @@ public sealed class WorkerArchitectureTests
         "FlurNetz.Modules.Titles",
         "FlurNetz.Modules.Achievements",
         "FlurNetz.Modules.Shop",
-        "FlurNetz.Modules.Overlay",
         "FlurNetz.Modules.Integrations",
         "FlurNetz.Modules.Administration"
     ];

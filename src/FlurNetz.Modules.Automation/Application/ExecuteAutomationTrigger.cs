@@ -4,6 +4,8 @@ using FlurNetz.Modules.Automation.Domain;
 using FlurNetz.Modules.Economy.Contracts;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Notifications.Contracts;
+using FlurNetz.Modules.Overlay.Contracts;
+using Microsoft.Extensions.Logging;
 
 namespace FlurNetz.Modules.Automation.Application;
 
@@ -15,14 +17,18 @@ public sealed class ExecuteAutomationTrigger
     private readonly IAutomationRuntimeStore runtimeStore;
     private readonly IEconomyBalanceCredit economyCredit;
     private readonly ICommunityNotificationCreate notificationCreate;
+    private readonly IOverlayAlertPublish? overlayAlertPublish;
     private readonly IClock clock;
+    private readonly ILogger<ExecuteAutomationTrigger>? logger;
 
     /// <summary>Erstellt den Runtime-Use-Case.</summary>
     public ExecuteAutomationTrigger(
         IAutomationRuntimeStore runtimeStore,
         IEconomyBalanceCredit economyCredit,
         ICommunityNotificationCreate notificationCreate,
-        IClock clock)
+        IClock clock,
+        IOverlayAlertPublish? overlayAlertPublish = null,
+        ILogger<ExecuteAutomationTrigger>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(runtimeStore);
         ArgumentNullException.ThrowIfNull(economyCredit);
@@ -32,6 +38,8 @@ public sealed class ExecuteAutomationTrigger
         this.economyCredit = economyCredit;
         this.notificationCreate = notificationCreate;
         this.clock = clock;
+        this.overlayAlertPublish = overlayAlertPublish;
+        this.logger = logger;
     }
 
     /// <summary>
@@ -104,6 +112,34 @@ public sealed class ExecuteAutomationTrigger
                                 transaction,
                                 cancellationToken)
                             .ConfigureAwait(false);
+                        break;
+
+                    case AutomationActionTypes.OverlayAlert:
+                        if (overlayAlertPublish is null)
+                        {
+                            throw new InvalidOperationException("Die Overlay-Publish-Capability ist in der Automation-Komposition nicht registriert.");
+                        }
+
+                        // Suppression (disabled, archived oder missing) ist ein fachlich erwarteter
+                        // Konfigurationszustand und wird bewusst nicht als technischer Fehler geworfen.
+                        var publishResult = await overlayAlertPublish.PublishAsync(
+                                new OverlayAlertPublishRequest(
+                                    action.OverlayChannelId!.Value,
+                                    action.Title!,
+                                    action.Message,
+                                    action.Variant!,
+                                    action.DurationMilliseconds!.Value),
+                                connection,
+                                transaction,
+                                cancellationToken)
+                            .ConfigureAwait(false);
+                        if (!publishResult.IsPublished)
+                        {
+                            logger?.LogWarning(
+                                "Overlay-Alert für Automation-Rule wurde unterdrückt. Channel: {OverlayChannelId}, Status: {Status}",
+                                action.OverlayChannelId.Value.Value,
+                                publishResult.Status);
+                        }
                         break;
 
                     default:

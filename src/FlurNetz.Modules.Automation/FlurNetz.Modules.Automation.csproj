@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="Dapper" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <ProjectReference Include="..\FlurNetz.Modules.Automation.Contracts\FlurNetz.Modules.Automation.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
     <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
@@ -19,6 +20,7 @@
     <ProjectReference Include="..\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Economy.Contracts\FlurNetz.Modules.Economy.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Notifications.Contracts\FlurNetz.Modules.Notifications.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Overlay.Contracts\FlurNetz.Modules.Overlay.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

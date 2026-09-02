@@ -152,5 +152,54 @@ public sealed class AutomationMigrationSource : IMigrationSource
             1,
             "CreateAutomationRulesAndExecutions",
             MigrationSql);
+        yield return new Migration(
+            "Automation",
+            2,
+            "AddOverlayAlertAction",
+            OverlayAlertMigrationSql);
     }
+
+    private const string OverlayAlertMigrationSql = """
+        ALTER TABLE automation_rule_actions
+            ADD COLUMN IF NOT EXISTS overlay_channel_id uuid NULL,
+            ADD COLUMN IF NOT EXISTS overlay_title varchar(200) NULL,
+            ADD COLUMN IF NOT EXISTS overlay_message varchar(2000) NULL,
+            ADD COLUMN IF NOT EXISTS overlay_variant varchar(20) NULL,
+            ADD COLUMN IF NOT EXISTS overlay_duration_milliseconds integer NULL;
+
+        ALTER TABLE automation_rule_actions
+            DROP CONSTRAINT IF EXISTS ck_automation_rule_actions_type,
+            DROP CONSTRAINT IF EXISTS ck_automation_rule_actions_value_shape;
+
+        ALTER TABLE automation_rule_actions
+            ADD CONSTRAINT ck_automation_rule_actions_type_v2 CHECK (
+                action_type IN ('economy.credit', 'notification.create', 'overlay.alert')
+            ),
+            ADD CONSTRAINT ck_automation_rule_actions_value_shape_v2 CHECK (
+                (action_type = 'economy.credit'
+                    AND amount IS NOT NULL AND amount > 0
+                    AND notification_title IS NULL AND notification_message IS NULL
+                    AND overlay_channel_id IS NULL AND overlay_title IS NULL
+                    AND overlay_message IS NULL AND overlay_variant IS NULL
+                    AND overlay_duration_milliseconds IS NULL)
+                OR (action_type = 'notification.create'
+                    AND amount IS NULL AND notification_title IS NOT NULL
+                    AND notification_title = btrim(notification_title, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000')
+                    AND overlay_channel_id IS NULL AND overlay_title IS NULL
+                    AND overlay_message IS NULL AND overlay_variant IS NULL
+                    AND overlay_duration_milliseconds IS NULL)
+                OR (action_type = 'overlay.alert'
+                    AND amount IS NULL AND notification_title IS NULL AND notification_message IS NULL
+                    AND overlay_channel_id IS NOT NULL
+                    AND overlay_channel_id <> '00000000-0000-0000-0000-000000000000'
+                    AND overlay_title IS NOT NULL
+                    AND btrim(overlay_title, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000') <> ''
+                    AND overlay_title = btrim(overlay_title, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000')
+                    AND (overlay_message IS NULL OR (
+                        btrim(overlay_message, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000') <> ''
+                        AND overlay_message = btrim(overlay_message, U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000')))
+                    AND overlay_variant IN ('default', 'success', 'warning', 'celebration')
+                    AND overlay_duration_milliseconds BETWEEN 1000 AND 30000)
+            );
+        """;
 }

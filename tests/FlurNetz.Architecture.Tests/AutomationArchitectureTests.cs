@@ -35,7 +35,8 @@ public sealed class AutomationArchitectureTests
             "FlurNetz.Modules.Engagement.Contracts",
             "FlurNetz.Modules.Shop.Contracts",
             "FlurNetz.Modules.Economy.Contracts",
-            "FlurNetz.Modules.Notifications.Contracts"
+            "FlurNetz.Modules.Notifications.Contracts",
+            "FlurNetz.Modules.Overlay.Contracts"
         };
 
         Assert.All(references, reference => Assert.Contains(reference, allowed));
@@ -81,7 +82,7 @@ public sealed class AutomationArchitectureTests
     [Fact]
     public void MigrationOwnsOnlyAutomationTablesAndInternalForeignKeys()
     {
-        var migration = Assert.Single(new AutomationMigrationSource().GetMigrations());
+        var migration = new AutomationMigrationSource().GetMigrations().First();
 
         Assert.Equal("Automation", migration.Owner);
         Assert.Equal(1L, migration.Version);
@@ -94,6 +95,12 @@ public sealed class AutomationArchitectureTests
         Assert.DoesNotContain("REFERENCES shop_", migration.Sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("community_notifications", migration.Sql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("community_economies", migration.Sql, StringComparison.OrdinalIgnoreCase);
+
+        var overlayMigration = new AutomationMigrationSource().GetMigrations().Skip(1).Single();
+        Assert.Equal("Automation", overlayMigration.Owner);
+        Assert.Equal(2L, overlayMigration.Version);
+        Assert.Equal("AddOverlayAlertAction", overlayMigration.Name);
+        Assert.Contains("overlay_channel_id", overlayMigration.Sql, StringComparison.Ordinal);
     }
 
     [Fact]

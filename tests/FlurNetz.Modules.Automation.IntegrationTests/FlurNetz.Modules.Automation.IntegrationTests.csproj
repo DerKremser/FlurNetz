@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Automation\FlurNetz.Modules.Automation.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Overlay\FlurNetz.Modules.Overlay.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Testcontainers.PostgreSql" />
