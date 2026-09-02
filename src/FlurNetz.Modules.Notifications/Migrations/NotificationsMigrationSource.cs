@@ -23,21 +23,53 @@ public sealed class NotificationsMigrationSource : IMigrationSource
             CONSTRAINT ck_community_notifications_type_length
                 CHECK (char_length(notification_type) BETWEEN 1 AND 100),
             CONSTRAINT ck_community_notifications_type_trimmed
-                CHECK (notification_type = btrim(notification_type)),
+                CHECK (
+                    notification_type = btrim(
+                        notification_type,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    )
+                ),
             CONSTRAINT ck_community_notifications_title_length
                 CHECK (char_length(title) BETWEEN 1 AND 200),
             CONSTRAINT ck_community_notifications_title_trimmed
-                CHECK (title = btrim(title)),
+                CHECK (
+                    title = btrim(
+                        title,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    )
+                ),
             CONSTRAINT ck_community_notifications_message_length
                 CHECK (message IS NULL OR char_length(message) BETWEEN 1 AND 2000),
             CONSTRAINT ck_community_notifications_message_trimmed
-                CHECK (message IS NULL OR message = btrim(message)),
+                CHECK (
+                    message IS NULL
+                    OR message = btrim(
+                        message,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    )
+                ),
             CONSTRAINT ck_community_notifications_source_pair
                 CHECK ((source_type IS NULL) = (source_id IS NULL)),
             CONSTRAINT ck_community_notifications_source_type_length
                 CHECK (source_type IS NULL OR char_length(source_type) BETWEEN 1 AND 100),
+            CONSTRAINT ck_community_notifications_source_type_trimmed
+                CHECK (
+                    source_type IS NULL
+                    OR source_type = btrim(
+                        source_type,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    )
+                ),
             CONSTRAINT ck_community_notifications_source_id_length
-                CHECK (source_id IS NULL OR char_length(source_id) BETWEEN 1 AND 200)
+                CHECK (source_id IS NULL OR char_length(source_id) BETWEEN 1 AND 200),
+            CONSTRAINT ck_community_notifications_source_id_trimmed
+                CHECK (
+                    source_id IS NULL
+                    OR source_id = btrim(
+                        source_id,
+                        U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'
+                    )
+                )
         );
 
         CREATE INDEX IF NOT EXISTS ix_community_notifications_inbox

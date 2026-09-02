@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Dapper;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Notifications.Application;
@@ -190,6 +191,61 @@ public sealed class NotificationsPostgreSqlIntegrationTests(NotificationsPostgre
     }
 
     [Fact]
+    public async Task DatabaseRejectsNonCanonicalUnicodeWhitespaceAcrossAllTextFields()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareDatabaseAsync(factory);
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+
+        await AssertInsertRejectedAsync(connection, "notification_type", "\u2003system.notice\u00A0");
+        await AssertInsertRejectedAsync(connection, "title", "\u202FTitle\u3000");
+        await AssertInsertRejectedAsync(connection, "message", "\u2007Message\u2009");
+        await AssertInsertRejectedAsync(connection, "source_type", "\u00A0shop.purchase\u2003");
+        await AssertInsertRejectedAsync(connection, "source_id", "\u3000purchase-1\u202F");
+    }
+
+    [Fact]
+    public async Task DatabaseAcceptsCanonicalUnicodeTextAndNullSourceReference()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareDatabaseAsync(factory);
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        var id = Guid.NewGuid();
+        var identityId = Guid.NewGuid();
+        const string notificationType = "system.notice😀";
+        const string title = "Hinweis\u2003intern";
+        const string message = "Kauf erfolgreich";
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO community_notifications
+                (id, community_identity_id, notification_type, title, message, source_type, source_id, created_at_utc)
+            VALUES (@Id, @IdentityId, @NotificationType, @Title, @Message, NULL, NULL, @CreatedAtUtc);
+            """,
+            new
+            {
+                Id = id,
+                IdentityId = identityId,
+                NotificationType = notificationType,
+                Title = title,
+                Message = message,
+                CreatedAtUtc = FirstTime
+            },
+            cancellationToken: TestToken));
+
+        var loaded = await new CommunityNotificationStore(factory)
+            .GetAsync(NotificationId.Create(id), TestToken);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(notificationType, loaded!.NotificationType);
+        Assert.Equal(title, loaded.Title);
+        Assert.Equal(message, loaded.Message);
+        Assert.Null(loaded.SourceReference);
+    }
+
+    [Fact]
     public async Task SameTimestampUsesDeterministicNotificationIdDescendingOrder()
     {
         SkipIfDatabaseIsUnavailable();
@@ -258,6 +314,49 @@ public sealed class NotificationsPostgreSqlIntegrationTests(NotificationsPostgre
         await connection.ExecuteAsync(new CommandDefinition(
             "DROP TABLE IF EXISTS community_notifications; DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;",
             cancellationToken: TestToken));
+    }
+
+    private static async Task AssertInsertRejectedAsync(
+        DbConnection connection,
+        string invalidColumn,
+        string invalidValue)
+    {
+        var sql = $"""
+            INSERT INTO community_notifications
+                (id, community_identity_id, notification_type, title, message, source_type, source_id, created_at_utc)
+            VALUES (@Id, @IdentityId, @NotificationType, @Title, @Message, @SourceType, @SourceId, @CreatedAtUtc);
+            """;
+
+        _ = invalidColumn switch
+        {
+            "notification_type" => 0,
+            "title" => 0,
+            "message" => 0,
+            "source_type" => 0,
+            "source_id" => 0,
+            _ => throw new ArgumentOutOfRangeException(nameof(invalidColumn), invalidColumn, null)
+        };
+
+        var notificationType = invalidColumn == "notification_type" ? invalidValue : "system.notice";
+        var title = invalidColumn == "title" ? invalidValue : "Title";
+        var message = invalidColumn == "message" ? invalidValue : "Message";
+        var sourceType = invalidColumn == "source_type" ? invalidValue : "shop.purchase";
+        var sourceId = invalidColumn == "source_id" ? invalidValue : "purchase-1";
+
+        await Assert.ThrowsAnyAsync<Exception>(() => connection.ExecuteAsync(new CommandDefinition(
+            sql,
+            new
+            {
+                Id = Guid.NewGuid(),
+                IdentityId = Guid.NewGuid(),
+                NotificationType = notificationType,
+                Title = title,
+                Message = message,
+                SourceType = sourceType,
+                SourceId = sourceId,
+                CreatedAtUtc = FirstTime
+            },
+            cancellationToken: TestContext.Current.CancellationToken)));
     }
 
     private PostgreSqlConnectionFactory CreateFactory() =>
