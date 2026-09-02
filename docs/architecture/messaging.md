@@ -9,6 +9,12 @@ konkrete Notifications-Policy ist ausschließlich im Notifications-Modul veranke
 
 ## Domain Events und Integration Events
 
+Automation hängt als unabhängiger Consumer an denselben beiden bereits registrierten
+Integration-Events. Für jede Automation-Consumer-Identity legt der OutboxProcessor einen
+eigenen Inbox-Eintrag an. Der Automation-Handler lädt Rules und schreibt Execution, Economy-
+Credit und Notification in genau diese Handler-Transaktion. Ein Fehler rollt sämtliche
+Automation-Writes zurück; Retry und Poison bleiben Messaging-owned.
+
 Domain Events (`IDomainEvent`) sind interne Prozesssignale. Der `DomainEventDispatcher` liefert sie in expliziter Registrierungsreihenfolge sequenziell an passende Handler. Ein fehlender Handler ist ein No-op, der erste Handler-Fehler wird nicht verschluckt und Cancellation wird weitergereicht. Domain Events werden weder serialisiert noch in der Outbox gespeichert.
 
 Integration Events (`IIntegrationEvent`) sind dagegen stabile technische Nachrichten an einer Modulgrenze. Ihre fachliche Payload bleibt von technischen Metadaten getrennt. Sie werden nicht sofort an einen externen Handler gesendet: `EnqueueAsync` bedeutet zunächst durable Persistierung in der Outbox.
@@ -73,13 +79,17 @@ Nach dem letzten erlaubten Versuch erhält die Nachricht den Status `failed` (Po
 Die Messaging Foundation definiert nur die technischen Outbox-/Inbox- und Processor-
 Verträge. Sie startet keinen Prozess und kennt weder Progression noch andere Fachmodule.
 `FlurNetz.Worker` ist der separate Runtime-Host: Er registriert die benötigten
-Contracts und Consumer explizit, führt die Messaging-, Progression- und Notifications-Migrationen beim
+Contracts und Consumer explizit, führt die Messaging-, Progression-, Economy-, Notifications- und
+Automation-Migrationen beim
 Startup aus und ruft danach `OutboxProcessor.ProcessBatchAsync` kontinuierlich auf. Seine
 Registry enthält `engagement.message-recorded` v1 und `shop.purchase-completed` v1; dafür
 referenziert er `FlurNetz.Modules.Shop.Contracts`, nicht die Shop-Implementierung. Für das
-Shop-Event ist der Notifications-Consumer `notifications.shop-purchase` registriert. Der
-Consumer verwendet die vom Processor bereitgestellte Connection/Transaction für Inbox und
-Notification gemeinsam.
+Shop-Event sind die Notifications- und Automation-Consumer `notifications.shop-purchase` und
+`automation.shop-purchase-completed` registriert; für das Engagement-Event zusätzlich
+`automation.engagement-message-recorded`. Der Notifications-Consumer verwendet die vom Processor
+bereitgestellte Connection/Transaction für Inbox und Notification gemeinsam. Automation lädt
+Rules mit Shared Lock, reserviert Execution-Records und schreibt Credit-/Notification-Actions
+über die caller-neutrale Capability in derselben Transaktion.
 Die Worker-spezifischen Idle-/Failure-Delays und der Scope pro Batch gehören zum Host, nicht
 zur Foundation. Message-Level-Retry und Lease-Semantik bleiben beim Processor.
 

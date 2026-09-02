@@ -2,6 +2,12 @@ using System.Data.Common;
 using FlurNetz.Modules.Economy.Application;
 using FlurNetz.Modules.Economy.Domain;
 using FlurNetz.Modules.Identity.Contracts;
+using FlurNetz.Modules.Economy;
+using FlurNetz.Modules.Economy.Contracts;
+using FlurNetz.Persistence.Configuration;
+using FlurNetz.Persistence.Connections;
+using FlurNetz.Persistence.Migrations;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace FlurNetz.Modules.Economy.Tests;
 
@@ -22,6 +28,27 @@ public sealed class CreditEconomyBalanceTests
         Assert.Equal(7, store.Amount);
         Assert.Equal(cancellationSource.Token, store.CancellationToken);
         Assert.Equal(StoreOperation.Credit, store.Operation);
+    }
+}
+
+public sealed class EconomyCapabilityRegistrationTests
+{
+    [Fact]
+    public async Task CreditCapabilityIsResolvableAndComposesWithDebitWithoutDuplicateCoreServices()
+    {
+        var services = new ServiceCollection();
+
+        services.AddEconomyDebitCapability();
+        services.AddEconomyCreditCapability();
+        services.AddSingleton<IPostgreSqlConnectionFactory>(_ =>
+            new PostgreSqlConnectionFactory(new PostgreSqlOptions(
+                "Host=localhost;Database=flurnetz-capability-test;Username=test;Password=test")));
+
+        await using var provider = services.BuildServiceProvider();
+        Assert.IsType<EconomyBalanceCredit>(provider.GetRequiredService<IEconomyBalanceCredit>());
+        Assert.IsType<EconomyBalanceDebit>(provider.GetRequiredService<IEconomyBalanceDebit>());
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ICommunityEconomyStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IMigrationSource));
     }
 }
 

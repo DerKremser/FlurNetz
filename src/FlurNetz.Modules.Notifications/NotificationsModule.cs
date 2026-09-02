@@ -1,6 +1,7 @@
 using FlurNetz.BuildingBlocks.Time;
 using FlurNetz.Messaging.Integration;
 using FlurNetz.Modules.Notifications.Application;
+using FlurNetz.Modules.Notifications.Contracts;
 using FlurNetz.Modules.Notifications.Migrations;
 using FlurNetz.Modules.Notifications.Persistence;
 using FlurNetz.Persistence.Migrations;
@@ -21,9 +22,7 @@ public static class NotificationsModule
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddSingleton<IClock, SystemClock>();
-        services.AddScoped<ICommunityNotificationStore, CommunityNotificationStore>();
-        services.AddScoped<CreateNotification>();
+        services.AddNotificationCreateCapability();
         services.AddScoped<GetNotification>();
         services.AddScoped<ListNotificationsForIdentity>();
         services.AddScoped<GetUnreadNotificationCount>();
@@ -32,6 +31,21 @@ public static class NotificationsModule
         services.AddScoped<MarkAllNotificationsRead>();
         services.AddSingleton<IMigrationSource, NotificationsMigrationSource>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registriert ausschließlich die schmale transaction-aware Create-Capability und den
+    /// vorhandenen Notification-Kern, auf den sie delegiert.
+    /// </summary>
+    public static IServiceCollection AddNotificationCreateCapability(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton<IClock, SystemClock>();
+        services.TryAddScoped<ICommunityNotificationStore, CommunityNotificationStore>();
+        services.TryAddScoped<CreateNotification>();
+        services.TryAddScoped<ICommunityNotificationCreate, CommunityNotificationCreateCapability>();
         return services;
     }
 

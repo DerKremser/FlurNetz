@@ -2,6 +2,15 @@
 
 `FlurNetz.Persistence` ist die technische PostgreSQL-Infrastruktur von FlurNetz. Sie enthält keine Fachmodule, fachlichen Tabellen, fachlichen Repositories oder fachlichen Services.
 
+## Automation-Persistenz
+
+Die Automation-Migration Automation:1:CreateAutomationRulesAndExecutions besitzt genau vier
+eigene Tabellen: automation_rules, automation_rule_conditions, automation_rule_actions und
+automation_executions. Nur Automation-interne Foreign Keys sind erlaubt. Die Regelverwaltung
+nutzt FOR UPDATE auf der Root-Zeile; die Runtime lädt aktive Rules deterministisch mit
+FOR SHARE innerhalb der vom Messaging-Processor vorgegebenen Transaktion. Die History wird
+über executed_at_utc DESC und id DESC keyset-paginiert.
+
 ## Datenzugriff
 
 PostgreSQL ist die primäre relationale Datenbank. Npgsql stellt über eine gemeinsam verwaltete `NpgsqlDataSource` die asynchrone Connection-Erzeugung bereit. `PostgreSqlConnectionFactory` öffnet konfigurierte Connections; Connection Strings werden nicht im Repository hinterlegt.
@@ -149,8 +158,8 @@ vollständiger Rollback bei unzureichendem Saldo.
 `FlurNetz.Modules.Notifications.IntegrationTests` prüft Migration, Idempotenz, History und
 Checksum, Tabellen-/Constraint-Grenzen, Snapshot-Roundtrip, Identity-Isolation, newest-first-
 Keyset-Pagination, Unread-Lifecycle sowie transaction-aware Commit und Rollback gegen echtes
-PostgreSQL. `FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, alle neun
-registrierten Identity-, Economy-, Inventory-, Shop-, Notifications- und Messaging-Migrationen, die read-only
+PostgreSQL. `FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, alle zehn
+registrierten Identity-, Economy-, Inventory-, Shop-, Notifications-, Automation- und Messaging-Migrationen, die read-only
 Offer-Storefront, vollständige DTO-Abbildung, den HTTP-Purchase mit Snapshot, Location,
 Idempotenz, Fehler-Rollback und Producer-only-Outbox sowie den Purchase-Lookup und die
 identity-isolierte newest-first History mit mehrseitigem API-Keyset-Cursor. Die Testdaten werden

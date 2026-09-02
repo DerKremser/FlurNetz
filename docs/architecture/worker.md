@@ -14,6 +14,8 @@ Der Worker referenziert ausschließlich:
 - FlurNetz.Modules.Progression für den vorhandenen Consumer, Store und die Progression-Migration;
 - FlurNetz.Modules.Notifications für den persönlichen Inbox-Store, die Migration und den
   `shop.purchase-completed`-Consumer;
+- FlurNetz.Modules.Economy für die transaction-aware Credit-Capability und die Economy-Migration;
+- FlurNetz.Modules.Automation für Rule Engine, Runtime-Store, Migration und Consumer;
 - FlurNetz.Modules.Engagement.Contracts für den bereits bestehenden Event-Vertrag;
 - FlurNetz.Modules.Shop.Contracts für den bekannten `shop.purchase-completed`-Vertrag.
 
@@ -29,6 +31,21 @@ API-Prozess startet dafür keinen Processor und keinen Consumer. Dieser Worker b
 separate Processor-Runtime, die die Nachricht später verarbeitet; der Notifications-Consumer
 ist im Worker registriert.
 
+## Automation-Runtime
+
+Der Worker registriert AddAutomationModule(), AddAutomationConsumers(),
+AddEconomyCreditCapability() und die Notifications-Create-Capability. Damit entsteht die
+Consumer-Matrix:
+
+- engagement.message-recorded → progression.message-engagement-xp
+- engagement.message-recorded → automation.engagement-message-recorded
+- shop.purchase-completed → notifications.shop-purchase
+- shop.purchase-completed → automation.shop-purchase-completed
+
+Alle Kanten laufen über den unveränderten OutboxProcessor und besitzen getrennte Inbox-
+Identitäten. Die Automation-Engine verwendet keine fremden Tabellen und startet weder einen
+Scheduler noch einen zweiten BackgroundService.
+
 ## PostgreSQL und Startup
 
 Die PostgreSQL-Verbindung wird ausschließlich aus ConnectionStrings:FlurNetz gelesen. Fehlt
@@ -38,12 +55,14 @@ User Secrets, Umgebungsvariablen oder eine andere normale .NET-Konfigurationsque
 bereitgestellt und nicht in Repository-Dateien versioniert.
 
 Vor dem Start des Processing-Loops führt der Worker den bestehenden MigrationRunner aus.
-Registriert werden genau die Migrationsquellen der Messaging Foundation, des Progression- und
-des Notifications-Moduls:
+Registriert werden genau die Migrationsquellen der Messaging Foundation, des Progression-,
+Economy-, Notifications- und Automation-Moduls:
 
 - Messaging:1:CreateOutboxAndInbox;
 - Progression:1:CreateCommunityProgressions;
-- Notifications:1:CreateCommunityNotifications.
+- Economy:1:CreateCommunityEconomies;
+- Notifications:1:CreateCommunityNotifications;
+- Automation:1:CreateAutomationRulesAndExecutions.
 
 EngagementMigrationSource wird bewusst nicht registriert. Der Worker benötigt
 engagement_activities für das Consuming nicht. Ebenso werden `Shop:1:CreateShopOffers` und

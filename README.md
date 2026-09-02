@@ -7,7 +7,23 @@ Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich 
 werden; die persönliche Notifications-Inbox V1 ist über HTTP lesbar und wird im Worker aus
 `shop.purchase-completed` v1 befüllt. Eine Engagement-HTTP-Schnittstelle, eine Economy-API,
 Rewards-Runtime-Trigger, Titles-API, Achievement-Runtime-Trigger, ein Shop-Admin-Frontend und
-externe Delivery-Integrationen sind noch nicht implementiert.
+externe Delivery-Integrationen sind noch nicht implementiert; Automation besitzt bewusst keine
+eigene öffentliche Runtime-API, sondern nur die interne Management-Grenze.
+
+## Automation V1
+
+Automation ist als persistierte, betreiberkonfigurierbare Rule Engine umgesetzt. Die Engine
+verarbeitet ausschließlich engagement.message-recorded v1 und shop.purchase-completed v1
+über die expliziten Consumer automation.engagement-message-recorded und
+automation.shop-purchase-completed. Rules werden über die interne Management-Grenze
+/api/admin/automation/rules verwaltet, starten deaktiviert und besitzen einen terminalen
+Archivzustand.
+
+V1 unterstützt fünf strikt validierte AND-Conditions, economy.credit und
+notification.create mit stabiler Action-Reihenfolge. Execution-Reservation,
+AutomationExecution-History und die Economy-/Notification-Writes teilen die vorhandene
+Messaging-Transaktion. Der Worker führt die Rules aus; die API bleibt Management-Host.
+Details stehen in docs/architecture/automation.md.
 
 ## Technische Basis
 
@@ -299,7 +315,7 @@ Der Shop-Purchase koordiniert Request-, Guard- und Purchase-Writes mit Identity-
 Economy-Debit, Inventory-Grant und Outbox in einer zweiten konkreten gemeinsamen
 PostgreSQL-Transaktion. Die read-only Kaufhistorie nutzt dagegen gezielte Einzel-Reads gegen
 `shop_purchases` ohne zusätzliche Transaktion, Locks, Identity-Existenzprüfung oder neue
-Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; der API-Host bindet für den Shop-Purchase nur Economy-Debit- und Inventory-Grant-Capabilities ein, nicht die vollständigen fachlichen HTTP-Module. Rewards, Titles und Achievements sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression und Economy sind weiterhin nicht als HTTP-Endpunkte registriert, Inventory besitzt keinen eigenen HTTP-Endpunkt. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
+Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; der API-Host bindet für den Shop-Purchase nur Economy-Debit- und Inventory-Grant-Capabilities ein, nicht die vollständigen fachlichen HTTP-Module. Der Worker bindet für Automation zusätzlich Economy-Credit und Notification-Create-Capabilities ein. Rewards, Titles und Achievements sind noch nicht hostverdrahtet. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression, Economy und Automation sind weiterhin nicht als öffentliche Fach-HTTP-Endpunkte registriert, Inventory besitzt keinen eigenen HTTP-Endpunkt. Externe Plattformintegrationen sind nicht implementiert. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md).
 
 ## Fachmodule
 
@@ -334,7 +350,7 @@ vollständigen V1-Scope-Entscheidungen und der Abschlussaudit stehen in
 
 ## Lokale API-Ausführung
 
-Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die neun Identity-, Economy-, Inventory-, Shop-, Notifications- und Messaging-Migrationen beim Start aus, darunter `Shop:4:AddShopOfferArchiveState` und `Notifications:1:CreateCommunityNotifications`. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
+Voraussetzung sind das in `global.json` festgelegte stabile .NET-10-SDK und eine erreichbare PostgreSQL-Datenbank. Der API-Host führt die technische Migration-History sowie die zehn Identity-, Economy-, Inventory-, Shop-, Notifications-, Automation- und Messaging-Migrationen beim Start aus, darunter `Shop:4:AddShopOfferArchiveState`, `Notifications:1:CreateCommunityNotifications` und `Automation:1:CreateAutomationRulesAndExecutions`. Für lokale Zugangsdaten werden User Secrets oder Umgebungsvariablen verwendet; keine Passwörter gehören ins Repository.
 
 ```text
 dotnet user-secrets set "ConnectionStrings:FlurNetz" "Host=localhost;Port=5432;Database=<datenbank>;Username=<benutzer>;Password=<passwort>" --project src/FlurNetz.Api
@@ -361,14 +377,16 @@ Der Entwicklungsstand enthält noch kein Authentifizierungssystem und keine Twit
 
 Der unabhängige Worker-Host verwendet dieselbe Konfigurationskonvention
 ConnectionStrings:FlurNetz und benötigt eine erreichbare PostgreSQL-Datenbank. Beim Start führt
-er ausschließlich die Messaging-, Progression- und Notifications-Migrationen aus, validiert die explizite
+er ausschließlich die Messaging-, Progression-, Economy-, Notifications- und Automation-Migrationen aus, validiert die explizite
 Registry-/Consumer-Komposition und verarbeitet die Outbox danach kontinuierlich. Die Registry
 enthält zusätzlich `shop.purchase-completed` v1 aus `FlurNetz.Modules.Shop.Contracts`; die
 Shop-Implementierung und Shop-Migrationen werden nicht referenziert beziehungsweise ausgeführt.
-engagement_activities wird vom Worker nicht angelegt; der Worker referenziert nur den
-Engagement- und den Shop-Contract sowie die Notifications-Implementierung. Der Notifications-
-Consumer erzeugt für erfolgreiche Shop-Purchases eine persönliche Notification atomar mit dem
-Inbox-Eintrag; bereits verarbeitete Nachrichten werden nicht nachträglich backgefüllt.
+engagement_activities wird vom Worker nicht angelegt; der Worker referenziert nur die
+benötigten Event-Contracts sowie Progression, Economy, Notifications und Automation. Der
+Notifications-Consumer erzeugt für erfolgreiche Shop-Purchases eine persönliche Notification
+atomar mit dem Inbox-Eintrag; Automation reserviert seine Execution und schreibt Credit- bzw.
+Notification-Actions in derselben Transaktion. Bereits verarbeitete Nachrichten werden nicht
+nachträglich backgefüllt.
 
 Start:
 

@@ -15,6 +15,8 @@ public sealed class WorkerArchitectureTests
         "FlurNetz.Persistence",
         "FlurNetz.Modules.Progression",
         "FlurNetz.Modules.Notifications",
+        "FlurNetz.Modules.Automation",
+        "FlurNetz.Modules.Economy",
         "FlurNetz.Modules.Engagement.Contracts",
         "FlurNetz.Modules.Shop.Contracts"
     ];
@@ -24,13 +26,11 @@ public sealed class WorkerArchitectureTests
         "FlurNetz.Api",
         "FlurNetz.Modules.Engagement",
         "FlurNetz.Modules.Identity",
-        "FlurNetz.Modules.Economy",
         "FlurNetz.Modules.Rewards",
         "FlurNetz.Modules.Inventory",
         "FlurNetz.Modules.Titles",
         "FlurNetz.Modules.Achievements",
         "FlurNetz.Modules.Shop",
-        "FlurNetz.Modules.Automation",
         "FlurNetz.Modules.Overlay",
         "FlurNetz.Modules.Integrations",
         "FlurNetz.Modules.Administration"

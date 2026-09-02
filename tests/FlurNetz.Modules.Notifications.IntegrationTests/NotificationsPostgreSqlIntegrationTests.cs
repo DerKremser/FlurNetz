@@ -1,7 +1,10 @@
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using FlurNetz.BuildingBlocks.Time;
 using Dapper;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Notifications.Application;
+using FlurNetz.Modules.Notifications.Contracts;
 using FlurNetz.Modules.Notifications.Domain;
 using FlurNetz.Modules.Notifications.Migrations;
 using FlurNetz.Modules.Notifications.Persistence;
@@ -164,6 +167,81 @@ public sealed class NotificationsPostgreSqlIntegrationTests(NotificationsPostgre
 
         Assert.NotNull(await store.GetAsync(committed.Id, TestToken));
         Assert.Null(await store.GetAsync(rolledBack.Id, TestToken));
+    }
+
+    [Fact]
+    public async Task PublicCreateCapabilityReusesDomainValidationAndCallerTransaction()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await using var factory = CreateFactory();
+        await PrepareDatabaseAsync(factory);
+
+        var store = new CommunityNotificationStore(factory);
+        var capability = new CommunityNotificationCreateCapability(
+            new CreateNotification(store, new FixedClock(FirstTime)));
+        var identity = CommunityIdentityId.New();
+
+        await using (var transaction = await PostgreSqlTransaction.BeginAsync(factory, TestToken))
+        {
+            await capability.CreateAsync(
+                identity,
+                "automation.rule-executed",
+                "  Automation ausgeführt  ",
+                "  Snapshot  ",
+                "automation.execution",
+                "execution-1",
+                transaction.Connection,
+                transaction.Transaction,
+                TestToken);
+            await transaction.CommitAsync(TestToken);
+        }
+
+        await using (var transaction = await PostgreSqlTransaction.BeginAsync(factory, TestToken))
+        {
+            await capability.CreateAsync(
+                identity,
+                "automation.rule-executed",
+                "Rollback",
+                null,
+                "automation.execution",
+                "execution-2",
+                transaction.Connection,
+                transaction.Transaction,
+                TestToken);
+            await transaction.RollbackAsync(TestToken);
+        }
+
+        await Assert.ThrowsAsync<ArgumentException>(() => capability.CreateAsync(
+            identity,
+            "automation.rule-executed",
+            " ",
+            null,
+            "automation.execution",
+            "execution-invalid",
+            new NonNullDbConnection(),
+            new NonNullDbTransaction(),
+            TestToken));
+
+        await using var connection = await factory.OpenConnectionAsync(TestToken);
+        var rows = (await connection.QueryAsync<CapabilityNotificationRow>(
+            new CommandDefinition(
+                """
+                SELECT notification_type AS NotificationType,
+                       title AS Title,
+                       message AS Message,
+                       source_type AS SourceType,
+                       source_id AS SourceId
+                FROM community_notifications
+                ORDER BY source_id;
+                """,
+                cancellationToken: TestToken))).ToArray();
+
+        var row = Assert.Single(rows);
+        Assert.Equal("automation.rule-executed", row.NotificationType);
+        Assert.Equal("Automation ausgeführt", row.Title);
+        Assert.Equal("Snapshot", row.Message);
+        Assert.Equal("automation.execution", row.SourceType);
+        Assert.Equal("execution-1", row.SourceId);
     }
 
     [Fact]
@@ -372,6 +450,44 @@ public sealed class NotificationsPostgreSqlIntegrationTests(NotificationsPostgre
             null,
             null,
             FirstTime);
+
+    private sealed class FixedClock(DateTimeOffset utcNow) : IClock
+    {
+        public DateTimeOffset UtcNow { get; } = utcNow;
+    }
+
+    private sealed class CapabilityNotificationRow
+    {
+        public string NotificationType { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string? Message { get; set; }
+        public string? SourceType { get; set; }
+        public string? SourceId { get; set; }
+    }
+
+    private sealed class NonNullDbConnection : DbConnection
+    {
+        [AllowNull]
+        public override string ConnectionString { get; set; } = string.Empty;
+        public override string Database => string.Empty;
+        public override string DataSource => string.Empty;
+        public override string ServerVersion => string.Empty;
+        public override System.Data.ConnectionState State => System.Data.ConnectionState.Open;
+        public override void ChangeDatabase(string databaseName) { }
+        public override void Close() { }
+        public override void Open() { }
+        protected override DbTransaction BeginDbTransaction(System.Data.IsolationLevel isolationLevel) =>
+            throw new NotSupportedException();
+        protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
+    }
+
+    private sealed class NonNullDbTransaction : DbTransaction
+    {
+        protected override DbConnection DbConnection => new NonNullDbConnection();
+        public override System.Data.IsolationLevel IsolationLevel => System.Data.IsolationLevel.ReadCommitted;
+        public override void Commit() { }
+        public override void Rollback() { }
+    }
 
     private void SkipIfDatabaseIsUnavailable() =>
         Assert.SkipUnless(database.IsAvailable, database.SkipReason);

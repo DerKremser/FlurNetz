@@ -74,6 +74,18 @@ internal static class ModuleArchitectureCatalog
                         "FlurNetz.Modules.Identity.Contracts",
                         "FlurNetz.Modules.Shop.Contracts"
                     ],
+                "Automation" =>
+                    [
+                        ContractsAssemblyName,
+                        "FlurNetz.BuildingBlocks",
+                        "FlurNetz.Persistence",
+                        "FlurNetz.Messaging",
+                        "FlurNetz.Modules.Identity.Contracts",
+                        "FlurNetz.Modules.Engagement.Contracts",
+                        "FlurNetz.Modules.Shop.Contracts",
+                        "FlurNetz.Modules.Economy.Contracts",
+                        "FlurNetz.Modules.Notifications.Contracts"
+                    ],
                 _ => [ContractsAssemblyName]
             };
     }

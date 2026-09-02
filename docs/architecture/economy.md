@@ -13,6 +13,14 @@ Die Foundation enthält ausschließlich den nicht-negativen Saldo sowie fachlich
 gültiges Gutschreiben und Abbuchen. XP, Level, Engagement-Aktivitäten, Rewards,
 Items, Shop-Produkte und Transfers gehören nicht zu Economy.
 
+## Runtime-Credit-Capability
+
+AddEconomyCreditCapability() registriert die bestehende transaction-aware Credit-Fähigkeit,
+ihren Store und die Economy-Migration ohne den vollständigen Economy-Use-Case-Satz. Die
+Registrierung verwendet TryAdd für gemeinsame Store-/Migrationsdienste und kann mit
+AddEconomyDebitCapability() oder AddEconomyModule() kombiniert werden. Automation kennt dabei
+ausschließlich IEconomyBalanceCredit und keine Economy-Implementierung.
+
 ## EconomyBalance
 
 `EconomyBalance` ist ein unveränderlicher Value Type auf Basis von `long`. Er
@@ -141,7 +149,8 @@ Es gibt weiterhin kein Economy-eigenes Messaging, keine Inbox/Outbox und keine D
 Integration Events. Ebenso sind keine Transfers, kein Ledger, keine Multi-Currency-Struktur,
 keine Shop-Produktlogik Bestandteil des Economy-Moduls. Die API nutzt den neutralen Debit-
 Contract ausschließlich als Teil der atomaren Shop-Purchase-Transaktion; sie bietet keine
-Economy-HTTP-Endpunkte. Der Worker bleibt unverändert.
+Economy-HTTP-Endpunkte. Der Worker nutzt zusätzlich die transaction-aware Credit-Capability für
+Automation-Ausführungen.
 
 Die fachfremden Referenzen der Economy-Implementierung sind
 `FlurNetz.Modules.Identity.Contracts` und `FlurNetz.Persistence`. Eine Referenz

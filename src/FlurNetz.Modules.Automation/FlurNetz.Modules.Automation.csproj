@@ -8,7 +8,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <ProjectReference Include="..\FlurNetz.Modules.Automation.Contracts\FlurNetz.Modules.Automation.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.BuildingBlocks\FlurNetz.BuildingBlocks.csproj" />
+    <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+    <ProjectReference Include="..\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Engagement.Contracts\FlurNetz.Modules.Engagement.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Economy.Contracts\FlurNetz.Modules.Economy.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Notifications.Contracts\FlurNetz.Modules.Notifications.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

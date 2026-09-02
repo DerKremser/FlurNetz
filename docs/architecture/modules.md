@@ -195,9 +195,28 @@ Keyset-Liste, Unread Count, Mark Read, Mark Unread und Mark All Read ab.
 Der Worker konsumiert `shop.purchase-completed` v1 ausschließlich aus `Shop.Contracts` und
 schreibt die Notification über den transaction-aware Store-Insert gemeinsam mit dem
 Messaging-Inbox-Eintrag. Der API-Host bindet die persönliche Inbox mit eigenen HTTP-DTOs ein,
-führt aber keinen Consumer aus. `Notifications.Contracts` bleibt leer; externe Delivery-
+führt aber keinen Consumer aus. `Notifications.Contracts` veröffentlicht ausschließlich die
+caller-neutrale `ICommunityNotificationCreate`-Capability; externe Delivery-
 Kanäle, Preferences, Templates, Delete/Archive/Retention und historischer Shop-Backfill sind
 nicht Teil von V1. Details stehen in [notifications.md](notifications.md).
+
+## Automation-V1-Endzustand
+
+Automation besitzt eine eigene persistierte Rule Engine für die beiden vorhandenen Events
+engagement.message-recorded und shop.purchase-completed. Das Aggregate AutomationRule erzwingt
+Lifecycle, Textgrenzen, Trigger-/Condition-Kompatibilität, AND-Semantik, stabile Action-
+Positionen und terminale Archivierung. Die vier Automation-eigenen Tabellen gehören der
+Migration Automation:1:CreateAutomationRulesAndExecutions; Cross-Module-Foreign-Keys gibt es
+nicht.
+
+Die beiden expliziten Worker-Consumer automation.engagement-message-recorded und
+automation.shop-purchase-completed laden stabile Rule-Snapshots mit FOR SHARE und reservieren
+AutomationExecutions idempotent. Economy und Notifications werden ausschließlich über ihre
+transaction-aware Contracts in der bestehenden Messaging-Transaktion geschrieben.
+Die Management-API unter /api/admin/automation/rules ist API-owned; der API-Host führt keine
+Consumer aus. Automation.Contracts bleibt leer. Cron, Scheduler, eigene Queues, Replay,
+Backfill, Delete, Run Now und Dry Run gehören nicht zum V1-Scope. Details stehen in
+[automation.md](automation.md).
 
 ## Aktueller Stand des Titles-Moduls
 
@@ -352,7 +371,8 @@ Messaging bleiben verboten. Shop verwendet `Shop.Contracts`, `Identity.Contracts
 `FlurNetz.Persistence`-Assembly, aber keine fremde Modulimplementierung. Notifications verwendet
 zusätzlich `Identity.Contracts`, `Shop.Contracts`, Messaging und `FlurNetz.Persistence`; die
 Notifications-Implementierung bleibt ohne fremde Modulimplementierung und
-`Notifications.Contracts` bleibt leer. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
+`Notifications.Contracts` veröffentlicht ausschließlich die caller-neutrale
+`ICommunityNotificationCreate`-Capability. Titles und Achievements dürfen zusätzlich `Identity.Contracts`
 und die technische Persistence-Assembly verwenden; Achievements verwendet außerdem
 `FlurNetz.BuildingBlocks` für `IClock`. Messaging und alle fachlichen Modulimplementierungen bleiben
 verboten.

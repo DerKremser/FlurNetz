@@ -2,6 +2,24 @@
 
 ## [Unveröffentlicht]
 
+### Automation V1
+
+- Persistierte, betreiberkonfigurierbare Rule Engine mit AutomationRule, Lifecycle,
+  deterministischer Sortierung, AND-Conditions, stabilen Action-Positionen und strengem
+  Rehydrate-Schutz.
+- Die vorhandenen Events engagement.message-recorded v1 und shop.purchase-completed v1
+  werden über die expliziten Consumer automation.engagement-message-recorded und
+  automation.shop-purchase-completed ausgeführt.
+- Automation:1:CreateAutomationRulesAndExecutions legt vier Automation-eigene Tabellen mit
+  Constraints, internen FKs, Reservation und Execution-History an.
+- Economy-Credit und Notification-Create laufen über schmale transaction-aware Contracts in
+  der bestehenden Messaging-Transaktion; Duplicate Delivery und Retry bleiben Inbox-/Outbox-
+  Verantwortung.
+- Management-API, Worker-Komposition, PostgreSQL-Integrationstests, Workflow-/Rollback-Tests,
+  Architekturtests und vollständige V1-Dokumentation ergänzt.
+- Bewusst nicht enthalten: Scheduler/Cron, OR/NOT, Scripts, Templates, Replay/Backfill,
+  Delete, Run Now, Dry Run, eigene Queue oder eigenes Retry-System.
+
 ### Shop-V1-Abschluss
 
 - Der vollständige Shop-Ist-/Gap-Audit bestätigt den bestehenden fachlichen V1-Scope aus

@@ -7,14 +7,23 @@ persönliche In-App-Benachrichtigungen, deren Snapshot und deren Read-/Unread-Le
 Ein Ursprungsvorgang bleibt im Ursprungsmodul: Der Shop erzeugt weiterhin seinen eigenen Kauf
 und das unveränderte `shop.purchase-completed`-Event. Der Shop kennt Notifications nicht.
 
-`FlurNetz.Modules.Notifications.Contracts` bleibt in V1 leer. Andere Fachmodule rufen
-Notifications nicht synchron auf; die erste fachliche Anbindung läuft ausschließlich über den
-expliziten Integration-Event-Consumer im Worker.
+`FlurNetz.Modules.Notifications.Contracts` veröffentlicht in V1 ausschließlich die schmale,
+caller-neutrale `ICommunityNotificationCreate`-Capability. Andere Fachmodule rufen Notifications
+nicht über Domainobjekte oder Stores auf; die fachliche Anbindung läuft über diese Capability
+innerhalb der bestehenden Transaktion sowie über den expliziten Integration-Event-Consumer im Worker.
 
 Die Implementierung referenziert nur `Notifications.Contracts`, `Identity.Contracts`,
 `Shop.Contracts`, `FlurNetz.BuildingBlocks`, `FlurNetz.Persistence` und `FlurNetz.Messaging`.
 Insbesondere gibt es keine Referenz auf `FlurNetz.Modules.Shop` oder `FlurNetz.Modules.Identity`,
 keine API-/Worker-Referenz, kein Cross-Module-SQL und keine Cross-Module-Foreign-Keys.
+
+## Öffentliche Create-Capability
+
+Notifications.Contracts veröffentlicht genau ICommunityNotificationCreate. Der Contract nimmt
+nur caller-neutrale Werte sowie DbConnection und DbTransaction entgegen und veröffentlicht
+weder Domainobjekte noch Store- oder SQL-Typen. Der Adapter CommunityNotificationCreateCapability
+delegiert an den bestehenden CreateNotification-/Store-Kern. Dadurch bleiben Domainvalidierung,
+SourceReference und Caller-Commit/Rollback identisch zum bestehenden Notifications-Consumer.
 
 ## Domainmodell und historische Snapshots
 

@@ -2,6 +2,11 @@
 
 ## Rolle des Hosts
 
+Für Automation V1 ist die API zusätzlich die reine Management-Grenze unter
+/api/admin/automation/rules. Sie registriert AddAutomationModule() und mappt Create, Get, List,
+Replace, Enable, Disable, Archive sowie die Execution-History. Sie registriert keine
+Automation-Consumer, keinen OutboxProcessor und führt keine Automation-Action aus.
+
 `FlurNetz.Api` ist ein eigenständiger ausführbarer FlurNetz-Host und ausschließlich Composition
 Root und HTTP-Adapter. Er konfiguriert den ASP.NET-Core-Host, liest die PostgreSQL-
 Konfiguration, registriert die technische Persistence Foundation, bindet das Identity-Modul,

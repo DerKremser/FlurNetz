@@ -6,6 +6,10 @@ using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Progression;
 using FlurNetz.Modules.Progression.Application;
 using FlurNetz.Modules.Notifications;
+using FlurNetz.Modules.Automation;
+using AutomationEngagementConsumer = FlurNetz.Modules.Automation.Application.EngagementMessageRecordedAutomationConsumer;
+using AutomationShopConsumer = FlurNetz.Modules.Automation.Application.ShopPurchaseCompletedAutomationConsumer;
+using FlurNetz.Modules.Economy;
 using NotificationsShopPurchaseHandler = FlurNetz.Modules.Notifications.Application.ShopPurchaseCompletedIntegrationEventHandler;
 using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Persistence.Configuration;
@@ -100,6 +104,9 @@ public sealed class Program
         services.AddProgressionModule();
         services.AddNotificationsModule();
         services.AddNotificationsConsumer();
+        services.AddEconomyCreditCapability();
+        services.AddAutomationModule();
+        services.AddAutomationConsumers();
         services.AddSingleton<MigrationRunner>(serviceProvider =>
             new MigrationRunner(
                 serviceProvider.GetRequiredService<IPostgreSqlConnectionFactory>(),
@@ -152,9 +159,7 @@ public sealed class Program
 
                 ValidateComposition();
                 logger.LogInformation(
-                    "Worker-Komposition validiert: Registry für Engagement- und Shop-Event, Progression-Consumer, Notifications-Consumer und OutboxProcessor sind bereit; {ShopMessageType} wird durch {NotificationsConsumer} konsumiert.",
-                    ShopPurchaseCompletedIntegrationEvent.MessageType,
-                    NotificationsShopPurchaseHandler.ConsumerName);
+                    "Worker-Komposition validiert: Registry für Engagement- und Shop-Event, Progression-, Notifications- und Automation-Consumer sowie OutboxProcessor sind bereit.");
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -197,22 +202,41 @@ public sealed class Program
                 .GetServices<IIntegrationEventHandlerRegistration>()
                 .ToArray();
             if (!registrations.Any(registration =>
-                    registration.EventType == typeof(MessageEngagementRecordedIntegrationEvent)
-                    && registration.ConsumerName == MessageEngagementRecordedIntegrationEventHandler.ConsumerName))
+                registration.EventType == typeof(MessageEngagementRecordedIntegrationEvent)
+                && registration.ConsumerName == MessageEngagementRecordedIntegrationEventHandler.ConsumerName))
             {
                 throw new InvalidOperationException(
                     $"The Progression consumer registration for {MessageEngagementRecordedIntegrationEvent.MessageType} is missing.");
             }
 
             if (!registrations.Any(registration =>
-                    registration.EventType == typeof(ShopPurchaseCompletedIntegrationEvent)
-                    && registration.ConsumerName == NotificationsShopPurchaseHandler.ConsumerName))
+                registration.EventType == typeof(MessageEngagementRecordedIntegrationEvent)
+                && registration.ConsumerName == AutomationEngagementConsumer.ConsumerName))
+            {
+                throw new InvalidOperationException(
+                    $"The Automation consumer registration for {MessageEngagementRecordedIntegrationEvent.MessageType} is missing.");
+            }
+
+            if (!registrations.Any(registration =>
+                registration.EventType == typeof(ShopPurchaseCompletedIntegrationEvent)
+                && registration.ConsumerName == NotificationsShopPurchaseHandler.ConsumerName))
             {
                 throw new InvalidOperationException(
                     $"The Notifications consumer registration for {ShopPurchaseCompletedIntegrationEvent.MessageType} is missing.");
             }
 
+            if (!registrations.Any(registration =>
+                registration.EventType == typeof(ShopPurchaseCompletedIntegrationEvent)
+                && registration.ConsumerName == AutomationShopConsumer.ConsumerName))
+            {
+                throw new InvalidOperationException(
+                    $"The Automation consumer registration for {ShopPurchaseCompletedIntegrationEvent.MessageType} is missing.");
+            }
+
             _ = scope.ServiceProvider.GetRequiredService<OutboxProcessor>();
+            _ = scope.ServiceProvider.GetRequiredService<FlurNetz.Modules.Economy.Contracts.IEconomyBalanceCredit>();
+            _ = scope.ServiceProvider.GetRequiredService<FlurNetz.Modules.Notifications.Contracts.ICommunityNotificationCreate>();
+            _ = scope.ServiceProvider.GetRequiredService<FlurNetz.Modules.Automation.Application.ExecuteAutomationTrigger>();
         }
     }
 }

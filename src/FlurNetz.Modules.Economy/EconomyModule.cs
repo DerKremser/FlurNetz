@@ -4,6 +4,7 @@ using FlurNetz.Modules.Economy.Migrations;
 using FlurNetz.Modules.Economy.Persistence;
 using FlurNetz.Persistence.Migrations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace FlurNetz.Modules.Economy;
 
@@ -20,7 +21,7 @@ public static class EconomyModule
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddEconomyDebitCapability();
-        services.AddScoped<IEconomyBalanceCredit, EconomyBalanceCredit>();
+        services.AddEconomyCreditCapability();
         services.AddScoped<CreditEconomyBalance>();
         services.AddScoped<DebitEconomyBalance>();
 
@@ -35,9 +36,33 @@ public static class EconomyModule
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddScoped<ICommunityEconomyStore, CommunityEconomyStore>();
-        services.AddScoped<IEconomyBalanceDebit, EconomyBalanceDebit>();
-        services.AddSingleton<IMigrationSource, EconomyMigrationSource>();
+        services.TryAddScoped<ICommunityEconomyStore, CommunityEconomyStore>();
+        services.TryAddScoped<IEconomyBalanceDebit, EconomyBalanceDebit>();
+        if (!services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IMigrationSource)
+            && descriptor.ImplementationType == typeof(EconomyMigrationSource)))
+        {
+            services.AddSingleton<IMigrationSource, EconomyMigrationSource>();
+        }
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registriert ausschließlich die transaction-aware Economy-Credit-Fähigkeit.
+    /// </summary>
+    public static IServiceCollection AddEconomyCreditCapability(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddScoped<ICommunityEconomyStore, CommunityEconomyStore>();
+        services.TryAddScoped<IEconomyBalanceCredit, EconomyBalanceCredit>();
+        if (!services.Any(descriptor =>
+            descriptor.ServiceType == typeof(IMigrationSource)
+            && descriptor.ImplementationType == typeof(EconomyMigrationSource)))
+        {
+            services.AddSingleton<IMigrationSource, EconomyMigrationSource>();
+        }
 
         return services;
     }

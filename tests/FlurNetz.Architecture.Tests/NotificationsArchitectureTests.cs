@@ -3,6 +3,7 @@ using System.Reflection;
 using FlurNetz.Messaging.Integration;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Notifications;
+using FlurNetz.Modules.Notifications.Contracts;
 using FlurNetz.Modules.Notifications.Application;
 using FlurNetz.Modules.Notifications.Domain;
 using FlurNetz.Modules.Notifications.Migrations;
@@ -49,11 +50,14 @@ public sealed class NotificationsArchitectureTests
     }
 
     [Fact]
-    public void ContractsRemainEmptyAndImplementationOwnedTypesStayOutOfThem()
+    public void ContractsExposeExactlyTheNarrowCreateCapability()
     {
-        Assert.Empty(ContractsAssembly.GetExportedTypes());
+        Assert.True(ContractsAssembly.GetExportedTypes().ToHashSet().SetEquals([typeof(ICommunityNotificationCreate)]));
+        Assert.Contains("FlurNetz.Modules.Identity.Contracts",
+            GetReferencedAssemblyNames(ContractsAssembly));
         Assert.DoesNotContain(typeof(CommunityNotification).Assembly.GetExportedTypes(),
-            type => ContractsAssembly.GetExportedTypes().Contains(type));
+            type => type.Namespace?.Contains(".Domain", StringComparison.Ordinal) == true
+                && ContractsAssembly.GetExportedTypes().Contains(type));
     }
 
     [Fact]
@@ -68,6 +72,7 @@ public sealed class NotificationsArchitectureTests
             typeof(NotificationInboxCursor),
             typeof(CommunityNotificationPage),
             typeof(CreateNotification),
+            typeof(CommunityNotificationCreateCapability),
             typeof(GetNotification),
             typeof(ListNotificationsForIdentity),
             typeof(GetUnreadNotificationCount),

@@ -453,7 +453,7 @@ registriert weiterhin keine Katalogmutation.
 Messaging-Registry, Serializer, `IIntegrationEventPublisher`, Connection Factory, API- und
 Worker-Komposition bleiben außerhalb des Shop-Moduls. Der API-Host bindet `AddShopModule()`
 zusammen mit der Identity- sowie den schmalen Economy-/Inventory-Capabilities ein und führt
-dadurch die neun Identity-, Economy-, Inventory-, Shop-, Notifications- und Messaging-Migrationen aus,
+dadurch die zehn Identity-, Economy-, Inventory-, Shop-, Notifications-, Automation- und Messaging-Migrationen aus,
 einschließlich `Shop:4:AddShopOfferArchiveState`. Die internen Katalogmutationen sind registriert
 und werden vom API-Host über
 die getrennte Management-Endpoint-Gruppe auf die bestehenden Use-Cases abgebildet.

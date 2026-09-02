@@ -4,9 +4,11 @@ using FlurNetz.BuildingBlocks.Time;
 using FlurNetz.Messaging.Integration;
 using FlurNetz.Messaging.Persistence;
 using FlurNetz.Messaging.Serialization;
+using FlurNetz.Modules.Automation.Application;
 using FlurNetz.Modules.Engagement.Contracts;
 using FlurNetz.Modules.Progression.Application;
 using FlurNetz.Modules.Shop.Contracts;
+using NotificationsShopPurchaseHandler = FlurNetz.Modules.Notifications.Application.ShopPurchaseCompletedIntegrationEventHandler;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Transactions;
@@ -24,7 +26,7 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
     : IClassFixture<WorkerPostgreSqlFixture>
 {
     [Fact]
-    public async Task StartupRunsMessagingProgressionAndNotificationsMigrationsAndEmptyQueueStaysHealthy()
+    public async Task StartupRunsMessagingProgressionNotificationsAutomationAndEconomyMigrationsAndEmptyQueueStaysHealthy()
     {
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
@@ -62,6 +64,27 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
                 SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name = 'community_notifications';
+                """,
+                timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'automation_rules';
+                """,
+                timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'automation_executions';
+                """,
+                timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'community_economies';
                 """,
                 timeout.Token));
             Assert.Equal(0, await CountAsync(
@@ -196,6 +219,92 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
     }
 
     [Fact]
+    public async Task EngagementMessageAfterStartupRunsAutomationConsumerAndKeepsConsumerMatrix()
+    {
+        SkipIfDatabaseIsUnavailable();
+        await ResetDatabaseAsync();
+
+        var host = CreateHost();
+        try
+        {
+            using var timeout = CreateTimeout();
+            await host.StartAsync(timeout.Token);
+
+            using (var scope = host.Services.CreateScope())
+            {
+                var registrations = scope.ServiceProvider
+                    .GetServices<IIntegrationEventHandlerRegistration>()
+                    .ToArray();
+                Assert.Contains(registrations, registration =>
+                    registration.EventType == typeof(MessageEngagementRecordedIntegrationEvent)
+                    && registration.ConsumerName == MessageEngagementRecordedIntegrationEventHandler.ConsumerName);
+                Assert.Contains(registrations, registration =>
+                    registration.EventType == typeof(MessageEngagementRecordedIntegrationEvent)
+                    && registration.ConsumerName == EngagementMessageRecordedAutomationConsumer.ConsumerName);
+                Assert.Contains(registrations, registration =>
+                    registration.EventType == typeof(ShopPurchaseCompletedIntegrationEvent)
+                    && registration.ConsumerName == NotificationsShopPurchaseHandler.ConsumerName);
+                Assert.Contains(registrations, registration =>
+                    registration.EventType == typeof(ShopPurchaseCompletedIntegrationEvent)
+                    && registration.ConsumerName == ShopPurchaseCompletedAutomationConsumer.ConsumerName);
+            }
+
+            var identityId = Guid.NewGuid();
+            var ruleId = Guid.NewGuid();
+            var now = new DateTimeOffset(2026, 9, 2, 21, 0, 0, TimeSpan.Zero).AddTicks(1230);
+            await using (var factory = CreateFactory())
+            await using (var connection = await factory.OpenConnectionAsync(timeout.Token))
+            {
+                await connection.ExecuteAsync(
+                    """
+                    INSERT INTO automation_rules
+                        (id, display_name, trigger_type, sort_order, is_enabled, is_archived,
+                         created_at_utc, updated_at_utc)
+                    VALUES
+                        (@RuleId, 'Worker-Test', 'engagement.message-recorded', 0, TRUE, FALSE,
+                         @Now, @Now);
+                    INSERT INTO automation_rule_actions
+                        (automation_rule_id, position, action_type, amount)
+                    VALUES
+                        (@RuleId, 0, 'economy.credit', 9);
+                    """,
+                    new { RuleId = ruleId, Now = now });
+            }
+
+            var messageId = await EnqueueMessageAsync(identityId, timeout.Token);
+            await WaitForAutomationBalanceAsync(identityId, 9, timeout.Token);
+
+            Assert.Equal("processed", await ReadOutboxStatusAsync(messageId, timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM automation_executions
+                WHERE automation_rule_id = @RuleId AND trigger_message_id = @MessageId;
+                """,
+                new { RuleId = ruleId, MessageId = messageId },
+                timeout.Token));
+            Assert.Equal(1, await CountAsync(
+                """
+                SELECT COUNT(*)
+                FROM flurnetz_messaging.inbox_messages
+                WHERE consumer_name = @ConsumerName AND message_id = @MessageId;
+                """,
+                new
+                {
+                    ConsumerName = EngagementMessageRecordedAutomationConsumer.ConsumerName,
+                    MessageId = messageId
+                },
+                timeout.Token));
+
+            await StopHostAsync(host, timeout.Token);
+        }
+        finally
+        {
+            await DisposeHostAsync(host);
+        }
+    }
+
+    [Fact]
     public async Task HostStopsWithinTheShutdownTimeout()
     {
         SkipIfDatabaseIsUnavailable();
@@ -264,6 +373,10 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
             """
             DROP SCHEMA IF EXISTS flurnetz_messaging CASCADE;
             DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
+            DROP TABLE IF EXISTS automation_executions CASCADE;
+            DROP TABLE IF EXISTS automation_rule_actions CASCADE;
+            DROP TABLE IF EXISTS automation_rule_conditions CASCADE;
+            DROP TABLE IF EXISTS automation_rules CASCADE;
             DROP TABLE IF EXISTS community_notifications CASCADE;
             DROP TABLE IF EXISTS shop_purchase_requests CASCADE;
             DROP TABLE IF EXISTS shop_purchase_guards CASCADE;
@@ -364,6 +477,33 @@ public sealed class WorkerHostIntegrationTests(WorkerPostgreSqlFixture database)
                 """,
                 new { CommunityIdentityId = communityIdentityId },
                 cancellationToken: cancellationToken));
+    }
+
+    private async Task WaitForAutomationBalanceAsync(
+        Guid communityIdentityId,
+        long expectedBalance,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            await using var factory = CreateFactory();
+            await using var connection = await factory.OpenConnectionAsync(cancellationToken);
+            var balance = await connection.QuerySingleOrDefaultAsync<long?>(
+                new CommandDefinition(
+                    """
+                    SELECT balance
+                    FROM community_economies
+                    WHERE community_identity_id = @CommunityIdentityId;
+                    """,
+                    new { CommunityIdentityId = communityIdentityId },
+                    cancellationToken: cancellationToken));
+            if (balance == expectedBalance)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25), cancellationToken);
+        }
     }
 
     private async Task<string> ReadOutboxStatusAsync(Guid messageId, CancellationToken cancellationToken)

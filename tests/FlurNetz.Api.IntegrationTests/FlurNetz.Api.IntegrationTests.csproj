@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlurNetz.Api\FlurNetz.Api.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Automation\FlurNetz.Modules.Automation.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Shop\FlurNetz.Modules.Shop.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Notifications\FlurNetz.Modules.Notifications.csproj" />
