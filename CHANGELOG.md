@@ -15,6 +15,25 @@
   zusammenhängenden Shop-V1-Endzustand. Migrationen `Shop:1` bis `Shop:4`, öffentliche Contracts
   und `shop.purchase-completed` v1 bleiben unverändert.
 
+### Notifications V1
+
+- Persistente persönliche In-App-Notification-Inbox mit notifications-eigener PostgreSQL-
+  Persistenz und Migration `Notifications:1:CreateCommunityNotifications` ergänzt.
+- Stabile Notification-Snapshots mit `NotificationType`, `Title`, `Message` und optionaler
+  `SourceReference` sowie vollständigem Read-/Unread-Lifecycle, `Mark All Read` und Unread Count.
+- Die Inbox ist identity-isoliert und verwendet stabile Keyset-Pagination über
+  `created_at_utc DESC, id DESC`.
+- HTTP-API unter `/api/identities/{communityIdentityId}/notifications` ergänzt.
+- `shop.purchase-completed` v1 ist der erste produktive Notification-Trigger; der stabile
+  Consumer `notifications.shop-purchase` verarbeitet das Event atomar mit dem Messaging-Inbox-
+  Write. Die bestehende Messaging-Inbox schützt vor Duplicate Delivery.
+- Worker-Integration ergänzt; es gibt keine direkte Kopplung an Shop-Implementierung oder
+  Shop-SQL. Unicode- und PostgreSQL-Persistenzinvarianten für alle Notification-Texte sind
+  abgesichert.
+- Vollständige Notifications-, API-, Worker-, Workflow- und Architekturtestabdeckung ergänzt.
+- Bewusst nicht enthalten: historischer Shop-Backfill, externe Delivery-Channels, Provider-/
+  Channel-/Template-Verwaltung, Automation, Overlay, UI, SignalR und EventBus.
+
 ### Hinzugefügt
 
 - Slice 10 ergänzt für `ShopOffer` den terminalen Zustand `IsArchived`. Neue Angebote starten
