@@ -22,9 +22,9 @@
             @Html.AntiForgeryToken()
             <input type="hidden" asp-for="ReturnUrl" />
             <div asp-validation-summary="ModelOnly" class="form-error" role="alert"></div>
-            <label asp-for="LoginName">LoginName</label>
-            <input asp-for="LoginName" autocomplete="username" autofocus />
-            <span asp-validation-for="LoginName" class="field-error"></span>
+            <label asp-for="Email">E-Mail-Adresse</label>
+            <input asp-for="Email" type="email" autocomplete="username" autofocus />
+            <span asp-validation-for="Email" class="field-error"></span>
             <label asp-for="Password">Passwort</label>
             <input asp-for="Password" type="password" autocomplete="current-password" />
             <span asp-validation-for="Password" class="field-error"></span>

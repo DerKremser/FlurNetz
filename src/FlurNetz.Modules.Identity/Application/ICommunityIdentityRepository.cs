@@ -1,5 +1,6 @@
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Identity.Domain;
+using System.Data.Common;
 
 namespace FlurNetz.Modules.Identity.Application;
 
@@ -21,6 +22,12 @@ public interface ICommunityIdentityRepository
     /// <returns>Ein Task, der nach dem Commit der Speicherung abgeschlossen ist.</returns>
     /// <exception cref="ArgumentNullException">Wenn <paramref name="identity"/> fehlt.</exception>
     Task AddAsync(CommunityIdentity identity, CancellationToken cancellationToken = default);
+
+    Task AddAsync(
+        CommunityIdentity identity,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lädt eine Community-Identität über ihre interne Kennung.

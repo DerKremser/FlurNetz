@@ -15,8 +15,9 @@ namespace FlurNetz.Api.Pages.Admin;
 public sealed class LoginModel(IAdminAuthenticationService authenticationService) : PageModel
 {
     [BindProperty]
-    [Required(ErrorMessage = "Der LoginName ist erforderlich.")]
-    public string? LoginName { get; set; }
+    [Required(ErrorMessage = "Die E-Mail-Adresse ist erforderlich.")]
+    [EmailAddress(ErrorMessage = "Die E-Mail-Adresse ist ungültig.")]
+    public string? Email { get; set; }
 
     [BindProperty]
     [Required(ErrorMessage = "Das Passwort ist erforderlich.")]
@@ -45,7 +46,7 @@ public sealed class LoginModel(IAdminAuthenticationService authenticationService
             return Page();
         }
 
-        var result = await authenticationService.AuthenticateAsync(LoginName, Password, cancellationToken).ConfigureAwait(false);
+        var result = await authenticationService.AuthenticateAsync(Email, Password, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded || result.Credential is null)
         {
             ModelState.AddModelError(string.Empty, "Anmeldedaten sind ungültig.");

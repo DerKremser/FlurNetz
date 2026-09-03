@@ -71,7 +71,7 @@
         <div class="panel-heading"><div><div class="eyebrow">Nachvollziehbarkeit</div><h2>Admin History</h2></div></div>
         @if (Model.AuditUnavailable) { <div class="unavailable">Nicht verfügbar · Audit konnte nicht geladen werden.</div> }
         else if (Model.AuditEntries.Count == 0) { <div class="empty-inline">Keine Audit-Aktionen für diese Identity.</div> }
-        else { foreach (var entry in Model.AuditEntries) { <div class="audit-row"><span class="status-dot @(entry.Result == FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded ? "success" : "warning")"></span><div><strong>@entry.Action</strong><small>@entry.ActorLoginNameSnapshot · @entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div><span class="badge">@entry.Result</span></div> } }
+        else { foreach (var entry in Model.AuditEntries) { <div class="audit-row"><span class="status-dot @(entry.Result == FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded ? "success" : "warning")"></span><div><strong>@entry.Action</strong><small>@entry.ActorIdentitySnapshot · @entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div><span class="badge">@entry.Result</span></div> } }
     </article>
 </section>
 @section Scripts { <script src="~/admin/admin.js" asp-append-version="true"></script> }

@@ -222,7 +222,7 @@ public static class AdminAchievementTitleEndpoints
     }
 
     private static AdminAuditEntry Audit(AdminExecutionContext context, string action, string targetId, string reason, Guid requestId, IReadOnlyDictionary<string, string?> summary) =>
-        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorLoginName, action, "CommunityIdentity", targetId, null, AdminRiskLevel.High, reason, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, requestId, null, summary, new Dictionary<string, string?>());
+        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorCommunityIdentityId.Value.ToString("D"), action, "CommunityIdentity", targetId, null, AdminRiskLevel.High, reason, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, requestId, null, summary, new Dictionary<string, string?>());
 
     private static async Task<IResult> MutateDefinitionAsync(
         AchievementDefinitionId id,
@@ -260,7 +260,7 @@ public static class AdminAchievementTitleEndpoints
     }
 
     private static AdminAuditEntry AuditNormal(AdminExecutionContext context, string action, string targetType, string targetId, IReadOnlyDictionary<string, string?> summary) =>
-        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorLoginName, action, targetType, targetId, null, AdminRiskLevel.Medium, null, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, null, null, summary, new Dictionary<string, string?>());
+        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorCommunityIdentityId.Value.ToString("D"), action, targetType, targetId, null, AdminRiskLevel.Medium, null, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, null, null, summary, new Dictionary<string, string?>());
 
     private static bool TryReasonAndRequest(string? rawReason, Guid? rawRequestId, out string reason, out Guid requestId, out string? error)
     {

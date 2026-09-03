@@ -1,25 +1,26 @@
 using System.ComponentModel.DataAnnotations;
 using FlurNetz.Api.Administration;
-using FlurNetz.Modules.Administration.Application;
 using FlurNetz.Modules.Administration.Contracts.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FlurNetz.Api.Pages.Admin;
 
-[Authorize(Policy = "Admin.Administration.Access")]
-public sealed class SetupModel(
-    AdminPasswordChange passwordChange,
-    IAdminExecutionContextAccessor contextAccessor) : PageModel
+[AllowAnonymous]
+[EnableRateLimiting("AdminSetup")]
+[ValidateAntiForgeryToken]
+public sealed class SetupModel(IAdminFirstRunSetup firstRunSetup) : PageModel
 {
     [BindProperty]
-    [Required(ErrorMessage = "Das aktuelle Passwort ist erforderlich.")]
-    public string? CurrentPassword { get; set; }
+    [Required(ErrorMessage = "Die E-Mail-Adresse ist erforderlich.")]
+    [EmailAddress(ErrorMessage = "Die E-Mail-Adresse ist ungültig.")]
+    public string? Email { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "Das neue Passwort ist erforderlich.")]
+    [Required(ErrorMessage = "Das Passwort ist erforderlich.")]
     public string? NewPassword { get; set; }
 
     [BindProperty]
@@ -27,24 +28,36 @@ public sealed class SetupModel(
     [Compare(nameof(NewPassword), ErrorMessage = "Die Passwortbestätigung stimmt nicht überein.")]
     public string? NewPasswordConfirmation { get; set; }
 
-    public bool Success { get; private set; }
+    [BindProperty]
+    [Required(ErrorMessage = "Der Einrichtungsschlüssel ist erforderlich.")]
+    public string? SetupSecret { get; set; }
+
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
+    {
+        ApplyNoStore();
+        return await firstRunSetup.IsAvailableAsync(cancellationToken).ConfigureAwait(false)
+            ? Page()
+            : NotFound();
+    }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
+        ApplyNoStore();
         if (!ModelState.IsValid)
         {
+            ClearSensitiveFields();
             return Page();
-        }
-
-        var context = contextAccessor.Current;
-        if (context is null)
-        {
-            return Challenge(AdminAuthenticationDefaults.Scheme);
         }
 
         try
         {
-            var credential = await passwordChange.ChangeAsync(context, CurrentPassword!, NewPassword!, cancellationToken).ConfigureAwait(false);
+            var credential = await firstRunSetup.CreateFirstAdministratorAsync(
+                    Email,
+                    NewPassword,
+                    NewPasswordConfirmation,
+                    SetupSecret,
+                    cancellationToken)
+                .ConfigureAwait(false);
             await HttpContext.SignInAsync(
                 AdminAuthenticationDefaults.Scheme,
                 AdminPrincipalFactory.Create(credential),
@@ -55,21 +68,50 @@ public sealed class SetupModel(
                     IssuedUtc = DateTimeOffset.UtcNow,
                     ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30)
                 }).ConfigureAwait(false);
-            Success = true;
-            CurrentPassword = null;
-            NewPassword = null;
-            NewPasswordConfirmation = null;
+            return LocalRedirect("/admin");
+        }
+        catch (AdminSetupClosedException)
+        {
+            ClearSensitiveFields();
+            return NotFound();
+        }
+        catch (AdminSetupGateException)
+        {
+            AddGenericSetupError();
+            ClearSensitiveFields();
             return Page();
         }
-        catch (InvalidCredentialException)
+        catch (ArgumentException)
         {
-            ModelState.AddModelError(string.Empty, "Das aktuelle Passwort ist ungültig.");
+            ClearSensitiveFields();
+            AddGenericSetupError();
             return Page();
         }
-        catch (ArgumentException exception)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            ModelState.AddModelError(nameof(NewPassword), exception.Message);
+            ClearSensitiveFields();
+            AddGenericSetupError();
             return Page();
         }
     }
+
+    private void ApplyNoStore()
+    {
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers.Pragma = "no-cache";
+    }
+
+    private void ClearSensitiveFields()
+    {
+        NewPassword = null;
+        NewPasswordConfirmation = null;
+        SetupSecret = null;
+        ModelState.Remove(nameof(NewPassword));
+        ModelState.Remove(nameof(NewPasswordConfirmation));
+        ModelState.Remove(nameof(SetupSecret));
+    }
+
+    private void AddGenericSetupError() => ModelState.AddModelError(
+        string.Empty,
+        "Die Ersteinrichtung konnte nicht abgeschlossen werden.");
 }

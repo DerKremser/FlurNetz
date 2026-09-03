@@ -18,14 +18,14 @@ public sealed class AdminAuthenticationService : IAdminAuthenticationService
         dummyHash = passwordHasher.Hash("flurnetz-admin-dummy-password");
     }
 
-    public async Task<AdminLoginResult> AuthenticateAsync(string? loginName, string? password, CancellationToken cancellationToken = default)
+    public async Task<AdminLoginResult> AuthenticateAsync(string? email, string? password, CancellationToken cancellationToken = default)
     {
         AdminCredential? credential = null;
         string? normalized = null;
         try
         {
-            normalized = AdminLoginName.Normalize(loginName);
-            credential = await credentialStore.GetByLoginNameAsync(normalized, cancellationToken).ConfigureAwait(false);
+            normalized = AdminEmail.Normalize(email);
+            credential = await credentialStore.GetByEmailAsync(normalized, cancellationToken).ConfigureAwait(false);
         }
         catch (ArgumentException)
         {
@@ -61,7 +61,7 @@ public sealed class AdminAuthenticationService : IAdminAuthenticationService
 
         if (!Guid.TryParse(principal.FindFirstValue(AdminAuthenticationDefaults.CommunityIdentityIdClaim), out var id)
             || !long.TryParse(principal.FindFirstValue(AdminAuthenticationDefaults.CredentialVersionClaim), out var version)
-            || string.IsNullOrWhiteSpace(principal.FindFirstValue(AdminAuthenticationDefaults.LoginNameClaim)))
+            || string.IsNullOrWhiteSpace(principal.FindFirstValue(AdminAuthenticationDefaults.EmailClaim)))
         {
             return false;
         }
@@ -73,8 +73,8 @@ public sealed class AdminAuthenticationService : IAdminAuthenticationService
         return credential is not null
             && credential.CredentialVersion == version
             && string.Equals(
-                credential.LoginName,
-                principal.FindFirstValue(AdminAuthenticationDefaults.LoginNameClaim),
+                credential.Email,
+                principal.FindFirstValue(AdminAuthenticationDefaults.EmailClaim),
                 StringComparison.Ordinal)
             && await credentialStore.HasRoleAssignmentAsync(
                 credential.CommunityIdentityId,

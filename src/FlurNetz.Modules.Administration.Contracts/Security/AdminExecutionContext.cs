@@ -5,7 +5,7 @@ namespace FlurNetz.Modules.Administration.Contracts.Security;
 /// <summary>ASP.NET-unabhängiger Kontext eines authentifizierten Adminvorgangs.</summary>
 public sealed record AdminExecutionContext(
     CommunityIdentityId ActorCommunityIdentityId,
-    string ActorLoginName,
+    string ActorEmail,
     string CorrelationId,
     IReadOnlySet<string> Permissions,
     Guid? RequestId = null);

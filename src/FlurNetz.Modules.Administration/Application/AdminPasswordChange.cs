@@ -42,7 +42,7 @@ public sealed class AdminPasswordChange
             var audit = new AdminAuditEntry(
                 Guid.NewGuid(),
                 context.ActorCommunityIdentityId,
-                context.ActorLoginName,
+                context.ActorCommunityIdentityId.Value.ToString("D"),
                 AdminAuditActions.CredentialChanged,
                 "CommunityIdentity",
                 context.ActorCommunityIdentityId.Value.ToString("D"),

@@ -20,7 +20,7 @@ public static class AdministrationModule
         services.AddScoped<IAdminOperationStore, AdminOperationStore>();
         services.AddScoped<IAdminPasswordHasher, AdminPasswordHasher>();
         services.AddScoped<IAdminAuthenticationService, AdminAuthenticationService>();
-        services.AddScoped<IAdminBootstrapper, AdminBootstrapper>();
+        services.AddScoped<IAdminFirstRunSetup, AdminFirstRunSetup>();
         services.AddScoped<IAdminCredentialRecovery, AdminCredentialRecovery>();
         services.AddScoped<AdminPasswordChange>();
         services.AddScoped<AdminMutationCoordinator>();

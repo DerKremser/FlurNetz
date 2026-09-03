@@ -58,6 +58,9 @@ public sealed class Program
                 ? CookieSecurePolicy.Always
                 : CookieSecurePolicy.SameAsRequest;
         });
+        builder.Services.AddSingleton<AdminSetupGateConfiguration>(serviceProvider =>
+            new AdminSetupGateConfiguration(
+                serviceProvider.GetRequiredService<IConfiguration>()["Administration:Setup:Secret"]));
         builder.Services.AddAdminAuthentication(builder.Environment);
         builder.Services.AddRateLimiter(options =>
         {
@@ -68,6 +71,16 @@ public sealed class Program
                     _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }));
+            options.AddPolicy("AdminSetup", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    $"setup:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0,
                         AutoReplenishment = true
@@ -148,15 +161,6 @@ public sealed class Program
             var migrationRunner = scope.ServiceProvider.GetRequiredService<MigrationRunner>();
             await migrationRunner.RunAsync(app.Lifetime.ApplicationStopping);
 
-            var bootstrap = AdminBootstrapConfigurationReader.TryRead(
-                app.Configuration,
-                out var bootstrapConfiguration);
-            if (bootstrap)
-            {
-                await scope.ServiceProvider
-                    .GetRequiredService<IAdminBootstrapper>()
-                    .BootstrapAsync(bootstrapConfiguration!, app.Lifetime.ApplicationStopping);
-            }
         }
         catch (Exception exception)
         {

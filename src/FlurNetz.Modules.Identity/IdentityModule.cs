@@ -33,6 +33,8 @@ public static class IdentityModule
             provider.GetRequiredService<CommunityIdentityRepository>());
         services.AddScoped<ICommunityIdentityExistence, CommunityIdentityExistence>();
         services.AddScoped<CreateCommunityIdentity>();
+        services.AddScoped<ICommunityIdentityCreator>(provider =>
+            provider.GetRequiredService<CreateCommunityIdentity>());
         services.AddSingleton<IMigrationSource, IdentityMigrationSource>();
 
         return services;

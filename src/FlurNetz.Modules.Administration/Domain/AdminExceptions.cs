@@ -2,8 +2,6 @@ using FlurNetz.Modules.Identity.Contracts;
 
 namespace FlurNetz.Modules.Administration.Domain;
 
-public sealed class AdminBootstrapConflictException(string message) : InvalidOperationException(message);
-
 public class AdminOperationConflictException(Guid requestId)
     : InvalidOperationException($"Die RequestId '{requestId}' wurde bereits mit anderen Requestdaten verwendet.");
 

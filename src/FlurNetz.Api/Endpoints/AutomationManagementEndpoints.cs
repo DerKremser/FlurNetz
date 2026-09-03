@@ -192,7 +192,7 @@ public static class AutomationManagementEndpoints
     }
 
     private static AdminAuditEntry NormalAudit(AdminExecutionContext context, string action, string targetId, IReadOnlyDictionary<string, string?> summary) =>
-        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorLoginName, action, "AutomationRule", targetId, null, AdminRiskLevel.Medium, null, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, null, null, summary, new Dictionary<string, string?>());
+        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorCommunityIdentityId.Value.ToString("D"), action, "AutomationRule", targetId, null, AdminRiskLevel.Medium, null, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, null, null, summary, new Dictionary<string, string?>());
 
     private static bool TryHighRiskRequest(AdminActionRequest? request, out (Guid RequestId, string Reason) value, out string? error)
     {
@@ -217,7 +217,7 @@ public static class AutomationManagementEndpoints
         new(
             Guid.NewGuid(),
             context.ActorCommunityIdentityId,
-            context.ActorLoginName,
+            context.ActorCommunityIdentityId.Value.ToString("D"),
             action,
             "AutomationRule",
             targetId,

@@ -5,7 +5,7 @@ namespace FlurNetz.Modules.Administration.Contracts.Security;
 /// <summary>Minimale serverseitige Credentialdaten für Authentifizierung und Sessionprüfung.</summary>
 public sealed record AdminCredentialSnapshot(
     CommunityIdentityId CommunityIdentityId,
-    string LoginName,
+    string Email,
     long CredentialVersion,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset PasswordChangedAtUtc);

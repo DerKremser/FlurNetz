@@ -21,7 +21,7 @@ public enum AdminAuditOutcome
 public sealed record AdminAuditEntry(
     Guid Id,
     CommunityIdentityId ActorCommunityIdentityId,
-    string ActorLoginNameSnapshot,
+    string ActorIdentitySnapshot,
     string Action,
     string TargetType,
     string TargetId,

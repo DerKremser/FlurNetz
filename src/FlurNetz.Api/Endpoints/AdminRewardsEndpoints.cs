@@ -129,7 +129,7 @@ public static class AdminRewardsEndpoints
                     () => new AdminAuditEntry(
                         Guid.NewGuid(),
                         context.ActorCommunityIdentityId,
-                        context.ActorLoginName,
+                        context.ActorCommunityIdentityId.Value.ToString("D"),
                         AdminAuditActions.RewardPackageGranted,
                         "CommunityIdentity",
                         identity.Value.ToString("D"),
@@ -160,7 +160,7 @@ public static class AdminRewardsEndpoints
     private static AdminRewardGrantResponse ToResponse(RewardGrant grant) => new(grant.Id.Value, grant.CommunityIdentityId.Value, grant.RewardDefinitionId.Value, grant.Source.SourceType, grant.Source.SourceId);
 
     private static AdminAuditEntry NormalAudit(AdminExecutionContext context, string action, string targetType, string targetId, IReadOnlyDictionary<string, string?> summary) =>
-        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorLoginName, action, targetType, targetId, null, AdminRiskLevel.Medium, null, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, null, null, summary, new Dictionary<string, string?>());
+        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorCommunityIdentityId.Value.ToString("D"), action, targetType, targetId, null, AdminRiskLevel.Medium, null, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, null, null, summary, new Dictionary<string, string?>());
 
     private static bool TryReasonAndRequest(string? rawReason, Guid? rawRequestId, out string reason, out Guid requestId, out string? error)
     {

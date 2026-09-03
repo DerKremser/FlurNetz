@@ -5,7 +5,7 @@ namespace FlurNetz.Modules.Administration.Contracts.Security;
 public interface IAdminAuthenticationService
 {
     Task<AdminLoginResult> AuthenticateAsync(
-        string? loginName,
+        string? email,
         string? password,
         CancellationToken cancellationToken = default);
 

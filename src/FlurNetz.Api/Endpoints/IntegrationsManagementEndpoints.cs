@@ -292,7 +292,7 @@ public static class IntegrationsManagementEndpoints
         new(
             Guid.NewGuid(),
             context.ActorCommunityIdentityId,
-            context.ActorLoginName,
+            context.ActorCommunityIdentityId.Value.ToString("D"),
             action,
             "ExternalIdentityMapping",
             targetId,

@@ -9,18 +9,29 @@ public sealed class AdministrationMigrationSource : IMigrationSource
         CREATE TABLE IF NOT EXISTS administration_credentials
         (
             community_identity_id uuid PRIMARY KEY,
-            login_name varchar(64) NOT NULL,
-            normalized_login_name varchar(64) NOT NULL,
+            email varchar(320) NOT NULL,
+            normalized_email varchar(320) NOT NULL,
             password_hash text NOT NULL,
             credential_version bigint NOT NULL,
             created_at_utc timestamptz(6) NOT NULL,
             password_changed_at_utc timestamptz(6) NOT NULL,
-            CONSTRAINT ux_administration_credentials_normalized_login UNIQUE (normalized_login_name),
+            CONSTRAINT ux_administration_credentials_normalized_email UNIQUE (normalized_email),
             CONSTRAINT ck_administration_credentials_version_positive CHECK (credential_version > 0),
-            CONSTRAINT ck_administration_credentials_login_length CHECK (char_length(login_name) BETWEEN 3 AND 64),
-            CONSTRAINT ck_administration_credentials_login_trimmed CHECK (login_name = btrim(login_name)),
+            CONSTRAINT ck_administration_credentials_email_length CHECK (char_length(email) BETWEEN 3 AND 320),
+            CONSTRAINT ck_administration_credentials_email_trimmed CHECK (email = btrim(email)),
             CONSTRAINT ck_administration_credentials_hash_not_blank CHECK (btrim(password_hash) <> '')
         );
+
+        CREATE TABLE IF NOT EXISTS administration_setup_state
+        (
+            id smallint PRIMARY KEY,
+            completed_at_utc timestamptz(6) NULL,
+            CONSTRAINT ck_administration_setup_state_singleton CHECK (id = 1)
+        );
+
+        INSERT INTO administration_setup_state (id)
+        VALUES (1)
+        ON CONFLICT (id) DO NOTHING;
 
         CREATE TABLE IF NOT EXISTS administration_role_assignments
         (
@@ -35,7 +46,7 @@ public sealed class AdministrationMigrationSource : IMigrationSource
         (
             id uuid PRIMARY KEY,
             actor_community_identity_id uuid NOT NULL,
-            actor_login_name_snapshot varchar(64) NOT NULL,
+            actor_identity_snapshot varchar(100) NOT NULL,
             action varchar(150) NOT NULL,
             target_type varchar(150) NOT NULL,
             target_id varchar(200) NOT NULL,

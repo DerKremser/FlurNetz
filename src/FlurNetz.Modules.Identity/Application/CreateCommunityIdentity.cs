@@ -1,5 +1,6 @@
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Identity.Domain;
+using System.Data.Common;
 
 namespace FlurNetz.Modules.Identity.Application;
 
@@ -10,7 +11,7 @@ namespace FlurNetz.Modules.Identity.Application;
 /// Der Use Case vergibt ausschließlich die interne FlurNetz-Kennung. Externe Plattform-IDs
 /// gehören in eine spätere Auflösungsgrenze und dürfen die zentrale Identität nicht bestimmen.
 /// </remarks>
-public sealed class CreateCommunityIdentity
+public sealed class CreateCommunityIdentity : ICommunityIdentityCreator
 {
     private readonly ICommunityIdentityRepository repository;
 
@@ -37,6 +38,24 @@ public sealed class CreateCommunityIdentity
 
         await repository.AddAsync(identity, cancellationToken).ConfigureAwait(false);
 
+        return id;
+    }
+
+    public async Task<CommunityIdentityId> CreateAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        var id = CommunityIdentityId.New();
+        await repository.AddAsync(
+                CommunityIdentity.Create(id),
+                connection,
+                transaction,
+                cancellationToken)
+            .ConfigureAwait(false);
         return id;
     }
 }

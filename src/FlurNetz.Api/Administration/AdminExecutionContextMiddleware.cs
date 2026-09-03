@@ -11,12 +11,12 @@ public sealed class AdminExecutionContextMiddleware(RequestDelegate next)
         if (httpContext.User.Identity?.IsAuthenticated == true
             && Guid.TryParse(httpContext.User.FindFirst(AdminAuthenticationDefaults.CommunityIdentityIdClaim)?.Value, out var id)
             && long.TryParse(httpContext.User.FindFirst(AdminAuthenticationDefaults.CredentialVersionClaim)?.Value, out _)
-            && httpContext.User.FindFirst(AdminAuthenticationDefaults.LoginNameClaim)?.Value is { } loginName)
+            && httpContext.User.FindFirst(AdminAuthenticationDefaults.EmailClaim)?.Value is { } email)
         {
             var correlationId = Activity.Current?.TraceId.ToString() ?? httpContext.TraceIdentifier;
             contextAccessor.Current = new AdminExecutionContext(
                 CommunityIdentityId.Create(id),
-                loginName,
+                email,
                 correlationId,
                 PermissionCatalog.All);
         }

@@ -227,7 +227,7 @@ public static class AdminProgressionInventoryEndpoints
                     () => new AdminAuditEntry(
                         Guid.NewGuid(),
                         context.ActorCommunityIdentityId,
-                        context.ActorLoginName,
+                        context.ActorCommunityIdentityId.Value.ToString("D"),
                         action,
                         "CommunityIdentity",
                         identity.Value.ToString("D"),
@@ -287,7 +287,7 @@ public static class AdminProgressionInventoryEndpoints
                     () => new AdminAuditEntry(
                         Guid.NewGuid(),
                         context.ActorCommunityIdentityId,
-                        context.ActorLoginName,
+                        context.ActorCommunityIdentityId.Value.ToString("D"),
                         action,
                         targetType,
                         targetId,

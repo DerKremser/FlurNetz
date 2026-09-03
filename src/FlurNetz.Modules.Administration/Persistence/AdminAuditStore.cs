@@ -12,17 +12,17 @@ public sealed class AdminAuditStore : IAdminAuditStore
 {
     private const string InsertSql = """
         INSERT INTO administration_audit_entries
-            (id, actor_community_identity_id, actor_login_name_snapshot, action, target_type,
+            (id, actor_community_identity_id, actor_identity_snapshot, action, target_type,
              target_id, target_display_snapshot, risk_level, reason, result, occurred_at_utc,
              correlation_id, request_id, failure_code, change_summary, metadata)
         VALUES
-            (@Id, @ActorCommunityIdentityId, @ActorLoginNameSnapshot, @Action, @TargetType,
+            (@Id, @ActorCommunityIdentityId, @ActorIdentitySnapshot, @Action, @TargetType,
              @TargetId, @TargetDisplaySnapshot, @RiskLevel, @Reason, @Result, @OccurredAtUtc,
              @CorrelationId, @RequestId, @FailureCode, CAST(@ChangeSummary AS jsonb), CAST(@Metadata AS jsonb));
         """;
     private const string ListSql = """
         SELECT id AS Id, actor_community_identity_id AS ActorCommunityIdentityId,
-               actor_login_name_snapshot AS ActorLoginNameSnapshot, action AS Action,
+               actor_identity_snapshot AS ActorIdentitySnapshot, action AS Action,
                target_type AS TargetType, target_id AS TargetId,
                target_display_snapshot AS TargetDisplaySnapshot, risk_level AS RiskLevel,
                reason AS Reason, result AS Result, occurred_at_utc AS OccurredAtUtc,
@@ -72,7 +72,7 @@ public sealed class AdminAuditStore : IAdminAuditStore
             {
                 entry.Id,
                 ActorCommunityIdentityId = entry.ActorCommunityIdentityId.Value,
-                entry.ActorLoginNameSnapshot,
+                entry.ActorIdentitySnapshot,
                 entry.Action,
                 entry.TargetType,
                 entry.TargetId,
@@ -125,7 +125,7 @@ public sealed class AdminAuditStore : IAdminAuditStore
     {
         public Guid Id { get; set; }
         public Guid ActorCommunityIdentityId { get; set; }
-        public string ActorLoginNameSnapshot { get; set; } = string.Empty;
+        public string ActorIdentitySnapshot { get; set; } = string.Empty;
         public string Action { get; set; } = string.Empty;
         public string TargetType { get; set; } = string.Empty;
         public string TargetId { get; set; } = string.Empty;
@@ -143,7 +143,7 @@ public sealed class AdminAuditStore : IAdminAuditStore
         public AdminAuditEntry ToDomain() => new(
             Id,
             CommunityIdentityId.Create(ActorCommunityIdentityId),
-            ActorLoginNameSnapshot,
+            ActorIdentitySnapshot,
             Action,
             TargetType,
             TargetId,

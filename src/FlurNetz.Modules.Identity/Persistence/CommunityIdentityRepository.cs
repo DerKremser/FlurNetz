@@ -78,13 +78,26 @@ public sealed class CommunityIdentityRepository : ICommunityIdentityRepository, 
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(transaction);
 
-        await transaction.Connection.ExecuteAsync(
-                new CommandDefinition(
-                    InsertSql,
-                    new { Id = identity.Id.Value },
-                    transaction: transaction.Transaction,
-                    cancellationToken: cancellationToken))
+        await AddAsync(identity, transaction.Connection, transaction.Transaction, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public Task AddAsync(
+        CommunityIdentity identity,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        return connection.ExecuteAsync(
+            new CommandDefinition(
+                InsertSql,
+                new { Id = identity.Id.Value },
+                transaction: transaction,
+                cancellationToken: cancellationToken));
     }
 
     /// <inheritdoc />

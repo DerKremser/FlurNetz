@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Dapper;
 using FlurNetz.Modules.Administration.Application;
+using FlurNetz.Modules.Administration.Contracts.Security;
 using FlurNetz.Modules.Administration.Domain;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Persistence.Connections;
@@ -10,15 +11,15 @@ namespace FlurNetz.Modules.Administration.Persistence;
 
 public sealed class AdminCredentialStore : IAdminCredentialStore
 {
-    private const string SelectByLoginSql = """
-        SELECT community_identity_id AS CommunityIdentityId, login_name AS LoginName,
+    private const string SelectByEmailSql = """
+        SELECT community_identity_id AS CommunityIdentityId, email AS Email,
                password_hash AS PasswordHash, credential_version AS CredentialVersion,
                created_at_utc AS CreatedAtUtc, password_changed_at_utc AS PasswordChangedAtUtc
         FROM administration_credentials
-        WHERE normalized_login_name = @NormalizedLoginName;
+        WHERE normalized_email = @NormalizedEmail;
         """;
     private const string SelectByIdentitySql = """
-        SELECT community_identity_id AS CommunityIdentityId, login_name AS LoginName,
+        SELECT community_identity_id AS CommunityIdentityId, email AS Email,
                password_hash AS PasswordHash, credential_version AS CredentialVersion,
                created_at_utc AS CreatedAtUtc, password_changed_at_utc AS PasswordChangedAtUtc
         FROM administration_credentials
@@ -31,10 +32,10 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
         """;
     private const string InsertCredentialSql = """
         INSERT INTO administration_credentials
-            (community_identity_id, login_name, normalized_login_name, password_hash,
+            (community_identity_id, email, normalized_email, password_hash,
              credential_version, created_at_utc, password_changed_at_utc)
         VALUES
-            (@CommunityIdentityId, @LoginName, @NormalizedLoginName, @PasswordHash,
+            (@CommunityIdentityId, @Email, @NormalizedEmail, @PasswordHash,
              @CredentialVersion, @CreatedAtUtc, @PasswordChangedAtUtc);
         """;
     private const string InsertRoleSql = """
@@ -57,24 +58,24 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
         this.connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
     }
 
-    public async Task<AdminCredential?> GetByLoginNameAsync(string normalizedLoginName, CancellationToken cancellationToken = default)
+    public async Task<AdminCredential?> GetByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default)
     {
-        var normalized = AdminLoginName.Normalize(normalizedLoginName);
+        var normalized = AdminEmail.Normalize(normalizedEmail);
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         var row = await connection.QuerySingleOrDefaultAsync<CredentialRow>(
-                new CommandDefinition(SelectByLoginSql, new { NormalizedLoginName = normalized }, cancellationToken: cancellationToken))
+                new CommandDefinition(SelectByEmailSql, new { NormalizedEmail = normalized }, cancellationToken: cancellationToken))
             .ConfigureAwait(false);
         return row is null ? null : row.ToDomain();
     }
 
-    public async Task<AdminCredential?> GetByLoginNameAsync(string normalizedLoginName, DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default)
+    public async Task<AdminCredential?> GetByEmailAsync(string normalizedEmail, DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(transaction);
-        var normalized = AdminLoginName.Normalize(normalizedLoginName);
+        var normalized = AdminEmail.Normalize(normalizedEmail);
         var row = await connection.QuerySingleOrDefaultAsync<CredentialRow>(new CommandDefinition(
-                SelectByLoginSql,
-                new { NormalizedLoginName = normalized },
+                SelectByEmailSql,
+                new { NormalizedEmail = normalized },
                 transaction: transaction,
                 cancellationToken: cancellationToken)).ConfigureAwait(false);
         return row is null ? null : row.ToDomain();
@@ -135,8 +136,8 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
             new
             {
                 CommunityIdentityId = credential.CommunityIdentityId.Value,
-                credential.LoginName,
-                NormalizedLoginName = credential.NormalizedLoginName,
+                credential.Email,
+                NormalizedEmail = credential.NormalizedEmail,
                 PasswordHash = credential.PasswordHash,
                 credential.CredentialVersion,
                 credential.CreatedAtUtc,
@@ -153,6 +154,45 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
         return connection.ExecuteAsync(new CommandDefinition(
             InsertRoleSql,
             new { CommunityIdentityId = CommunityIdentityId.Create(identityId.Value).Value, RoleName = roleName, CreatedAtUtc = DateTimeOffset.UtcNow },
+            transaction: transaction,
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<bool> IsFirstRunAvailableAsync(DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        var setupCompleted = await connection.QuerySingleAsync<bool>(new CommandDefinition(
+            "SELECT completed_at_utc IS NOT NULL FROM administration_setup_state WHERE id = 1 FOR UPDATE;",
+            transaction: transaction,
+            cancellationToken: cancellationToken)).ConfigureAwait(false);
+        if (setupCompleted)
+        {
+            return false;
+        }
+
+        return !await connection.QuerySingleAsync<bool>(new CommandDefinition(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM administration_credentials credential
+                INNER JOIN administration_role_assignments role_assignment
+                    ON role_assignment.community_identity_id = credential.community_identity_id
+                WHERE role_assignment.role_name = @RoleName);
+            """,
+            new { RoleName = AdminRole.Administrator },
+            transaction: transaction,
+            cancellationToken: cancellationToken)).ConfigureAwait(false);
+    }
+
+    public Task CompleteFirstRunSetupAsync(DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        return connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE administration_setup_state SET completed_at_utc = @CompletedAtUtc WHERE id = 1 AND completed_at_utc IS NULL;",
+            new { CompletedAtUtc = DateTimeOffset.UtcNow },
             transaction: transaction,
             cancellationToken: cancellationToken));
     }
@@ -182,7 +222,7 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
     private sealed class CredentialRow
     {
         public Guid CommunityIdentityId { get; set; }
-        public string LoginName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
         public string PasswordHash { get; set; } = string.Empty;
         public long CredentialVersion { get; set; }
         public DateTimeOffset CreatedAtUtc { get; set; }
@@ -190,7 +230,7 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
 
         public AdminCredential ToDomain() => AdminCredential.Rehydrate(
             FlurNetz.Modules.Identity.Contracts.CommunityIdentityId.Create(CommunityIdentityId),
-            LoginName,
+            Email,
             PasswordHash,
             CredentialVersion,
             CreatedAtUtc,

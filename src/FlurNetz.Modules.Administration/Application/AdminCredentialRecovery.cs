@@ -65,7 +65,7 @@ public sealed class AdminCredentialRecovery : IAdminCredentialRecovery
             await auditStore.AppendAsync(new AdminAuditEntry(
                 Guid.NewGuid(),
                 identityId,
-                credential.LoginName,
+                identityId.Value.ToString("D"),
                 AdminAuditActions.CredentialRecovered,
                 "CommunityIdentity",
                 identityId.Value.ToString("D"),

@@ -8,14 +8,14 @@ public sealed class AdminCredential
 {
     private AdminCredential(
         CommunityIdentityId communityIdentityId,
-        string loginName,
+        string email,
         string passwordHash,
         long credentialVersion,
         DateTimeOffset createdAtUtc,
         DateTimeOffset passwordChangedAtUtc)
     {
         CommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
-        LoginName = AdminLoginName.Canonicalize(loginName);
+        Email = AdminEmail.Canonicalize(email);
         if (string.IsNullOrWhiteSpace(passwordHash))
         {
             throw new ArgumentException("Ein Passwort-Hash ist erforderlich.", nameof(passwordHash));
@@ -38,8 +38,8 @@ public sealed class AdminCredential
     }
 
     public CommunityIdentityId CommunityIdentityId { get; }
-    public string LoginName { get; }
-    public string NormalizedLoginName => AdminLoginName.Normalize(LoginName);
+    public string Email { get; }
+    public string NormalizedEmail => AdminEmail.Normalize(Email);
     internal string PasswordHash { get; private set; }
     public long CredentialVersion { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; }
@@ -47,12 +47,12 @@ public sealed class AdminCredential
 
     public static AdminCredential Create(
         CommunityIdentityId communityIdentityId,
-        string loginName,
+        string email,
         string passwordHash,
         DateTimeOffset nowUtc) =>
         new(
             communityIdentityId,
-            loginName,
+            email,
             passwordHash,
             1,
             EnsureUtc(nowUtc),
@@ -60,14 +60,14 @@ public sealed class AdminCredential
 
     public static AdminCredential Rehydrate(
         CommunityIdentityId communityIdentityId,
-        string loginName,
+        string email,
         string passwordHash,
         long credentialVersion,
         DateTimeOffset createdAtUtc,
         DateTimeOffset passwordChangedAtUtc) =>
         new(
             communityIdentityId,
-            loginName,
+            email,
             passwordHash,
             credentialVersion,
             createdAtUtc,
@@ -86,7 +86,7 @@ public sealed class AdminCredential
     }
 
     public AdminCredentialSnapshot ToSnapshot() =>
-        new(CommunityIdentityId, LoginName, CredentialVersion, CreatedAtUtc, PasswordChangedAtUtc);
+        new(CommunityIdentityId, Email, CredentialVersion, CreatedAtUtc, PasswordChangedAtUtc);
 
     private static DateTimeOffset EnsureUtc(DateTimeOffset value)
     {
@@ -99,24 +99,30 @@ public sealed class AdminCredential
     }
 }
 
-public static class AdminLoginName
+public static class AdminEmail
 {
     public const int MinimumLength = 3;
-    public const int MaximumLength = 64;
+    public const int MaximumLength = 320;
 
     public static string Canonicalize(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new ArgumentException("Der LoginName darf nicht leer sein.", nameof(value));
+            throw new ArgumentException("Die E-Mail-Adresse darf nicht leer sein.", nameof(value));
         }
 
         var canonical = value.Trim();
         if (canonical.Length is < MinimumLength or > MaximumLength)
         {
             throw new ArgumentException(
-                $"Der LoginName muss zwischen {MinimumLength} und {MaximumLength} Zeichen lang sein.",
+                $"Die E-Mail-Adresse muss zwischen {MinimumLength} und {MaximumLength} Zeichen lang sein.",
                 nameof(value));
+        }
+
+        if (canonical.Any(char.IsWhiteSpace)
+            || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(canonical))
+        {
+            throw new ArgumentException("Die E-Mail-Adresse ist ungültig.", nameof(value));
         }
 
         return canonical;

@@ -498,7 +498,7 @@ public static class ShopManagementEndpoints
         new(
             Guid.NewGuid(),
             context.ActorCommunityIdentityId,
-            context.ActorLoginName,
+            context.ActorCommunityIdentityId.Value.ToString("D"),
             action,
             "ShopOffer",
             targetId,
@@ -521,7 +521,7 @@ public static class ShopManagementEndpoints
         new(
             Guid.NewGuid(),
             context.ActorCommunityIdentityId,
-            context.ActorLoginName,
+            context.ActorCommunityIdentityId.Value.ToString("D"),
             action,
             "ShopOffer",
             targetId,

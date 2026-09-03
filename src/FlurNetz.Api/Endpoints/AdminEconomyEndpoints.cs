@@ -75,7 +75,7 @@ public static class AdminEconomyEndpoints
                     if (credit) await creditCapability!.CreditAsync(identityId, amount, connection, transaction, cancellationToken).ConfigureAwait(false);
                     else await debitCapability!.DebitAsync(identityId, amount, connection, transaction, cancellationToken).ConfigureAwait(false);
                 },
-                () => new AdminAuditEntry(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorLoginName, action, "CommunityIdentity", identityId.Value.ToString("D"), null, AdminRiskLevel.High, reason, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, requestId, null, new Dictionary<string, string?> { ["Direction"] = credit ? "Credit" : "Debit", ["Amount"] = amount.ToString(System.Globalization.CultureInfo.InvariantCulture) }, new Dictionary<string, string?>()),
+                () => new AdminAuditEntry(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorCommunityIdentityId.Value.ToString("D"), action, "CommunityIdentity", identityId.Value.ToString("D"), null, AdminRiskLevel.High, reason, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, requestId, null, new Dictionary<string, string?> { ["Direction"] = credit ? "Credit" : "Debit", ["Amount"] = amount.ToString(System.Globalization.CultureInfo.InvariantCulture) }, new Dictionary<string, string?>()),
                 token).ConfigureAwait(false);
             var balance = await economyStore.GetByCommunityIdentityIdAsync(identityId, token).ConfigureAwait(false);
             return balance is null ? Results.NotFound() : Results.Ok(new AdminEconomyAdjustmentResponse(identityId.Value, balance.Balance.Value, mutation.AlreadyCompleted));

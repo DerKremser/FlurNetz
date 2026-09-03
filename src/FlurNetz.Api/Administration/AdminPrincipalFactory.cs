@@ -12,11 +12,11 @@ public static class AdminPrincipalFactory
         identity.AddClaim(new Claim(
             AdminAuthenticationDefaults.CommunityIdentityIdClaim,
             credential.CommunityIdentityId.Value.ToString("D")));
-        identity.AddClaim(new Claim(AdminAuthenticationDefaults.LoginNameClaim, credential.LoginName));
+        identity.AddClaim(new Claim(AdminAuthenticationDefaults.EmailClaim, credential.Email));
         identity.AddClaim(new Claim(
             AdminAuthenticationDefaults.CredentialVersionClaim,
             credential.CredentialVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-        identity.AddClaim(new Claim(ClaimTypes.Name, credential.LoginName));
+        identity.AddClaim(new Claim(ClaimTypes.Name, credential.Email));
         identity.AddClaim(new Claim(AdminAuthenticationDefaults.SchemeClaim, AdminAuthenticationDefaults.Scheme));
         return new ClaimsPrincipal(identity);
     }

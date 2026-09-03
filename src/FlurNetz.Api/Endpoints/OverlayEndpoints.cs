@@ -381,7 +381,7 @@ public static class OverlayEndpoints
         new(
             Guid.NewGuid(),
             context.ActorCommunityIdentityId,
-            context.ActorLoginName,
+            context.ActorCommunityIdentityId.Value.ToString("D"),
             action,
             "OverlayChannel",
             targetId,
@@ -404,7 +404,7 @@ public static class OverlayEndpoints
         new(
             Guid.NewGuid(),
             context.ActorCommunityIdentityId,
-            context.ActorLoginName,
+            context.ActorCommunityIdentityId.Value.ToString("D"),
             action,
             "OverlayChannel",
             targetId,
