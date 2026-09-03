@@ -2,6 +2,50 @@
 
 ## [Unveröffentlicht]
 
+### Administration V1
+
+- Geschützte lokale Administration mit ASP.NET-Core-Cookie-Authentifizierung und E-Mail als
+  Admin-Login ergänzt.
+- Einmalige, Setup-Secret-geschützte Ersteinrichtung unter `/admin/setup` ergänzt; dabei werden
+  CommunityIdentity, Admin-Credential und Administrator-Rolle race-safe angelegt.
+- Permissions/RBAC, Audit, Credential-Versionierung, Session-Invalidierung, Rate Limiting,
+  Antiforgery und Admin-Security-Hardening ergänzt.
+- Persistierte idempotente Admin-Operations und atomare High-Risk-Orchestrierungen über
+  Owner-Contracts ergänzt.
+- Razor-Pages-Administration mit Dashboard, Identity-Detailansichten, Shop, Achievements,
+  Titles, Rewards, Automation, Integrations, Overlay, Audit und Account ergänzt.
+- Sicheren lokalen Passwortgenerator auf Setup- und Account-Seite ergänzt: 24 Zeichen über
+  `window.crypto.getRandomValues()`, Anzeigen/Verbergen und Kopieren, ohne Browser- oder
+  Server-Persistenz des generierten Passworts.
+- Administration-eigene PostgreSQL-Persistenz für Credentials, Rollen, Audit, Operations und
+  Setup-State ergänzt.
+- Bestehende Admin-Management-Grenzen für Shop, Automation, Integrations und Overlay über
+  Permissions abgesichert.
+- Bewusst nicht enthalten: öffentliche Registrierung, Forgot-Password-Flow, Remember-Me,
+  JWT-Adminlogin, allgemeines Community-Account-/Profile-System und Role-/Permission-
+  Management-UI.
+
+### Integrations V1
+
+- Persistierte External-Identity-Mapping-Grenze ergänzt:
+  `ProviderKey` + opaker `ExternalUserId` → `CommunityIdentityId`.
+- Link, Resolve, Get, List und Unlink mit Idempotenz und Konfliktschutz ergänzt.
+- Integrations-eigene PostgreSQL-Migration und Dapper-/Npgsql-Persistenz ergänzt.
+- Identity-Existenzprüfung ausschließlich über den öffentlichen Identity-Owner-Contract ergänzt;
+  kein Cross-Module-Foreign-Key.
+- Interne Management-Grenze unter `/api/admin/integrations/external-identities` ergänzt.
+- Bewusst nicht enthalten: Twitch OAuth, EventSub, Helix, Chat, Webhooks oder andere konkrete
+  Provider-Runtimes.
+
+### Behoben
+
+- ASP.NET-Core-Static-File-Auslieferung für die Administration aktiviert.
+- Dadurch werden `/admin/admin.css` und `/admin/admin.js` nun korrekt aus `wwwroot` ausgeliefert.
+- Behebt die zuvor ungestylte Admin-Oberfläche sowie den nicht funktionierenden
+  Passwortgenerator, Anzeigen/Verbergen und Kopieren.
+- Regressionstest über den realen API-Testhost ergänzt, der HTTP-Status, Content-Type und
+  nicht-leere Antworten für CSS und JavaScript absichert.
+
 ### Overlay V1
 
 - Persistierte Overlay-Channels und immutable Alerts mit Unicode-/Zeit-/Duration-
