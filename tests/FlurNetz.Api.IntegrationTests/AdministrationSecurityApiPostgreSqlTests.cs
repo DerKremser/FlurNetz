@@ -28,6 +28,31 @@ public sealed class AdministrationSecurityApiPostgreSqlTests(ApiPostgreSqlFixtur
     }
 
     [Fact]
+    public async Task AdminStaticAssetsAreServedByTheRealApiHost()
+    {
+        SkipIfUnavailable();
+        await database.ResetDatabaseAsync(TestContext.Current.CancellationToken);
+        using var factory = new FlurNetzApiFactory(database.ConnectionString);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        using var css = await client.GetAsync("/admin/admin.css", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, css.StatusCode);
+        Assert.Equal("text/css", css.Content.Headers.ContentType?.MediaType);
+        var cssBody = await css.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.False(string.IsNullOrWhiteSpace(cssBody));
+
+        using var javascript = await client.GetAsync("/admin/admin.js", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, javascript.StatusCode);
+        var javascriptContentType = javascript.Content.Headers.ContentType?.MediaType;
+        Assert.True(
+            string.Equals(javascriptContentType, "text/javascript", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(javascriptContentType, "application/javascript", StringComparison.OrdinalIgnoreCase),
+            $"Unexpected JavaScript content type: {javascriptContentType ?? "<missing>"}");
+        var javascriptBody = await javascript.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.False(string.IsNullOrWhiteSpace(javascriptBody));
+    }
+
+    [Fact]
     public async Task LoginIsGenericCsrfProtectedAndLogoutIsPostOnly()
     {
         SkipIfUnavailable();
