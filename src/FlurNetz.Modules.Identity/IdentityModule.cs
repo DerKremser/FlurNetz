@@ -26,7 +26,11 @@ public static class IdentityModule
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddScoped<ICommunityIdentityRepository, CommunityIdentityRepository>();
+        services.AddScoped<CommunityIdentityRepository>();
+        services.AddScoped<ICommunityIdentityRepository>(provider =>
+            provider.GetRequiredService<CommunityIdentityRepository>());
+        services.AddScoped<ICommunityIdentityRead>(provider =>
+            provider.GetRequiredService<CommunityIdentityRepository>());
         services.AddScoped<ICommunityIdentityExistence, CommunityIdentityExistence>();
         services.AddScoped<CreateCommunityIdentity>();
         services.AddSingleton<IMigrationSource, IdentityMigrationSource>();

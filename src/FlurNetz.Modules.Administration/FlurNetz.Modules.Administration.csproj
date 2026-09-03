@@ -9,6 +9,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlurNetz.Modules.Administration.Contracts\FlurNetz.Modules.Administration.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Dapper" />
   </ItemGroup>
 
 </Project>

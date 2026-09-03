@@ -15,7 +15,7 @@ namespace FlurNetz.Modules.Identity.Persistence;
 /// Schreibpfad besitzt seine Transaktion selbst; die transaktionsbewusste Überladung erlaubt
 /// später eine atomare Komposition mit weiteren Identity-Schreibvorgängen.
 /// </remarks>
-public sealed class CommunityIdentityRepository : ICommunityIdentityRepository
+public sealed class CommunityIdentityRepository : ICommunityIdentityRepository, ICommunityIdentityRead
 {
     private const string InsertSql = """
         INSERT INTO community_identities (id)
@@ -108,5 +108,45 @@ public sealed class CommunityIdentityRepository : ICommunityIdentityRepository
         return storedId is null
             ? null
             : CommunityIdentity.Create(CommunityIdentityId.Create(storedId.Value));
+    }
+
+    public async Task<CommunityIdentitySummary?> GetAsync(
+        CommunityIdentityId id,
+        CancellationToken cancellationToken = default)
+    {
+        var identity = await GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        return identity is null ? null : new CommunityIdentitySummary(identity.Id);
+    }
+
+    public async Task<CommunityIdentityPage> ListAsync(
+        CommunityIdentityId? after,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        if (pageSize is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageSize));
+        }
+
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var ids = await connection.QueryAsync<Guid>(new CommandDefinition(
+                """
+                SELECT id
+                FROM community_identities
+                WHERE (@AfterId IS NULL OR id > @AfterId)
+                ORDER BY id
+                LIMIT @Limit;
+                """,
+                new { AfterId = after?.Value, Limit = pageSize + 1 },
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+        var materialized = ids.ToArray();
+        var hasMore = materialized.Length > pageSize;
+        var visible = hasMore ? materialized[..pageSize] : materialized;
+        var items = visible
+            .Select(value => new CommunityIdentitySummary(CommunityIdentityId.Create(value)))
+            .ToArray();
+        return new CommunityIdentityPage(
+            Array.AsReadOnly(items),
+            hasMore && items.Length > 0 ? items[^1].CommunityIdentityId : null);
     }
 }
