@@ -3,9 +3,16 @@ using FlurNetz.Modules.Inventory.Contracts;
 using FlurNetz.Modules.Shop.Application;
 using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Modules.Shop.Domain;
+using FlurNetz.Modules.Administration.Contracts.Security;
+using FlurNetz.Modules.Administration.Application;
+using FlurNetz.Modules.Administration.Contracts.Audit;
+using FlurNetz.Modules.Administration.Contracts.Operations;
+using FlurNetz.Modules.Administration.Domain;
+using FlurNetz.Modules.Identity.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Mvc;
 
 namespace FlurNetz.Api.Endpoints;
 
@@ -24,36 +31,58 @@ public static class ShopManagementEndpoints
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        endpoints.MapGet(OffersRoute, ListShopOffersAsync);
-        endpoints.MapGet($"{OffersRoute}/{{offerId}}", GetShopOfferAsync);
-        endpoints.MapPost(OffersRoute, CreateShopOfferAsync);
+        endpoints.MapGet(OffersRoute, ListShopOffersAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopRead));
+        endpoints.MapGet($"{OffersRoute}/{{offerId}}", GetShopOfferAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopRead));
+        endpoints.MapPost(OffersRoute, CreateShopOfferAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPut(
             $"{OffersRoute}/{{offerId}}/display-name",
-            RenameShopOfferAsync);
+            RenameShopOfferAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPut(
             $"{OffersRoute}/{{offerId}}/description",
-            ChangeShopOfferDescriptionAsync);
+            ChangeShopOfferDescriptionAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPut(
             $"{OffersRoute}/{{offerId}}/price",
-            ChangeShopOfferPriceAsync);
+            ChangeShopOfferPriceAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPut(
             $"{OffersRoute}/{{offerId}}/availability",
-            ChangeShopOfferAvailabilityAsync);
+            ChangeShopOfferAvailabilityAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPut(
             $"{OffersRoute}/{{offerId}}/purchase-limit",
-            ChangeShopOfferPurchaseLimitAsync);
+            ChangeShopOfferPurchaseLimitAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPut(
             $"{OffersRoute}/{{offerId}}/sort-order",
-            ChangeShopOfferSortOrderAsync);
+            ChangeShopOfferSortOrderAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPost(
             $"{OffersRoute}/{{offerId}}/enable",
-            EnableShopOfferAsync);
+            EnableShopOfferAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPost(
             $"{OffersRoute}/{{offerId}}/disable",
-            DisableShopOfferAsync);
+            DisableShopOfferAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
         endpoints.MapPost(
             $"{OffersRoute}/{{offerId}}/archive",
-            ArchiveShopOfferAsync);
+            ArchiveShopOfferAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.ShopManage))
+            .RequireAntiforgery();
 
         return endpoints;
     }
@@ -87,8 +116,10 @@ public static class ShopManagementEndpoints
     }
 
     private static async Task<IResult> CreateShopOfferAsync(
-        CreateShopOfferRequest? request,
-        CreateShopOffer useCase,
+        [FromBody] CreateShopOfferRequest? request,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken)
     {
         if (request is null)
@@ -103,18 +134,21 @@ public static class ShopManagementEndpoints
 
         try
         {
-            var offer = await useCase.ExecuteAsync(
-                    ItemDefinitionId.Create(request.ItemDefinitionId),
-                    request.DisplayName!,
-                    request.Description,
-                    ShopPrice.Create(priceValue),
-                    AvailabilityWindow.Create(
-                        request.AvailableFromUtc,
-                        request.AvailableUntilUtc),
-                    request.PurchaseLimitPerIdentity,
-                    cancellationToken,
-                    request.SortOrder ?? 0)
-                .ConfigureAwait(false);
+            var context = contextAccessor.Current;
+            if (context is null) return Results.Unauthorized();
+            var offer = ShopOffer.Create(
+                ShopOfferId.New(),
+                ItemDefinitionId.Create(request.ItemDefinitionId),
+                request.DisplayName!,
+                request.Description,
+                ShopPrice.Create(priceValue),
+                AvailabilityWindow.Create(request.AvailableFromUtc, request.AvailableUntilUtc),
+                request.PurchaseLimitPerIdentity,
+                request.SortOrder ?? 0);
+            await coordinator.ExecuteAuditedAsync(
+                (connection, transaction, token) => store.AddAsync(offer, connection, transaction, token),
+                () => NormalAudit(context, AdminAuditActions.OfferUpdated, offer.Id.Value.ToString("D"), new Dictionary<string, string?> { ["Created"] = "true" }),
+                cancellationToken).ConfigureAwait(false);
 
             return Results.Created(
                 $"{OffersRoute}/{offer.Id.Value}",
@@ -128,8 +162,10 @@ public static class ShopManagementEndpoints
 
     private static async Task<IResult> RenameShopOfferAsync(
         string offerId,
-        RenameShopOfferRequest? request,
-        RenameShopOffer useCase,
+        [FromBody] RenameShopOfferRequest? request,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken)
     {
         if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
@@ -142,18 +178,16 @@ public static class ShopManagementEndpoints
             return InvalidRequest("Der Request-Body ist erforderlich.");
         }
 
-        return await ExecuteMutationAsync(
-                () => useCase.ExecuteAsync(
-                    validOfferId,
-                    request.DisplayName!,
-                    cancellationToken))
+        return await ExecuteAuditedMutationAsync(validOfferId, offer => offer.Rename(request.DisplayName!), AdminAuditActions.OfferUpdated, store, coordinator, contextAccessor, cancellationToken)
             .ConfigureAwait(false);
     }
 
     private static async Task<IResult> ChangeShopOfferDescriptionAsync(
         string offerId,
-        ChangeShopOfferDescriptionRequest? request,
-        ChangeShopOfferDescription useCase,
+        [FromBody] ChangeShopOfferDescriptionRequest? request,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken)
     {
         if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
@@ -166,18 +200,16 @@ public static class ShopManagementEndpoints
             return InvalidRequest("Der Request-Body ist erforderlich.");
         }
 
-        return await ExecuteMutationAsync(
-                () => useCase.ExecuteAsync(
-                    validOfferId,
-                    request.Description,
-                    cancellationToken))
+        return await ExecuteAuditedMutationAsync(validOfferId, offer => offer.ChangeDescription(request.Description), AdminAuditActions.OfferUpdated, store, coordinator, contextAccessor, cancellationToken)
             .ConfigureAwait(false);
     }
 
     private static async Task<IResult> ChangeShopOfferPriceAsync(
         string offerId,
-        ChangeShopOfferPriceRequest? request,
-        ChangeShopOfferPrice useCase,
+        [FromBody] ChangeShopOfferPriceRequest? request,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken)
     {
         if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
@@ -198,8 +230,7 @@ public static class ShopManagementEndpoints
         try
         {
             var price = ShopPrice.Create(priceValue);
-            return await ExecuteMutationAsync(
-                    () => useCase.ExecuteAsync(validOfferId, price, cancellationToken))
+            return await ExecuteAuditedMutationAsync(validOfferId, offer => offer.ChangePrice(price), AdminAuditActions.OfferUpdated, store, coordinator, contextAccessor, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (ArgumentException exception)
@@ -210,8 +241,10 @@ public static class ShopManagementEndpoints
 
     private static async Task<IResult> ChangeShopOfferAvailabilityAsync(
         string offerId,
-        ChangeShopOfferAvailabilityRequest? request,
-        ChangeShopOfferAvailability useCase,
+        [FromBody] ChangeShopOfferAvailabilityRequest? request,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken)
     {
         if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
@@ -229,8 +262,7 @@ public static class ShopManagementEndpoints
             var availability = AvailabilityWindow.Create(
                 request.AvailableFromUtc,
                 request.AvailableUntilUtc);
-            return await ExecuteMutationAsync(
-                    () => useCase.ExecuteAsync(validOfferId, availability, cancellationToken))
+            return await ExecuteAuditedMutationAsync(validOfferId, offer => offer.ChangeAvailability(availability), AdminAuditActions.OfferUpdated, store, coordinator, contextAccessor, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (ArgumentException exception)
@@ -241,8 +273,10 @@ public static class ShopManagementEndpoints
 
     private static async Task<IResult> ChangeShopOfferPurchaseLimitAsync(
         string offerId,
-        ChangeShopOfferPurchaseLimitRequest? request,
-        ChangeShopOfferPurchaseLimit useCase,
+        [FromBody] ChangeShopOfferPurchaseLimitRequest? request,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken)
     {
         if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
@@ -255,18 +289,16 @@ public static class ShopManagementEndpoints
             return InvalidRequest("Der Request-Body ist erforderlich.");
         }
 
-        return await ExecuteMutationAsync(
-                () => useCase.ExecuteAsync(
-                    validOfferId,
-                    request.PurchaseLimitPerIdentity,
-                    cancellationToken))
+        return await ExecuteAuditedMutationAsync(validOfferId, offer => offer.ChangePurchaseLimit(request.PurchaseLimitPerIdentity), AdminAuditActions.OfferUpdated, store, coordinator, contextAccessor, cancellationToken)
             .ConfigureAwait(false);
     }
 
     private static async Task<IResult> ChangeShopOfferSortOrderAsync(
         string offerId,
-        ChangeShopOfferSortOrderRequest? request,
-        ChangeShopOfferSortOrder useCase,
+        [FromBody] ChangeShopOfferSortOrderRequest? request,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken)
     {
         if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
@@ -284,44 +316,122 @@ public static class ShopManagementEndpoints
             return InvalidRequest("Die Sortierreihenfolge ist erforderlich.");
         }
 
-        return await ExecuteMutationAsync(
-                () => useCase.ExecuteAsync(validOfferId, sortOrder, cancellationToken))
+        return await ExecuteAuditedMutationAsync(validOfferId, offer => offer.ChangeSortOrder(sortOrder), AdminAuditActions.OfferUpdated, store, coordinator, contextAccessor, cancellationToken)
             .ConfigureAwait(false);
     }
 
     private static async Task<IResult> EnableShopOfferAsync(
         string offerId,
-        EnableShopOffer useCase,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken) =>
-        await ExecuteStatusMutationAsync(
+        await ExecuteAuditedStatusMutationAsync(
                 offerId,
-                useCase.ExecuteAsync,
+                offer => offer.Enable(),
+                AdminAuditActions.OfferEnabled,
+                store,
+                coordinator,
+                contextAccessor,
                 cancellationToken)
             .ConfigureAwait(false);
 
     private static async Task<IResult> DisableShopOfferAsync(
         string offerId,
-        DisableShopOffer useCase,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken) =>
-        await ExecuteStatusMutationAsync(
+        await ExecuteAuditedStatusMutationAsync(
                 offerId,
-                useCase.ExecuteAsync,
+                offer => offer.Disable(),
+                AdminAuditActions.OfferDisabled,
+                store,
+                coordinator,
+                contextAccessor,
                 cancellationToken)
             .ConfigureAwait(false);
 
     private static async Task<IResult> ArchiveShopOfferAsync(
         string offerId,
-        ArchiveShopOffer useCase,
-        CancellationToken cancellationToken) =>
-        await ExecuteStatusMutationAsync(
-                offerId,
-                useCase.ExecuteAsync,
-                cancellationToken)
-            .ConfigureAwait(false);
+        [FromBody] AdminActionRequest? request,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
+        CancellationToken cancellationToken)
+    {
+        if (!TryCreateId(offerId, ShopOfferId.Create, out var validOfferId))
+        {
+            return InvalidRequest("Die Route-ID des Shop-Angebots ist ungültig.");
+        }
 
-    private static async Task<IResult> ExecuteStatusMutationAsync(
+        if (!TryHighRiskRequest(request, out var requestData, out var requestError))
+        {
+            return InvalidRequest(requestError!);
+        }
+
+        var context = contextAccessor.Current;
+        if (context is null) return Results.Unauthorized();
+
+        try
+        {
+            var mutation = await coordinator.ExecuteAsync(
+                    new AdminMutationCommand(
+                        requestData.RequestId,
+                        context.ActorCommunityIdentityId,
+                        AdminAuditActions.OfferArchived,
+                        "ShopOffer",
+                        validOfferId.Value.ToString("D"),
+                        AdminRequestFingerprint.Compute(
+                            ("offer", validOfferId.Value),
+                            ("reason", requestData.Reason)),
+                        context.CorrelationId,
+                        DateTimeOffset.UtcNow),
+                    (connection, transaction, token) => store.ExecuteAsync(
+                        validOfferId,
+                        offer => offer.Archive(),
+                        connection,
+                        transaction,
+                        token),
+                    () => CreateAudit(
+                        context,
+                        AdminAuditActions.OfferArchived,
+                        validOfferId.Value.ToString("D"),
+                        requestData.Reason,
+                        requestData.RequestId,
+                        new Dictionary<string, string?> { ["Archived"] = "true" }),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            return mutation.AlreadyCompleted
+                ? Results.Ok(new AdminAlreadyCompletedResponse(true))
+                : Results.NoContent();
+        }
+        catch (AdminOperationConflictException exception)
+        {
+            return Results.Conflict(new AdminErrorResponse(exception.Message));
+        }
+        catch (ShopOfferNotFoundException exception)
+        {
+            return Results.NotFound(new AdminErrorResponse(exception.Message));
+        }
+        catch (ShopOfferArchivedException exception)
+        {
+            return Results.Conflict(new AdminErrorResponse(exception.Message));
+        }
+        catch (ArgumentException exception)
+        {
+            return InvalidRequest(exception.Message);
+        }
+    }
+
+    private static async Task<IResult> ExecuteAuditedStatusMutationAsync(
         string rawOfferId,
-        Func<ShopOfferId, CancellationToken, Task<bool>> operation,
+        Func<ShopOffer, bool> mutation,
+        string action,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
         CancellationToken cancellationToken)
     {
         if (!TryCreateId(rawOfferId, ShopOfferId.Create, out var validOfferId))
@@ -329,10 +439,102 @@ public static class ShopManagementEndpoints
             return InvalidRequest("Die Route-ID des Shop-Angebots ist ungültig.");
         }
 
-        return await ExecuteMutationAsync(
-                () => operation(validOfferId, cancellationToken))
+        return await ExecuteAuditedMutationAsync(validOfferId, mutation, action, store, coordinator, contextAccessor, cancellationToken)
             .ConfigureAwait(false);
     }
+
+    private static async Task<IResult> ExecuteAuditedMutationAsync(
+        ShopOfferId offerId,
+        Func<ShopOffer, bool> mutation,
+        string action,
+        IShopOfferStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
+        CancellationToken cancellationToken)
+    {
+        var context = contextAccessor.Current;
+        if (context is null) return Results.Unauthorized();
+        try
+        {
+            await coordinator.ExecuteAuditedAsync(
+                (connection, transaction, token) => store.ExecuteAsync(offerId, mutation, connection, transaction, token),
+                () => NormalAudit(context, action, offerId.Value.ToString("D"), new Dictionary<string, string?> { ["Changed"] = "true" }),
+                cancellationToken).ConfigureAwait(false);
+            return Results.NoContent();
+        }
+        catch (ShopOfferNotFoundException exception) { return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Shop-Angebot nicht gefunden.", detail: exception.Message); }
+        catch (ShopOfferArchivedException exception) { return Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Shop-Angebot archiviert.", detail: exception.Message); }
+        catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
+    }
+
+    private static bool TryHighRiskRequest(AdminActionRequest? request, out (Guid RequestId, string Reason) value, out string? error)
+    {
+        value = default;
+        try
+        {
+            if (request?.RequestId is not Guid requestId || requestId == Guid.Empty)
+            {
+                throw new ArgumentException("Eine eindeutige RequestId ist erforderlich.");
+            }
+
+            value = (requestId, AdminReason.Required(request.Reason));
+            error = null;
+            return true;
+        }
+        catch (ArgumentException exception)
+        {
+            error = exception.Message;
+            return false;
+        }
+    }
+
+    private static AdminAuditEntry CreateAudit(
+        AdminExecutionContext context,
+        string action,
+        string targetId,
+        string reason,
+        Guid requestId,
+        IReadOnlyDictionary<string, string?> changeSummary) =>
+        new(
+            Guid.NewGuid(),
+            context.ActorCommunityIdentityId,
+            context.ActorLoginName,
+            action,
+            "ShopOffer",
+            targetId,
+            null,
+            AdminRiskLevel.High,
+            reason,
+            AdminAuditOutcome.Succeeded,
+            DateTimeOffset.UtcNow,
+            context.CorrelationId,
+            requestId,
+            null,
+            changeSummary,
+            new Dictionary<string, string?>());
+
+    private static AdminAuditEntry NormalAudit(
+        AdminExecutionContext context,
+        string action,
+        string targetId,
+        IReadOnlyDictionary<string, string?> changeSummary) =>
+        new(
+            Guid.NewGuid(),
+            context.ActorCommunityIdentityId,
+            context.ActorLoginName,
+            action,
+            "ShopOffer",
+            targetId,
+            null,
+            AdminRiskLevel.Medium,
+            null,
+            AdminAuditOutcome.Succeeded,
+            DateTimeOffset.UtcNow,
+            context.CorrelationId,
+            null,
+            null,
+            changeSummary,
+            new Dictionary<string, string?>());
 
     private static async Task<IResult> ExecuteMutationAsync(Func<Task<bool>> operation)
     {

@@ -3,6 +3,13 @@ using FlurNetz.Api.Cursors;
 using FlurNetz.Modules.Automation.Application;
 using FlurNetz.Modules.Automation.Domain;
 using FlurNetz.Modules.Overlay.Contracts;
+using FlurNetz.Modules.Administration.Contracts.Security;
+using FlurNetz.Modules.Administration.Application;
+using FlurNetz.Modules.Administration.Contracts.Audit;
+using FlurNetz.Modules.Administration.Contracts.Operations;
+using FlurNetz.Modules.Administration.Domain;
+using FlurNetz.BuildingBlocks.Time;
+using Microsoft.AspNetCore.Mvc;
 
 namespace FlurNetz.Api.Endpoints;
 
@@ -15,14 +22,27 @@ public static class AutomationManagementEndpoints
     public static IEndpointRouteBuilder MapAutomationManagementEndpoints(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        endpoints.MapGet(RulesRoute, ListAsync);
-        endpoints.MapGet($"{RulesRoute}/{{ruleId}}", GetAsync);
-        endpoints.MapPost(RulesRoute, CreateAsync);
-        endpoints.MapPut($"{RulesRoute}/{{ruleId}}", ReplaceAsync);
-        endpoints.MapPost($"{RulesRoute}/{{ruleId}}/enable", EnableAsync);
-        endpoints.MapPost($"{RulesRoute}/{{ruleId}}/disable", DisableAsync);
-        endpoints.MapPost($"{RulesRoute}/{{ruleId}}/archive", ArchiveAsync);
-        endpoints.MapGet($"{RulesRoute}/{{ruleId}}/executions", ListExecutionsAsync);
+        endpoints.MapGet(RulesRoute, ListAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.AutomationRead));
+        endpoints.MapGet($"{RulesRoute}/{{ruleId}}", GetAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.AutomationRead));
+        endpoints.MapPost(RulesRoute, CreateAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.AutomationManage))
+            .RequireAntiforgery();
+        endpoints.MapPut($"{RulesRoute}/{{ruleId}}", ReplaceAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.AutomationManage))
+            .RequireAntiforgery();
+        endpoints.MapPost($"{RulesRoute}/{{ruleId}}/enable", EnableAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.AutomationManage))
+            .RequireAntiforgery();
+        endpoints.MapPost($"{RulesRoute}/{{ruleId}}/disable", DisableAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.AutomationManage))
+            .RequireAntiforgery();
+        endpoints.MapPost($"{RulesRoute}/{{ruleId}}/archive", ArchiveAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.AutomationManage))
+            .RequireAntiforgery();
+        endpoints.MapGet($"{RulesRoute}/{{ruleId}}/executions", ListExecutionsAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.AutomationRead));
         return endpoints;
     }
 
@@ -41,38 +61,42 @@ public static class AutomationManagementEndpoints
             : Results.Ok(ToResponse(rule));
     }
 
-    private static async Task<IResult> CreateAsync(AutomationRuleRequest? request, CreateAutomationRule useCase, CancellationToken cancellationToken)
+    private static async Task<IResult> CreateAsync([FromBody] AutomationRuleRequest? request, IAutomationRuleStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, IClock clock, CancellationToken cancellationToken)
     {
         if (request is null) return InvalidRequest("Der Request-Body ist erforderlich.");
         try
         {
-            var rule = await useCase.ExecuteAsync(
-                request.DisplayName!,
-                request.Description,
-                request.TriggerType!,
-                ToConditions(request.Conditions),
-                ToActions(request.Actions),
-                request.SortOrder ?? 0,
+            var context = contextAccessor.Current;
+            if (context is null) return Results.Unauthorized();
+            var rule = AutomationRule.Create(AutomationRuleId.New(), request.DisplayName!, request.Description, request.TriggerType!, ToConditions(request.Conditions), ToActions(request.Actions), request.SortOrder ?? 0, Canonicalize(clock.UtcNow));
+            await coordinator.ExecuteAuditedAsync(
+                (connection, transaction, token) => store.AddAsync(rule, connection, transaction, token),
+                () => NormalAudit(context, AdminAuditActions.RuleCreated, rule.AutomationRuleId.Value.ToString("D"), new Dictionary<string, string?> { ["Created"] = "true" }),
                 cancellationToken).ConfigureAwait(false);
             return Results.Created($"{RulesRoute}/{rule.AutomationRuleId.Value}", ToResponse(rule));
         }
         catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
     }
 
-    private static async Task<IResult> ReplaceAsync(string ruleId, AutomationRuleRequest? request, ReplaceAutomationRule useCase, CancellationToken cancellationToken)
+    private static async Task<IResult> ReplaceAsync(string ruleId, [FromBody] AutomationRuleRequest? request, IAutomationRuleStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, IClock clock, CancellationToken cancellationToken)
     {
         if (!TryCreateId(ruleId, out var validId)) return InvalidRequest("Die Route-ID der Automation-Rule ist ungültig.");
         if (request is null) return InvalidRequest("Der Request-Body ist erforderlich.");
         try
         {
-            await useCase.ExecuteAsync(
-                validId,
-                request.DisplayName!,
-                request.Description,
-                request.TriggerType!,
-                ToConditions(request.Conditions),
-                ToActions(request.Actions),
-                request.SortOrder ?? 0,
+            var context = contextAccessor.Current;
+            if (context is null) return Results.Unauthorized();
+            await coordinator.ExecuteAuditedAsync(
+                async (connection, transaction, token) =>
+                {
+                    var rule = await store.MutateAsync(validId, value =>
+                    {
+                        if (value.IsEnabled || value.IsArchived) throw new AutomationRuleConflictException(validId, "Eine aktive oder archivierte Automation-Rule kann nicht ersetzt werden.");
+                        return value.ReplaceConfiguration(request.DisplayName!, request.Description, request.TriggerType!, ToConditions(request.Conditions), ToActions(request.Actions), request.SortOrder ?? 0, Canonicalize(clock.UtcNow));
+                    }, connection, transaction, token).ConfigureAwait(false);
+                    if (rule is null) throw new AutomationRuleNotFoundException(validId);
+                },
+                () => NormalAudit(context, AdminAuditActions.RuleUpdated, validId.Value.ToString("D"), new Dictionary<string, string?> { ["Changed"] = "true" }),
                 cancellationToken).ConfigureAwait(false);
             return Results.NoContent();
         }
@@ -81,27 +105,137 @@ public static class AutomationManagementEndpoints
         catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
     }
 
-    private static Task<IResult> EnableAsync(string ruleId, EnableAutomationRule useCase, CancellationToken cancellationToken) =>
-        StatusAsync(ruleId, useCase.ExecuteAsync, cancellationToken);
+    private static Task<IResult> EnableAsync(string ruleId, IAutomationRuleStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, IClock clock, CancellationToken cancellationToken) =>
+        StatusAsync(ruleId, value => value.Enable(Canonicalize(clock.UtcNow)), AdminAuditActions.RuleEnabled, store, coordinator, contextAccessor, cancellationToken);
 
-    private static Task<IResult> DisableAsync(string ruleId, DisableAutomationRule useCase, CancellationToken cancellationToken) =>
-        StatusAsync(ruleId, useCase.ExecuteAsync, cancellationToken);
+    private static Task<IResult> DisableAsync(string ruleId, IAutomationRuleStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, IClock clock, CancellationToken cancellationToken) =>
+        StatusAsync(ruleId, value => value.Disable(Canonicalize(clock.UtcNow)), AdminAuditActions.RuleDisabled, store, coordinator, contextAccessor, cancellationToken);
 
-    private static Task<IResult> ArchiveAsync(string ruleId, ArchiveAutomationRule useCase, CancellationToken cancellationToken) =>
-        StatusAsync(ruleId, useCase.ExecuteAsync, cancellationToken);
+    private static async Task<IResult> ArchiveAsync(
+        string ruleId,
+        [FromBody] AdminActionRequest? request,
+        IAutomationRuleStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
+        IClock clock,
+        CancellationToken cancellationToken)
+    {
+        if (!TryCreateId(ruleId, out var validId)) return InvalidRequest("Die Route-ID der Automation-Rule ist ungültig.");
+        if (!TryHighRiskRequest(request, out var requestData, out var requestError)) return InvalidRequest(requestError!);
+        var context = contextAccessor.Current;
+        if (context is null) return Results.Unauthorized();
 
-    private static async Task<IResult> StatusAsync(string rawRuleId, Func<AutomationRuleId, CancellationToken, Task> operation, CancellationToken cancellationToken)
+        try
+        {
+            var mutation = await coordinator.ExecuteAsync(
+                    new AdminMutationCommand(
+                        requestData.RequestId,
+                        context.ActorCommunityIdentityId,
+                        AdminAuditActions.RuleArchived,
+                        "AutomationRule",
+                        validId.Value.ToString("D"),
+                        AdminRequestFingerprint.Compute(("rule", validId.Value), ("reason", requestData.Reason)),
+                        context.CorrelationId,
+                        DateTimeOffset.UtcNow),
+                    async (connection, transaction, token) =>
+                    {
+                        var rule = await store.MutateAsync(
+                                validId,
+                                value => value.Archive(Canonicalize(clock.UtcNow)),
+                                connection,
+                                transaction,
+                                token)
+                            .ConfigureAwait(false);
+                        if (rule is null) throw new AutomationRuleNotFoundException(validId);
+                    },
+                    () => CreateAudit(
+                        context,
+                        AdminAuditActions.RuleArchived,
+                        validId.Value.ToString("D"),
+                        requestData.Reason,
+                        requestData.RequestId,
+                        new Dictionary<string, string?> { ["Archived"] = "true" }),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            return mutation.AlreadyCompleted
+                ? Results.Ok(new AdminAlreadyCompletedResponse(true))
+                : Results.NoContent();
+        }
+        catch (AdminOperationConflictException exception) { return Results.Conflict(new AdminErrorResponse(exception.Message)); }
+        catch (AutomationRuleNotFoundException exception) { return NotFound(exception.RuleId); }
+        catch (AutomationRuleArchivedException exception) { return Conflict(exception.Message); }
+        catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
+    }
+
+    private static async Task<IResult> StatusAsync(string rawRuleId, Func<AutomationRule, bool> mutation, string action, IAutomationRuleStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, CancellationToken cancellationToken)
     {
         if (!TryCreateId(rawRuleId, out var validId)) return InvalidRequest("Die Route-ID der Automation-Rule ist ungültig.");
         try
         {
-            await operation(validId, cancellationToken).ConfigureAwait(false);
+            var context = contextAccessor.Current;
+            if (context is null) return Results.Unauthorized();
+            await coordinator.ExecuteAuditedAsync(
+                async (connection, transaction, token) =>
+                {
+                    var rule = await store.MutateAsync(validId, mutation, connection, transaction, token).ConfigureAwait(false);
+                    if (rule is null) throw new AutomationRuleNotFoundException(validId);
+                },
+                () => NormalAudit(context, action, validId.Value.ToString("D"), new Dictionary<string, string?> { ["Changed"] = "true" }),
+                cancellationToken).ConfigureAwait(false);
             return Results.NoContent();
         }
         catch (AutomationRuleNotFoundException exception) { return NotFound(exception.RuleId); }
         catch (AutomationRuleArchivedException exception) { return Conflict(exception.Message); }
         catch (AutomationRuleConflictException exception) { return Conflict(exception.Message); }
         catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
+    }
+
+    private static AdminAuditEntry NormalAudit(AdminExecutionContext context, string action, string targetId, IReadOnlyDictionary<string, string?> summary) =>
+        new(Guid.NewGuid(), context.ActorCommunityIdentityId, context.ActorLoginName, action, "AutomationRule", targetId, null, AdminRiskLevel.Medium, null, AdminAuditOutcome.Succeeded, DateTimeOffset.UtcNow, context.CorrelationId, null, null, summary, new Dictionary<string, string?>());
+
+    private static bool TryHighRiskRequest(AdminActionRequest? request, out (Guid RequestId, string Reason) value, out string? error)
+    {
+        value = default;
+        try
+        {
+            if (request?.RequestId is not Guid requestId || requestId == Guid.Empty) throw new ArgumentException("Eine eindeutige RequestId ist erforderlich.");
+            value = (requestId, AdminReason.Required(request.Reason));
+            error = null;
+            return true;
+        }
+        catch (ArgumentException exception) { error = exception.Message; return false; }
+    }
+
+    private static AdminAuditEntry CreateAudit(
+        AdminExecutionContext context,
+        string action,
+        string targetId,
+        string reason,
+        Guid requestId,
+        IReadOnlyDictionary<string, string?> changeSummary) =>
+        new(
+            Guid.NewGuid(),
+            context.ActorCommunityIdentityId,
+            context.ActorLoginName,
+            action,
+            "AutomationRule",
+            targetId,
+            null,
+            AdminRiskLevel.High,
+            reason,
+            AdminAuditOutcome.Succeeded,
+            DateTimeOffset.UtcNow,
+            context.CorrelationId,
+            requestId,
+            null,
+            changeSummary,
+            new Dictionary<string, string?>());
+
+    private static DateTimeOffset Canonicalize(DateTimeOffset value)
+    {
+        var utc = value.ToUniversalTime();
+        return utc.AddTicks(-(utc.Ticks % TimeSpan.TicksPerMicrosecond));
     }
 
     private static async Task<IResult> ListExecutionsAsync(

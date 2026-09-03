@@ -6,6 +6,12 @@ using FlurNetz.BuildingBlocks.Time;
 using FlurNetz.Modules.Overlay.Application;
 using FlurNetz.Modules.Overlay.Contracts;
 using FlurNetz.Modules.Overlay.Domain;
+using FlurNetz.Modules.Administration.Contracts.Security;
+using FlurNetz.Modules.Administration.Application;
+using FlurNetz.Modules.Administration.Contracts.Audit;
+using FlurNetz.Modules.Administration.Contracts.Operations;
+using FlurNetz.Modules.Administration.Domain;
+using Microsoft.AspNetCore.Mvc;
 
 namespace FlurNetz.Api.Endpoints;
 
@@ -18,15 +24,31 @@ public static class OverlayEndpoints
     public static IEndpointRouteBuilder MapOverlayEndpoints(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        endpoints.MapGet(ChannelsRoute, ListAsync);
-        endpoints.MapGet($"{ChannelsRoute}/{{channelId}}", GetAsync);
-        endpoints.MapPost(ChannelsRoute, CreateAsync);
-        endpoints.MapPut($"{ChannelsRoute}/{{channelId}}", UpdateAsync);
-        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/enable", EnableAsync);
-        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/disable", DisableAsync);
-        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/archive", ArchiveAsync);
-        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/rotate-source-key", RotateAsync);
-        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/alerts", PreviewAsync);
+        endpoints.MapGet(ChannelsRoute, ListAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayRead));
+        endpoints.MapGet($"{ChannelsRoute}/{{channelId}}", GetAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayRead));
+        endpoints.MapPost(ChannelsRoute, CreateAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayManage))
+            .RequireAntiforgery();
+        endpoints.MapPut($"{ChannelsRoute}/{{channelId}}", UpdateAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayManage))
+            .RequireAntiforgery();
+        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/enable", EnableAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayManage))
+            .RequireAntiforgery();
+        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/disable", DisableAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayManage))
+            .RequireAntiforgery();
+        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/archive", ArchiveAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayManage))
+            .RequireAntiforgery();
+        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/rotate-source-key", RotateAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayRotateSourceKey))
+            .RequireAntiforgery();
+        endpoints.MapPost($"{ChannelsRoute}/{{channelId}}/alerts", PreviewAsync)
+            .RequireAuthorization(AdminPolicies.ForPermission(PermissionCatalog.OverlayManage))
+            .RequireAntiforgery();
         endpoints.MapGet("/overlay/{sourceKey}", BrowserSourceAsync);
         endpoints.MapGet("/api/overlay/sources/{sourceKey}/stream", StreamAsync);
         return endpoints;
@@ -45,73 +67,185 @@ public static class OverlayEndpoints
         return channel is null ? NotFound(id) : Results.Ok(ToResponse(channel));
     }
 
-    private static async Task<IResult> CreateAsync(OverlayChannelRequest? request, CreateOverlayChannel useCase, CancellationToken cancellationToken)
+    private static async Task<IResult> CreateAsync([FromBody] OverlayChannelRequest? request, IOverlayChannelStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, IClock clock, CancellationToken cancellationToken)
     {
         if (request is null) return InvalidRequest("Der Request-Body ist erforderlich.");
         try
         {
-            var result = await useCase.ExecuteAsync(request.DisplayName!, request.Description, cancellationToken).ConfigureAwait(false);
-            return Results.Created($"{ChannelsRoute}/{result.Channel.Id.Value:D}", new OverlayChannelSecretResponse(ToResponse(result.Channel), result.SourceKey, BrowserSourceUrl(result.SourceKey)));
+            var context = contextAccessor.Current;
+            if (context is null) return Results.Unauthorized();
+            var channel = OverlayChannel.Create(OverlayChannelId.New(), request.DisplayName!, request.Description, Canonicalize(clock.UtcNow));
+            var sourceKey = OverlaySourceKey.Generate();
+            await coordinator.ExecuteAuditedAsync(
+                (connection, transaction, token) => store.AddAsync(channel, OverlaySourceKey.Hash(sourceKey), connection, transaction, token),
+                () => NormalAudit(context, AdminAuditActions.ChannelCreated, channel.Id.Value.ToString("D"), new Dictionary<string, string?> { ["Created"] = "true" }),
+                cancellationToken).ConfigureAwait(false);
+            return Results.Created($"{ChannelsRoute}/{channel.Id.Value:D}", new OverlayChannelSecretResponse(ToResponse(channel), sourceKey, BrowserSourceUrl(sourceKey)));
         }
         catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
     }
 
-    private static async Task<IResult> UpdateAsync(string channelId, OverlayChannelRequest? request, UpdateOverlayChannelMetadata useCase, CancellationToken cancellationToken)
+    private static async Task<IResult> UpdateAsync(string channelId, [FromBody] OverlayChannelRequest? request, IOverlayChannelStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, IClock clock, CancellationToken cancellationToken)
     {
         if (!TryCreateId(channelId, out var id)) return InvalidRequest("Die Route-ID des Overlay-Channels ist ungültig.");
         if (request is null) return InvalidRequest("Der Request-Body ist erforderlich.");
         try
         {
-            var channel = await useCase.ExecuteAsync(id, request.DisplayName!, request.Description, cancellationToken).ConfigureAwait(false);
+            var context = contextAccessor.Current;
+            if (context is null) return Results.Unauthorized();
+            OverlayChannel? channel = null;
+            await coordinator.ExecuteAuditedAsync(
+                async (connection, transaction, token) => channel = await store.MutateAsync(id, value => value.UpdateMetadata(request.DisplayName!, request.Description, Canonicalize(clock.UtcNow)), connection, transaction, cancellationToken: token).ConfigureAwait(false),
+                () => NormalAudit(context, AdminAuditActions.ChannelUpdated, id.Value.ToString("D"), new Dictionary<string, string?> { ["Changed"] = "true" }),
+                cancellationToken).ConfigureAwait(false);
             return channel is null ? NotFound(id) : Results.Ok(ToResponse(channel));
         }
         catch (OverlayChannelArchivedException exception) { return Conflict(exception.Message); }
         catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
     }
 
-    private static Task<IResult> EnableAsync(string channelId, EnableOverlayChannel useCase, CancellationToken cancellationToken) => StatusAsync(channelId, useCase.ExecuteAsync, cancellationToken);
-    private static Task<IResult> DisableAsync(string channelId, DisableOverlayChannel useCase, CancellationToken cancellationToken) => StatusAsync(channelId, useCase.ExecuteAsync, cancellationToken);
-    private static Task<IResult> ArchiveAsync(string channelId, ArchiveOverlayChannel useCase, CancellationToken cancellationToken) => StatusAsync(channelId, useCase.ExecuteAsync, cancellationToken);
+    private static Task<IResult> EnableAsync(string channelId, IOverlayChannelStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, IClock clock, CancellationToken cancellationToken) => StatusAsync(channelId, value => value.Enable(Canonicalize(clock.UtcNow)), AdminAuditActions.ChannelEnabled, store, coordinator, contextAccessor, cancellationToken);
+    private static Task<IResult> DisableAsync(string channelId, IOverlayChannelStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, IClock clock, CancellationToken cancellationToken) => StatusAsync(channelId, value => value.Disable(Canonicalize(clock.UtcNow)), AdminAuditActions.ChannelDisabled, store, coordinator, contextAccessor, cancellationToken);
+    private static async Task<IResult> ArchiveAsync(
+        string channelId,
+        [FromBody] AdminActionRequest? request,
+        IOverlayChannelStore store,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
+        IClock clock,
+        CancellationToken cancellationToken)
+    {
+        if (!TryCreateId(channelId, out var id)) return InvalidRequest("Die Route-ID des Overlay-Channels ist ungültig.");
+        if (!TryHighRiskRequest(request, out var requestData, out var requestError)) return InvalidRequest(requestError!);
+        var context = contextAccessor.Current;
+        if (context is null) return Results.Unauthorized();
+        try
+        {
+            var mutation = await coordinator.ExecuteAsync(
+                    new AdminMutationCommand(
+                        requestData.RequestId,
+                        context.ActorCommunityIdentityId,
+                        AdminAuditActions.ChannelArchived,
+                        "OverlayChannel",
+                        id.Value.ToString("D"),
+                        AdminRequestFingerprint.Compute(("channel", id.Value), ("reason", requestData.Reason)),
+                        context.CorrelationId,
+                        DateTimeOffset.UtcNow),
+                    async (connection, transaction, token) =>
+                    {
+                        var channel = await store.MutateAsync(id, value => value.Archive(Canonicalize(clock.UtcNow)), connection, transaction, invalidateSourceKey: true, cancellationToken: token).ConfigureAwait(false);
+                        if (channel is null) throw new KeyNotFoundException();
+                    },
+                    () => CreateAudit(context, AdminAuditActions.ChannelArchived, id.Value.ToString("D"), requestData.Reason, requestData.RequestId, new Dictionary<string, string?> { ["Archived"] = "true" }),
+                    cancellationToken).ConfigureAwait(false);
+            return mutation.AlreadyCompleted ? Results.Ok(new AdminAlreadyCompletedResponse(true)) : Results.NoContent();
+        }
+        catch (AdminOperationConflictException exception) { return Results.Conflict(new AdminErrorResponse(exception.Message)); }
+        catch (KeyNotFoundException) { return NotFound(id); }
+        catch (OverlayChannelArchivedException exception) { return Conflict(exception.Message); }
+        catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
+    }
 
-    private static async Task<IResult> StatusAsync(string rawId, Func<OverlayChannelId, CancellationToken, Task<OverlayChannel?>> operation, CancellationToken cancellationToken)
+    private static async Task<IResult> StatusAsync(string rawId, Func<OverlayChannel, bool> mutation, string action, IOverlayChannelStore store, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, CancellationToken cancellationToken)
     {
         if (!TryCreateId(rawId, out var id)) return InvalidRequest("Die Route-ID des Overlay-Channels ist ungültig.");
         try
         {
-            return await operation(id, cancellationToken).ConfigureAwait(false) is null ? NotFound(id) : Results.NoContent();
+            var context = contextAccessor.Current;
+            if (context is null) return Results.Unauthorized();
+            OverlayChannel? channel = null;
+            await coordinator.ExecuteAuditedAsync(
+                async (connection, transaction, token) => channel = await store.MutateAsync(id, mutation, connection, transaction, cancellationToken: token).ConfigureAwait(false),
+                () => NormalAudit(context, action, id.Value.ToString("D"), new Dictionary<string, string?> { ["Changed"] = "true" }),
+                cancellationToken).ConfigureAwait(false);
+            return channel is null ? NotFound(id) : Results.NoContent();
         }
         catch (OverlayChannelArchivedException exception) { return Conflict(exception.Message); }
         catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
     }
 
-    private static async Task<IResult> RotateAsync(string channelId, RotateOverlaySourceKey useCase, CancellationToken cancellationToken)
+    private static async Task<IResult> RotateAsync(
+        string channelId,
+        [FromBody] AdminActionRequest? request,
+        RotateOverlaySourceKey useCase,
+        AdminMutationCoordinator coordinator,
+        IAdminExecutionContextAccessor contextAccessor,
+        CancellationToken cancellationToken)
     {
         if (!TryCreateId(channelId, out var id)) return InvalidRequest("Die Route-ID des Overlay-Channels ist ungültig.");
+        if (!TryHighRiskRequest(request, out var requestData, out var requestError)) return InvalidRequest(requestError!);
+        var context = contextAccessor.Current;
+        if (context is null) return Results.Unauthorized();
         try
         {
-            var result = await useCase.ExecuteAsync(id, cancellationToken).ConfigureAwait(false);
-            return result is null
-                ? NotFound(id)
-                : Results.Ok(new OverlayChannelSecretResponse(ToResponse(result.Channel), result.SourceKey, BrowserSourceUrl(result.SourceKey)));
+            OverlayChannelSecret? result = null;
+            var mutation = await coordinator.ExecuteAsync(
+                    new AdminMutationCommand(
+                        requestData.RequestId,
+                        context.ActorCommunityIdentityId,
+                        AdminAuditActions.SourceKeyRotated,
+                        "OverlayChannel",
+                        id.Value.ToString("D"),
+                        AdminRequestFingerprint.Compute(("channel", id.Value), ("reason", requestData.Reason)),
+                        context.CorrelationId,
+                        DateTimeOffset.UtcNow),
+                    async (connection, transaction, token) =>
+                    {
+                        result = await useCase.ExecuteAsync(id, connection, transaction, token).ConfigureAwait(false);
+                        if (result is null) throw new KeyNotFoundException();
+                    },
+                    () => CreateAudit(context, AdminAuditActions.SourceKeyRotated, id.Value.ToString("D"), requestData.Reason, requestData.RequestId, new Dictionary<string, string?> { ["SourceKeyRotated"] = "true" }),
+                    cancellationToken).ConfigureAwait(false);
+            if (mutation.AlreadyCompleted) return Results.Conflict(new AdminErrorResponse("Die RequestId wurde bereits verarbeitet; für eine neue Source-Key-Ausgabe ist eine neue RequestId erforderlich."));
+            return Results.Ok(new OverlayChannelSecretResponse(ToResponse(result!.Channel), result.SourceKey, BrowserSourceUrl(result.SourceKey)));
         }
+        catch (AdminOperationConflictException exception) { return Results.Conflict(new AdminErrorResponse(exception.Message)); }
+        catch (KeyNotFoundException) { return NotFound(id); }
         catch (OverlayChannelArchivedException exception) { return Conflict(exception.Message); }
         catch (ArgumentException exception) { return InvalidRequest(exception.Message); }
     }
 
-    private static async Task<IResult> PreviewAsync(string channelId, OverlayAlertRequest? request, PublishPreviewAlert useCase, CancellationToken cancellationToken)
+    private static bool TryHighRiskRequest(AdminActionRequest? request, out (Guid RequestId, string Reason) value, out string? error)
+    {
+        value = default;
+        try
+        {
+            if (request?.RequestId is not Guid requestId || requestId == Guid.Empty)
+            {
+                throw new ArgumentException("Eine eindeutige RequestId ist erforderlich.");
+            }
+
+            value = (requestId, AdminReason.Required(request.Reason));
+            error = null;
+            return true;
+        }
+        catch (ArgumentException exception)
+        {
+            error = exception.Message;
+            return false;
+        }
+    }
+
+    private static async Task<IResult> PreviewAsync(string channelId, [FromBody] OverlayAlertRequest? request, PublishPreviewAlert useCase, AdminMutationCoordinator coordinator, IAdminExecutionContextAccessor contextAccessor, CancellationToken cancellationToken)
     {
         if (!TryCreateId(channelId, out var id)) return InvalidRequest("Die Route-ID des Overlay-Channels ist ungültig.");
         if (request is null) return InvalidRequest("Der Request-Body ist erforderlich.");
         try
         {
-            var publish = await useCase.ExecuteAsync(new OverlayAlertPublishRequest(
+            var context = contextAccessor.Current;
+            if (context is null) return Results.Unauthorized();
+            var previewRequest = new OverlayAlertPublishRequest(
                 id,
                 request.Title!,
                 request.Message,
                 request.Variant ?? OverlayAlertVariant.Default,
                 request.DurationMilliseconds ?? OverlayAlertDurationRules.DefaultMilliseconds,
                 request.SourceType,
-                request.SourceId), cancellationToken).ConfigureAwait(false);
+                request.SourceId);
+            var publish = await coordinator.ExecuteAuditedAsync(
+                (connection, transaction, token) => useCase.ExecuteAsync(previewRequest, connection, transaction, token),
+                () => NormalAudit(context, AdminAuditActions.PreviewPublished, id.Value.ToString("D"), new Dictionary<string, string?> { ["Published"] = "true" }),
+                cancellationToken).ConfigureAwait(false);
             return publish.Status switch
             {
                 OverlayAlertPublishStatus.Published => Results.Ok(new OverlayAlertPublishResponse(publish.Status.ToString(), publish.AlertId)),
@@ -236,6 +370,54 @@ public static class OverlayEndpoints
     private static IResult InvalidRequest(string detail) => Results.Problem(statusCode: StatusCodes.Status400BadRequest, title: "Ungültige Anfrage.", detail: detail);
     private static IResult NotFound(OverlayChannelId id) => Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Overlay-Channel nicht gefunden.", detail: $"Der Overlay-Channel '{id.Value}' wurde nicht gefunden.");
     private static IResult Conflict(string detail) => Results.Problem(statusCode: StatusCodes.Status409Conflict, title: "Overlay-Channel-Konflikt.", detail: detail);
+
+    private static AdminAuditEntry CreateAudit(
+        AdminExecutionContext context,
+        string action,
+        string targetId,
+        string reason,
+        Guid requestId,
+        IReadOnlyDictionary<string, string?> changeSummary) =>
+        new(
+            Guid.NewGuid(),
+            context.ActorCommunityIdentityId,
+            context.ActorLoginName,
+            action,
+            "OverlayChannel",
+            targetId,
+            null,
+            AdminRiskLevel.High,
+            reason,
+            AdminAuditOutcome.Succeeded,
+            DateTimeOffset.UtcNow,
+            context.CorrelationId,
+            requestId,
+            null,
+            changeSummary,
+            new Dictionary<string, string?>());
+
+    private static AdminAuditEntry NormalAudit(
+        AdminExecutionContext context,
+        string action,
+        string targetId,
+        IReadOnlyDictionary<string, string?> changeSummary) =>
+        new(
+            Guid.NewGuid(),
+            context.ActorCommunityIdentityId,
+            context.ActorLoginName,
+            action,
+            "OverlayChannel",
+            targetId,
+            null,
+            AdminRiskLevel.Medium,
+            null,
+            AdminAuditOutcome.Succeeded,
+            DateTimeOffset.UtcNow,
+            context.CorrelationId,
+            null,
+            null,
+            changeSummary,
+            new Dictionary<string, string?>());
 
     private static string BrowserHtml(string startCursor)
     {

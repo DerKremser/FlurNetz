@@ -7,6 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FlurNetz.Modules.Administration\FlurNetz.Modules.Administration.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Administration.Contracts\FlurNetz.Modules.Administration.Contracts.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Achievements\FlurNetz.Modules.Achievements.csproj" />
     <ProjectReference Include="..\FlurNetz.Messaging\FlurNetz.Messaging.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Economy\FlurNetz.Modules.Economy.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Identity.Contracts\FlurNetz.Modules.Identity.Contracts.csproj" />
@@ -15,10 +18,13 @@
     <ProjectReference Include="..\FlurNetz.Modules.Inventory.Contracts\FlurNetz.Modules.Inventory.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Integrations\FlurNetz.Modules.Integrations.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Notifications\FlurNetz.Modules.Notifications.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Progression\FlurNetz.Modules.Progression.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Rewards\FlurNetz.Modules.Rewards.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Automation\FlurNetz.Modules.Automation.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Overlay\FlurNetz.Modules.Overlay.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />
     <ProjectReference Include="..\FlurNetz.Modules.Shop\FlurNetz.Modules.Shop.csproj" />
+    <ProjectReference Include="..\FlurNetz.Modules.Titles\FlurNetz.Modules.Titles.csproj" />
     <ProjectReference Include="..\FlurNetz.Persistence\FlurNetz.Persistence.csproj" />
   </ItemGroup>
 

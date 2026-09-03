@@ -10,7 +10,9 @@ public sealed record AutomationRuleRequest(
     string? TriggerType,
     IReadOnlyList<AutomationConditionRequest>? Conditions,
     IReadOnlyList<AutomationActionRequest>? Actions,
-    int? SortOrder);
+    int? SortOrder,
+    Guid? RequestId = null,
+    string? Reason = null);
 
 /// <summary>API-Request für eine bekannte V1-Condition.</summary>
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

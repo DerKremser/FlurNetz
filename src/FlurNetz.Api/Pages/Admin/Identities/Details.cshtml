@@ -1,0 +1,77 @@
+@page "/admin/identities/{communityIdentityId:guid}"
+@model FlurNetz.Api.Pages.Admin.Identities.DetailsModel
+@{
+    ViewData["Title"] = "Identity Detail";
+}
+<header class="page-header">
+    <div><a class="back-link" href="/admin/identities">← Identitäten</a><div class="eyebrow">Identity Detail</div><h1>@Model.IdentityId</h1><p class="muted">Permission-aware Fachbereiche der zentralen Community-Identität.</p></div>
+    <button class="secondary-button copy-button" type="button" data-copy="@Model.IdentityId">ID kopieren</button>
+</header>
+<section class="detail-grid">
+    <article class="panel detail-hero"><div class="detail-avatar">◎</div><div><div class="eyebrow">Zentrale Identität</div><h2>@Model.IdentityId</h2><p class="muted">Die CommunityIdentityId bleibt die fachliche Identität über alle Module hinweg.</p></div></article>
+
+    <article class="panel">
+        <div class="panel-heading"><div><div class="eyebrow">External Identity</div><h2>Mappings</h2></div><span class="badge neutral">@(Model.MappingsUnavailable ? "–" : Model.Mappings.Count)</span></div>
+        @if (Model.MappingsUnavailable) { <div class="unavailable">Nicht verfügbar · Die Mapping-Abfrage konnte nicht geladen werden.</div> }
+        else if (Model.Mappings.Count == 0) { <div class="empty-inline">Keine externen Mappings vorhanden.</div> }
+        else { foreach (var mapping in Model.Mappings) { <div class="key-value"><span>@mapping.ProviderKey.Value</span><strong>@mapping.ExternalUserId.Value</strong></div> } }
+    </article>
+
+    <article class="panel">
+        <div class="panel-heading"><div><div class="eyebrow">Economy</div><h2>Balance</h2></div><span class="badge green-badge">Read</span></div>
+        @if (Model.EconomyUnavailable) { <div class="unavailable">Nicht verfügbar · Economy konnte nicht geladen werden.</div> }
+        else if (Model.Economy is not null) { <div class="big-value">@Model.Economy.Balance.Value</div><p class="muted">Aktueller Economy-Saldo</p> }
+        else { <div class="empty-inline">Noch kein Economy-Zustand für diese Identity.</div> }
+    </article>
+
+    <article class="panel">
+        <div class="panel-heading"><div><div class="eyebrow">Progression</div><h2>Experience</h2></div><span class="badge purple-badge">Read</span></div>
+        @if (Model.ProgressionUnavailable) { <div class="unavailable">Nicht verfügbar · Progression konnte nicht geladen werden.</div> }
+        else if (Model.Progression is not null) { <div class="big-value">@Model.Progression.ExperiencePoints.Value</div><p class="muted">Experience Points</p> }
+        else { <div class="empty-inline">Noch kein Progression-Zustand für diese Identity.</div> }
+    </article>
+
+    <article class="panel">
+        <div class="panel-heading"><div><div class="eyebrow">Inventory</div><h2>Bestand</h2></div><span class="badge neutral">@(Model.InventoryUnavailable ? "–" : Model.Inventory.Count)</span></div>
+        @if (Model.InventoryUnavailable) { <div class="unavailable">Nicht verfügbar · Inventory konnte nicht geladen werden.</div> }
+        else if (Model.Inventory.Count == 0) { <div class="empty-inline">Noch kein Inventory-Zustand.</div> }
+        else { foreach (var entry in Model.Inventory) { <div class="key-value"><code>@entry.ItemDefinitionId.Value</code><strong>@entry.Quantity.Value</strong></div> } }
+    </article>
+
+    <article class="panel">
+        <div class="panel-heading"><div><div class="eyebrow">Achievements</div><h2>Erreicht</h2></div><span class="badge neutral">@(Model.AchievementsUnavailable ? "–" : Model.Achievements.Count)</span></div>
+        @if (Model.AchievementsUnavailable) { <div class="unavailable">Nicht verfügbar · Achievements konnten nicht geladen werden.</div> }
+        else if (Model.Achievements.Count == 0) { <div class="empty-inline">Noch keine Achievements erreicht.</div> }
+        else { foreach (var achievement in Model.Achievements) { <div class="key-value"><code>@achievement.AchievementDefinitionId.Value</code><small>@achievement.UnlockedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div> } }
+    </article>
+
+    <article class="panel">
+        <div class="panel-heading"><div><div class="eyebrow">Titles</div><h2>Freigeschaltet</h2></div><span class="badge neutral">@(Model.TitlesUnavailable ? "–" : Model.Titles?.UnlockedTitleDefinitionIds.Count ?? 0)</span></div>
+        @if (Model.TitlesUnavailable) { <div class="unavailable">Nicht verfügbar · Titles konnten nicht geladen werden.</div> }
+        else if (Model.Titles is null) { <div class="empty-inline">Noch kein Titles-Zustand.</div> }
+        else if (Model.Titles.UnlockedTitleDefinitionIds.Count == 0) { <div class="empty-inline">Noch keine Titles freigeschaltet.</div> }
+        else { foreach (var title in Model.Titles.UnlockedTitleDefinitionIds) { <div class="key-value"><code>@title.Value</code>@if (Model.Titles.CurrentTitleDefinitionId == title) { <span class="badge green-badge">Aktuell</span> }</div> } }
+    </article>
+
+    <article class="panel">
+        <div class="panel-heading"><div><div class="eyebrow">Shop</div><h2>Kaufhistorie</h2></div><span class="badge neutral">@(Model.ShopPurchasesUnavailable ? "–" : Model.ShopPurchases.Count)</span></div>
+        @if (Model.ShopPurchasesUnavailable) { <div class="unavailable">Nicht verfügbar · Shop-Historie konnte nicht geladen werden.</div> }
+        else if (Model.ShopPurchases.Count == 0) { <div class="empty-inline">Noch keine Käufe vorhanden.</div> }
+        else { foreach (var purchase in Model.ShopPurchases) { <div class="key-value"><span><code>@purchase.ItemDefinitionId.Value</code><small>@purchase.PurchasedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></span><strong>@purchase.PricePaid.Value</strong></div> } }
+    </article>
+
+    <article class="panel panel-wide">
+        <div class="panel-heading"><div><div class="eyebrow">Notifications</div><h2>Inbox</h2></div>@if (!Model.NotificationsUnavailable && Model.UnreadCount is not null) { <span class="badge">@Model.UnreadCount ungelesen</span> }</div>
+        @if (Model.NotificationsUnavailable) { <div class="unavailable">Nicht verfügbar · Die Notifications-Abfrage konnte nicht geladen werden.</div> }
+        else if (Model.Notifications.Count == 0) { <div class="empty-inline">Keine Notifications vorhanden.</div> }
+        else { foreach (var notification in Model.Notifications) { <div class="notification-row"><span class="status-dot @(notification.IsRead ? "muted-dot" : "success")"></span><div><strong>@notification.Title</strong><small>@notification.Message · @notification.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div><span class="badge @(notification.IsRead ? "neutral" : "")">@(notification.IsRead ? "Gelesen" : "Ungelesen")</span></div> } }
+    </article>
+
+    <article class="panel panel-wide">
+        <div class="panel-heading"><div><div class="eyebrow">Nachvollziehbarkeit</div><h2>Admin History</h2></div></div>
+        @if (Model.AuditUnavailable) { <div class="unavailable">Nicht verfügbar · Audit konnte nicht geladen werden.</div> }
+        else if (Model.AuditEntries.Count == 0) { <div class="empty-inline">Keine Audit-Aktionen für diese Identity.</div> }
+        else { foreach (var entry in Model.AuditEntries) { <div class="audit-row"><span class="status-dot @(entry.Result == FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded ? "success" : "warning")"></span><div><strong>@entry.Action</strong><small>@entry.ActorLoginNameSnapshot · @entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div><span class="badge">@entry.Result</span></div> } }
+    </article>
+</section>
+@section Scripts { <script src="~/admin/admin.js" asp-append-version="true"></script> }

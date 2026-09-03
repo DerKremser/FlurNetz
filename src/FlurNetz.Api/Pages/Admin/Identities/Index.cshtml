@@ -1,0 +1,19 @@
+@page "/admin/identities"
+@model FlurNetz.Api.Pages.Admin.Identities.IndexModel
+@{
+    ViewData["Title"] = "Identitäten";
+}
+<header class="page-header"><div><div class="eyebrow">Community</div><h1>Identitäten</h1><p class="muted">Stabile CommunityIdentityIds als zentrale Navigationsgrenze.</p></div></header>
+<section class="panel">
+    <div class="filter-bar"><div class="search-box"><span aria-hidden="true">⌕</span><label class="visually-hidden" for="identity-search">Identity-ID suchen</label><input id="identity-search" type="search" placeholder="Identity-ID einfügen …" /></div><span class="muted">Keyset-Pagination · @Model.Items.Count geladen</span></div>
+    @if (Model.Error is not null) { <div class="notice error" role="alert">@Model.Error</div> }
+    @if (Model.Items.Count == 0 && Model.Error is null) { <div class="empty-state"><span class="empty-icon">◎</span><strong>Keine Identitäten vorhanden</strong><p>Es wurden noch keine Community-Identitäten angelegt.</p></div> }
+    else if (Model.Items.Count > 0)
+    {
+        <div class="table-wrap"><table><caption class="visually-hidden">Community-Identitäten</caption><thead><tr><th>CommunityIdentityId</th><th>Typ</th><th></th></tr></thead><tbody>
+        @foreach (var item in Model.Items)
+        { <tr><td><a class="id-link" href="/admin/identities/@item.CommunityIdentityId.Value:D">@item.CommunityIdentityId.Value:D</a></td><td><span class="badge neutral">Community Identity</span></td><td class="row-action"><a class="text-link" href="/admin/identities/@item.CommunityIdentityId.Value:D">Details →</a></td></tr> }
+        </tbody></table></div>
+        @if (Model.NextCursor is not null) { <div class="pagination"><a class="secondary-button" href="/admin/identities?after=@Model.NextCursor.Value:D">Nächste Seite →</a></div> }
+    }
+</section>

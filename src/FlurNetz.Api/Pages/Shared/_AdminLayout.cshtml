@@ -1,0 +1,57 @@
+@{
+    var path = Context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+    var loginName = User.FindFirst(AdminAuthenticationDefaults.LoginNameClaim)?.Value ?? "Admin";
+}
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"] – FlurNetz Administration</title>
+    <link rel="stylesheet" href="~/admin/admin.css" asp-append-version="true" />
+</head>
+<body class="admin-shell">
+    <div class="admin-frame">
+        <aside class="sidebar" aria-label="Administration">
+            <a class="brand" href="/admin">
+                <span class="brand-mark" aria-hidden="true">F</span>
+                <span><strong>FlurNetz</strong><small>Administration</small></span>
+            </a>
+            <nav class="nav-groups">
+                <div class="nav-group">
+                    <span class="nav-label">Übersicht</span>
+                    <a class="nav-link @(path == "/admin" ? "active" : "")" href="/admin"><span aria-hidden="true">⌂</span>Dashboard</a>
+                    <a class="nav-link @(path.StartsWith("/admin/identities") ? "active" : "")" href="/admin/identities"><span aria-hidden="true">◎</span>Identitäten</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-label">Inhalte</span>
+                    <a class="nav-link @(path.StartsWith("/admin/shop") ? "active" : "")" href="/admin/shop"><span aria-hidden="true">▣</span>Shop</a>
+                    <a class="nav-link @(path.StartsWith("/admin/catalog") ? "active" : "")" href="/admin/catalog"><span aria-hidden="true">✦</span>Achievements &amp; Titles</a>
+                    <a class="nav-link @(path.StartsWith("/admin/catalog") ? "active" : "")" href="/admin/catalog#rewards"><span aria-hidden="true">◈</span>Rewards</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-label">System</span>
+                    <a class="nav-link @(path.StartsWith("/admin/automation") ? "active" : "")" href="/admin/automation"><span aria-hidden="true">↗</span>Automation</a>
+                    <a class="nav-link @(path.StartsWith("/admin/integrations") ? "active" : "")" href="/admin/integrations"><span aria-hidden="true">⌁</span>Integrations</a>
+                    <a class="nav-link @(path.StartsWith("/admin/overlay") ? "active" : "")" href="/admin/overlay"><span aria-hidden="true">◌</span>Overlay</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-label">Administration</span>
+                    <a class="nav-link @(path.StartsWith("/admin/audit") ? "active" : "")" href="/admin/audit"><span aria-hidden="true">▤</span>Audit</a>
+                    <a class="nav-link @(path.StartsWith("/admin/account") ? "active" : "")" href="/admin/account"><span aria-hidden="true">⚙</span>Account</a>
+                    <a class="nav-link @(path.StartsWith("/admin/setup") ? "active" : "")" href="/admin/setup"><span aria-hidden="true">⌑</span>Passwort einrichten</a>
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-chip"><span class="avatar">@loginName[..Math.Min(1, loginName.Length)]</span><span><strong>@loginName</strong><small>Administrator</small></span></div>
+                <form method="post" action="/admin/logout">@Html.AntiForgeryToken()<button class="logout-button" type="submit">Abmelden</button></form>
+            </div>
+        </aside>
+        <main class="main-content">
+            <div class="mobile-topbar"><a class="brand" href="/admin"><span class="brand-mark">F</span><strong>FlurNetz</strong></a></div>
+            @RenderBody()
+        </main>
+    </div>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

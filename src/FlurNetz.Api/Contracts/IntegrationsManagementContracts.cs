@@ -7,7 +7,9 @@ namespace FlurNetz.Api.Contracts;
 public sealed record ExternalIdentityMappingRequest(
     string? Provider,
     string? ExternalUserId,
-    Guid? CommunityIdentityId);
+    Guid? CommunityIdentityId,
+    string? Reason = null,
+    Guid? RequestId = null);
 
 /// <summary>API-Darstellung einer externen Identitätsverknüpfung.</summary>
 public sealed record ExternalIdentityMappingResponse(

@@ -1,8 +1,13 @@
+using FlurNetz.Api.Administration;
 using FlurNetz.Api.Endpoints;
 using FlurNetz.Messaging.Integration;
 using FlurNetz.Messaging.Migrations;
 using FlurNetz.Messaging.Persistence;
 using FlurNetz.Messaging.Serialization;
+using FlurNetz.Modules.Administration;
+using FlurNetz.Modules.Administration.Application;
+using FlurNetz.Modules.Administration.Contracts.Security;
+using FlurNetz.Modules.Achievements;
 using FlurNetz.Modules.Economy;
 using FlurNetz.Modules.Identity;
 using FlurNetz.Modules.Integrations;
@@ -12,10 +17,15 @@ using FlurNetz.Modules.Automation;
 using FlurNetz.Modules.Shop.Contracts;
 using FlurNetz.Modules.Shop;
 using FlurNetz.Modules.Overlay;
+using FlurNetz.Modules.Progression;
+using FlurNetz.Modules.Rewards;
+using FlurNetz.Modules.Titles;
 using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Migrations;
 using Microsoft.Extensions.Configuration;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FlurNetz.Api;
 
@@ -37,6 +47,32 @@ public sealed class Program
         var builder = WebApplication.CreateBuilder(args);
 
         builder.Services.AddProblemDetails();
+        builder.Services.AddRazorPages();
+        builder.Services.AddAntiforgery(options =>
+        {
+            options.HeaderName = "X-CSRF-TOKEN";
+            options.Cookie.Name = "__Host-FlurNetz.AntiForgery";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Strict;
+            options.Cookie.SecurePolicy = builder.Environment.IsProduction()
+                ? CookieSecurePolicy.Always
+                : CookieSecurePolicy.SameAsRequest;
+        });
+        builder.Services.AddAdminAuthentication(builder.Environment);
+        builder.Services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("AdminLogin", httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        AutoReplenishment = true
+                    }));
+        });
 
         // Die technische Verbindungsfabrik gehört in den Composition Root, damit alle Module
         // dieselbe Persistence-Grundlage verwenden und keine eigene Datenbankinfrastruktur aufbauen.
@@ -59,10 +95,15 @@ public sealed class Program
                 serviceProvider.GetServices<IMigrationSource>()));
 
         // Die Module registrieren ihre Use Cases, Adapter und bestehenden Migrationsquellen.
+        builder.Services.AddAdministrationModule();
         builder.Services.AddIdentityModule();
         builder.Services.AddIntegrationsModule();
-        builder.Services.AddEconomyDebitCapability();
-        builder.Services.AddInventoryGrantCapability();
+        builder.Services.AddEconomyModule();
+        builder.Services.AddInventoryModule();
+        builder.Services.AddProgressionReadModule();
+        builder.Services.AddAchievementsModule();
+        builder.Services.AddRewardsModule();
+        builder.Services.AddTitlesModule();
         builder.Services.AddShopModule();
         builder.Services.AddNotificationsModule();
         builder.Services.AddAutomationModule();
@@ -106,6 +147,16 @@ public sealed class Program
             await using var scope = app.Services.CreateAsyncScope();
             var migrationRunner = scope.ServiceProvider.GetRequiredService<MigrationRunner>();
             await migrationRunner.RunAsync(app.Lifetime.ApplicationStopping);
+
+            var bootstrap = AdminBootstrapConfigurationReader.TryRead(
+                app.Configuration,
+                out var bootstrapConfiguration);
+            if (bootstrap)
+            {
+                await scope.ServiceProvider
+                    .GetRequiredService<IAdminBootstrapper>()
+                    .BootstrapAsync(bootstrapConfiguration!, app.Lifetime.ApplicationStopping);
+            }
         }
         catch (Exception exception)
         {
@@ -114,13 +165,29 @@ public sealed class Program
             throw;
         }
 
+        app.UseRouting();
+        app.UseMiddleware<AdminSecurityHeadersMiddleware>();
+        app.UseRateLimiter();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseMiddleware<AdminExecutionContextMiddleware>();
+        app.UseMiddleware<AdminAntiforgeryMiddleware>();
+        app.UseAntiforgery();
+
         app.MapIdentityEndpoints();
+        app.MapAdminIdentityEndpoints();
+        app.MapAdminEconomyEndpoints();
+        app.MapAdminProgressionInventoryEndpoints();
+        app.MapAdminAchievementTitleEndpoints();
+        app.MapAdminRewardsEndpoints();
         app.MapIntegrationsManagementEndpoints();
         app.MapShopEndpoints();
         app.MapShopManagementEndpoints();
         app.MapNotificationEndpoints();
         app.MapAutomationManagementEndpoints();
         app.MapOverlayEndpoints();
+        app.MapAdminAccountEndpoints();
+        app.MapRazorPages();
         await app.RunAsync();
     }
 }

@@ -1,0 +1,36 @@
+@page "/admin/login"
+@model FlurNetz.Api.Pages.Admin.LoginModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Anmelden";
+}
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anmelden – FlurNetz</title>
+    <link rel="stylesheet" href="~/admin/admin.css" asp-append-version="true" />
+</head>
+<body class="login-page">
+    <main class="login-card" aria-labelledby="login-title">
+        <div class="brand login-brand"><span class="brand-mark">F</span><span><strong>FlurNetz</strong><small>Administration</small></span></div>
+        <div class="eyebrow">Sicherer Bereich</div>
+        <h1 id="login-title">Willkommen zurück</h1>
+        <p class="muted">Melde dich an, um die Community-Verwaltung zu öffnen.</p>
+        <form method="post" class="stack-form">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div asp-validation-summary="ModelOnly" class="form-error" role="alert"></div>
+            <label asp-for="LoginName">LoginName</label>
+            <input asp-for="LoginName" autocomplete="username" autofocus />
+            <span asp-validation-for="LoginName" class="field-error"></span>
+            <label asp-for="Password">Passwort</label>
+            <input asp-for="Password" type="password" autocomplete="current-password" />
+            <span asp-validation-for="Password" class="field-error"></span>
+            <button class="primary-button" type="submit">Anmelden</button>
+        </form>
+        <p class="login-footnote">Zugriff wird protokolliert. Es gibt keinen öffentlichen Passwort-Recovery-Flow.</p>
+    </main>
+</body>
+</html>

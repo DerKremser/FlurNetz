@@ -1,0 +1,33 @@
+@page "/admin"
+@model FlurNetz.Api.Pages.Admin.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+<header class="page-header">
+    <div><div class="eyebrow">Übersicht</div><h1>Dashboard</h1><p class="muted">Der aktuelle Überblick über deine Administration.</p></div>
+    <a class="secondary-button" href="/admin/identities">Identitäten öffnen <span aria-hidden="true">→</span></a>
+</header>
+@if (Model.DependencyError is not null)
+{
+    <div class="notice error" role="status">Ein Bereich ist momentan nicht verfügbar: @Model.DependencyError</div>
+}
+<section class="metric-grid" aria-label="Aktuelle Daten">
+    <article class="metric-card"><span class="metric-icon blue">◎</span><div><span class="metric-label">Identitäten geladen</span><strong>@Model.IdentityCount</strong><small>erste Seite</small></div></article>
+    <article class="metric-card"><span class="metric-icon purple">▤</span><div><span class="metric-label">Audit geladen</span><strong>@Model.AuditCount</strong><small>letzte Einträge</small></div></article>
+    <article class="metric-card"><span class="metric-icon green">✓</span><div><span class="metric-label">Administration</span><strong>Aktiv</strong><small>serverseitig geschützt</small></div></article>
+</section>
+<section class="content-grid">
+    <article class="panel panel-wide">
+        <div class="panel-heading"><div><div class="eyebrow">Verlauf</div><h2>Letzte Audit-Aktionen</h2></div><a class="text-link" href="/admin/audit">Alle ansehen →</a></div>
+        @if (Model.RecentAudit.Count == 0)
+        { <div class="empty-state"><span class="empty-icon">▤</span><strong>Noch keine Audit-Aktionen</strong><p>Erfolgreiche administrative Änderungen erscheinen hier.</p></div> }
+        else
+        {
+            <div class="audit-list">
+            @foreach (var entry in Model.RecentAudit)
+            { <div class="audit-row"><span class="status-dot @(entry.Result == FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded ? "success" : "warning")"></span><div><strong>@entry.Action</strong><small>@entry.TargetType · @entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div><span class="badge">@entry.Result</span></div> }
+            </div>
+        }
+    </article>
+    <article class="panel quick-panel"><div class="eyebrow">Schnellzugriff</div><h2>Arbeitsbereiche</h2><a class="quick-link" href="/admin/identities"><span>◎</span><div><strong>Identity Lookup</strong><small>Balances, XP und Notifications</small></div><b>→</b></a><a class="quick-link" href="/admin/audit"><span>▤</span><div><strong>Audit prüfen</strong><small>Nachvollziehbarer Verlauf</small></div><b>→</b></a><a class="quick-link" href="/admin/account"><span>⚙</span><div><strong>Account sichern</strong><small>Passwort und Sessions</small></div><b>→</b></a></article>
+</section>
