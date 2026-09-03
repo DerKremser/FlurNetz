@@ -10,6 +10,14 @@ public interface IOverlayChannelStore
     /// <summary>Fügt einen neuen Kanal samt gehashtem Source Key ein.</summary>
     Task AddAsync(OverlayChannel channel, string sourceKeyHash, CancellationToken cancellationToken = default);
 
+    Task AddAsync(
+        OverlayChannel channel,
+        string sourceKeyHash,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
+
     /// <summary>Lädt einen Kanal.</summary>
     Task<OverlayChannel?> GetAsync(OverlayChannelId channelId, CancellationToken cancellationToken = default);
 
@@ -33,4 +41,15 @@ public interface IOverlayChannelStore
         string? replacementSourceKeyHash = null,
         bool invalidateSourceKey = false,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Mutiert einen Kanal innerhalb einer vom Kompositor gehaltenen Transaktion.</summary>
+    Task<OverlayChannel?> MutateAsync(
+        OverlayChannelId channelId,
+        Func<OverlayChannel, bool> mutation,
+        DbConnection connection,
+        DbTransaction transaction,
+        string? replacementSourceKeyHash = null,
+        bool invalidateSourceKey = false,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 }

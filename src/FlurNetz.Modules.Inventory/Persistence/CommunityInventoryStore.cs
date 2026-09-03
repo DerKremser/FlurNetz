@@ -42,6 +42,16 @@ public sealed class CommunityInventoryStore : ICommunityInventoryStore
           AND item_definition_id = @ItemDefinitionId;
         """;
 
+    private const string ListSql = """
+        SELECT
+            community_identity_id AS CommunityIdentityId,
+            item_definition_id AS ItemDefinitionId,
+            quantity AS Quantity
+        FROM community_inventory_entries
+        WHERE community_identity_id = @CommunityIdentityId
+        ORDER BY item_definition_id;
+        """;
+
     private const string UpdateSql = """
         UPDATE community_inventory_entries
         SET quantity = @Quantity
@@ -174,6 +184,22 @@ public sealed class CommunityInventoryStore : ICommunityInventoryStore
     }
 
     /// <inheritdoc />
+    public Task<InventoryQuantity> RemoveAsync(
+        CommunityIdentityId communityIdentityId,
+        ItemDefinitionId itemDefinitionId,
+        long amount,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        RemoveInTransactionAsync(
+            communityIdentityId,
+            itemDefinitionId,
+            amount,
+            connection,
+            transaction,
+            cancellationToken);
+
+    /// <inheritdoc />
     public async Task<CommunityInventoryEntry?> GetAsync(
         CommunityIdentityId communityIdentityId,
         ItemDefinitionId itemDefinitionId,
@@ -198,6 +224,26 @@ public sealed class CommunityInventoryStore : ICommunityInventoryStore
             .ConfigureAwait(false);
 
         return row is null ? null : ToDomain(row);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<CommunityInventoryEntry>> ListAsync(
+        CommunityIdentityId communityIdentityId,
+        CancellationToken cancellationToken = default)
+    {
+        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
+        await using var connection = await connectionFactory
+            .OpenConnectionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var rows = await connection.QueryAsync<InventoryRow>(
+                new CommandDefinition(
+                    ListSql,
+                    new { CommunityIdentityId = validCommunityIdentityId.Value },
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        return Array.AsReadOnly(rows.Select(ToDomain).ToArray());
     }
 
     private static async Task<InventoryQuantity> RemoveInTransactionAsync(

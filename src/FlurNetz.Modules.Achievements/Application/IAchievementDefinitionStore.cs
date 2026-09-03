@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Achievements.Domain;
 
 namespace FlurNetz.Modules.Achievements.Application;
@@ -20,6 +21,13 @@ public interface IAchievementDefinitionStore
         AchievementDefinition definition,
         CancellationToken cancellationToken = default);
 
+    Task AddAsync(
+        AchievementDefinition definition,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
+
     /// <summary>
     /// Lädt eine Achievement-Definition oder liefert bei unbekannter ID <see langword="null"/>.
     /// </summary>
@@ -40,4 +48,12 @@ public interface IAchievementDefinitionStore
         AchievementDefinitionId achievementDefinitionId,
         Func<AchievementDefinition, TResult> operation,
         CancellationToken cancellationToken = default);
+
+    Task<TResult> ExecuteAsync<TResult>(
+        AchievementDefinitionId achievementDefinitionId,
+        Func<AchievementDefinition, TResult> operation,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 }

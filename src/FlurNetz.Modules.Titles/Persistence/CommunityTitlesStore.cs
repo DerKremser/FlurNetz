@@ -32,6 +32,12 @@ public sealed class CommunityTitlesStore : ICommunityTitlesStore
         FOR UPDATE;
         """;
 
+    private const string SelectRootSql = """
+        SELECT community_identity_id
+        FROM community_titles
+        WHERE community_identity_id = @CommunityIdentityId;
+        """;
+
     private const string SelectUnlocksSql = """
         SELECT title_definition_id
         FROM community_title_unlocks
@@ -86,6 +92,48 @@ public sealed class CommunityTitlesStore : ICommunityTitlesStore
     }
 
     /// <inheritdoc />
+    public async Task<CommunityTitles?> GetAsync(
+        CommunityIdentityId communityIdentityId,
+        CancellationToken cancellationToken = default)
+    {
+        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
+        await using var connection = await connectionFactory
+            .OpenConnectionAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var parameters = new { CommunityIdentityId = validCommunityIdentityId.Value };
+        var rootExists = await connection.QuerySingleOrDefaultAsync<Guid?>(
+                new CommandDefinition(
+                    SelectRootSql,
+                    parameters,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        if (rootExists is null)
+        {
+            return null;
+        }
+
+        var persistedUnlocks = (await connection.QueryAsync<Guid>(
+                new CommandDefinition(
+                    SelectUnlocksSql,
+                    parameters,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false)).ToArray();
+        var persistedSelection = await connection.QuerySingleOrDefaultAsync<SelectionRow>(
+                new CommandDefinition(
+                    SelectCurrentSql,
+                    parameters,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        return CommunityTitles.Rehydrate(
+            validCommunityIdentityId,
+            persistedUnlocks.Select(TitleDefinitionId.Create).ToArray(),
+            persistedSelection is null ? null : TitleDefinitionId.Create(persistedSelection.TitleDefinitionId));
+    }
+
+    /// <inheritdoc />
     public async Task<TResult> ExecuteAsync<TResult>(
         CommunityIdentityId communityIdentityId,
         Func<CommunityTitles, TResult> operation,
@@ -99,64 +147,9 @@ public sealed class CommunityTitlesStore : ICommunityTitlesStore
 
         try
         {
-            var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
-            var parameters = new
-            {
-                CommunityIdentityId = validCommunityIdentityId.Value
-            };
-
-            await transaction.Connection.ExecuteAsync(
-                    new CommandDefinition(
-                        EnsureRootSql,
-                        parameters,
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
-            await transaction.Connection.QuerySingleAsync<Guid>(
-                    new CommandDefinition(
-                        LockRootSql,
-                        parameters,
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
-            var persistedUnlocks = (await transaction.Connection.QueryAsync<Guid>(
-                    new CommandDefinition(
-                        SelectUnlocksSql,
-                        parameters,
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false))
-                .ToArray();
-
-            var persistedSelection = await transaction.Connection.QuerySingleOrDefaultAsync<SelectionRow>(
-                    new CommandDefinition(
-                        SelectCurrentSql,
-                        parameters,
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
-            var unlockedTitleDefinitionIds = persistedUnlocks
-                .Select(TitleDefinitionId.Create)
-                .ToArray();
-            var currentTitleDefinitionId = persistedSelection is null
-                ? (TitleDefinitionId?)null
-                : TitleDefinitionId.Create(persistedSelection.TitleDefinitionId);
-
-            var titles = CommunityTitles.Rehydrate(
-                validCommunityIdentityId,
-                unlockedTitleDefinitionIds,
-                currentTitleDefinitionId);
-            var before = Snapshot(titles);
-            var result = operation(titles);
-            var after = Snapshot(titles);
-
-            await PersistChangesAsync(
-                    validCommunityIdentityId,
-                    before,
-                    after,
+            var result = await ExecuteAsync(
+                    communityIdentityId,
+                    operation,
                     transaction.Connection,
                     transaction.Transaction,
                     cancellationToken)
@@ -170,6 +163,35 @@ public sealed class CommunityTitlesStore : ICommunityTitlesStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<TResult> ExecuteAsync<TResult>(
+        CommunityIdentityId communityIdentityId,
+        Func<CommunityTitles, TResult> operation,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
+        var parameters = new { CommunityIdentityId = validCommunityIdentityId.Value };
+
+        await connection.ExecuteAsync(new CommandDefinition(EnsureRootSql, parameters, transaction: transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        await connection.QuerySingleAsync<Guid>(new CommandDefinition(LockRootSql, parameters, transaction: transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        var persistedUnlocks = (await connection.QueryAsync<Guid>(new CommandDefinition(SelectUnlocksSql, parameters, transaction: transaction, cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
+        var persistedSelection = await connection.QuerySingleOrDefaultAsync<SelectionRow>(new CommandDefinition(SelectCurrentSql, parameters, transaction: transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        var titles = CommunityTitles.Rehydrate(
+            validCommunityIdentityId,
+            persistedUnlocks.Select(TitleDefinitionId.Create).ToArray(),
+            persistedSelection is null ? null : TitleDefinitionId.Create(persistedSelection.TitleDefinitionId));
+        var before = Snapshot(titles);
+        var result = operation(titles);
+        var after = Snapshot(titles);
+        await PersistChangesAsync(validCommunityIdentityId, before, after, connection, transaction, cancellationToken).ConfigureAwait(false);
+        return result;
     }
 
     private static TitlesSnapshot Snapshot(CommunityTitles titles) =>

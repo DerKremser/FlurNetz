@@ -66,6 +66,17 @@ public sealed class CommunityAchievementStore : ICommunityAchievementStore
             .OpenConnectionAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        return await UnlockAsync(achievement, connection, transaction: null, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<bool> UnlockAsync(
+        CommunityAchievement achievement,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction? transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(achievement);
+        ArgumentNullException.ThrowIfNull(connection);
         var affectedRows = await connection.ExecuteAsync(
                 new CommandDefinition(
                     UnlockSql,
@@ -75,6 +86,7 @@ public sealed class CommunityAchievementStore : ICommunityAchievementStore
                         AchievementDefinitionId = achievement.AchievementDefinitionId.Value,
                         achievement.UnlockedAtUtc
                     },
+                    transaction: transaction,
                     cancellationToken: cancellationToken))
             .ConfigureAwait(false);
 

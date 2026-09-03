@@ -50,10 +50,30 @@ public interface ICommunityInventoryStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Entfernt eine positive Menge innerhalb einer bereits bestehenden Transaktion.
+    /// </summary>
+    Task<InventoryQuantity> RemoveAsync(
+        CommunityIdentityId communityIdentityId,
+        ItemDefinitionId itemDefinitionId,
+        long amount,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
+
+    /// <summary>
     /// Lädt genau eine Bestandsposition, ohne beim Lesen einen fehlenden Zustand anzulegen.
     /// </summary>
     Task<CommunityInventoryEntry?> GetAsync(
         CommunityIdentityId communityIdentityId,
         ItemDefinitionId itemDefinitionId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lädt alle vorhandenen Bestandspositionen einer Identity in stabiler Reihenfolge.
+    /// </summary>
+    Task<IReadOnlyList<CommunityInventoryEntry>> ListAsync(
+        CommunityIdentityId communityIdentityId,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keine Identitätsliste.");
 }

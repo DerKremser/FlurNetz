@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Overlay.Contracts;
 using FlurNetz.Modules.Overlay.Domain;
 
@@ -17,6 +18,29 @@ public sealed class RotateOverlaySourceKey(IOverlayChannelStore store)
             if (current.IsArchived) throw new OverlayChannelArchivedException(current.Id);
             return false;
         }, OverlaySourceKey.Hash(key), cancellationToken: cancellationToken).ConfigureAwait(false);
+        return channel is null ? null : new OverlayChannelSecret(channel, key);
+    }
+
+    /// <summary>Rotiert den Key innerhalb einer vom Kompositor gehaltenen Transaktion.</summary>
+    public async Task<OverlayChannelSecret?> ExecuteAsync(
+        OverlayChannelId channelId,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        var key = OverlaySourceKey.Generate();
+        var channel = await store.MutateAsync(
+                channelId,
+                current =>
+                {
+                    if (current.IsArchived) throw new OverlayChannelArchivedException(current.Id);
+                    return false;
+                },
+                connection,
+                transaction,
+                replacementSourceKeyHash: OverlaySourceKey.Hash(key),
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         return channel is null ? null : new OverlayChannelSecret(channel, key);
     }
 }

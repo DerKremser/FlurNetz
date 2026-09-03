@@ -83,20 +83,7 @@ public sealed class AchievementDefinitionStore : IAchievementDefinitionStore
 
         try
         {
-            var affectedRows = await transaction.Connection.ExecuteAsync(
-                    new CommandDefinition(
-                        AddSql,
-                        new
-                        {
-                            Id = definition.Id.Value,
-                            definition.DisplayName,
-                            definition.Description
-                        },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
-            EnsureAffectedRows(affectedRows, "eingefügt");
+            await AddAsync(definition, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -203,6 +190,62 @@ public sealed class AchievementDefinitionStore : IAchievementDefinitionStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    public async Task AddAsync(
+        AchievementDefinition definition,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var affectedRows = await connection.ExecuteAsync(new CommandDefinition(
+            AddSql,
+            new { Id = definition.Id.Value, definition.DisplayName, definition.Description },
+            transaction: transaction,
+            cancellationToken: cancellationToken)).ConfigureAwait(false);
+        EnsureAffectedRows(affectedRows, "eingefügt");
+    }
+
+    public async Task<TResult> ExecuteAsync<TResult>(
+        AchievementDefinitionId achievementDefinitionId,
+        Func<AchievementDefinition, TResult> operation,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var validId = AchievementDefinitionId.Create(achievementDefinitionId.Value);
+        var row = await connection.QuerySingleOrDefaultAsync<AchievementDefinitionRow>(
+                new CommandDefinition(
+                    GetForUpdateSql,
+                    new { Id = validId.Value },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+        if (row is null) throw new AchievementDefinitionNotFoundException(validId);
+
+        var definition = Rehydrate(row);
+        var before = Snapshot(definition);
+        var result = operation(definition);
+        var after = Snapshot(definition);
+        if (before != after)
+        {
+            var affectedRows = await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        UpdateSql,
+                        new { Id = validId.Value, after.DisplayName, after.Description },
+                        transaction: transaction,
+                        cancellationToken: cancellationToken))
+                .ConfigureAwait(false);
+            EnsureAffectedRows(affectedRows, "aktualisiert");
+        }
+
+        return result;
     }
 
     private static AchievementDefinition Rehydrate(AchievementDefinitionRow row)

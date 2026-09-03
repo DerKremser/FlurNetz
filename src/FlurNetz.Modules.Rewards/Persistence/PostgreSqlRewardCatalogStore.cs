@@ -1,4 +1,5 @@
 using Dapper;
+using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Rewards.Application;
 using FlurNetz.Modules.Rewards.Domain;
 using FlurNetz.Persistence.Connections;
@@ -44,6 +45,26 @@ public sealed class PostgreSqlRewardCatalogStore : IRewardCatalogStore
             (@RewardPackageId, @RewardDefinitionId);
         """;
 
+    private const string ListDefinitionsSql = """
+        SELECT id AS RewardDefinitionId, definition_type AS DefinitionType, amount AS Amount
+        FROM reward_definitions
+        ORDER BY id;
+        """;
+
+    private const string ListPackagesSql = """
+        SELECT reward_package_id AS RewardPackageId, reward_definition_id AS RewardDefinitionId
+        FROM reward_package_definitions
+        ORDER BY reward_package_id, reward_definition_id;
+        """;
+
+    private const string ListGrantsSql = """
+        SELECT id AS Id, community_identity_id AS CommunityIdentityId,
+               reward_definition_id AS RewardDefinitionId, source_type AS SourceType, source_id AS SourceId
+        FROM reward_grants
+        WHERE @CommunityIdentityId IS NULL OR community_identity_id = @CommunityIdentityId
+        ORDER BY id;
+        """;
+
     private readonly IPostgreSqlConnectionFactory connectionFactory;
 
     /// <summary>
@@ -70,18 +91,7 @@ public sealed class PostgreSqlRewardCatalogStore : IRewardCatalogStore
 
         try
         {
-            await transaction.Connection.ExecuteAsync(
-                    new CommandDefinition(
-                        AddDefinitionSql,
-                        new
-                        {
-                            Id = definition.Id.Value,
-                            DefinitionType = RewardDefinitionTypeCodes.EconomyBalance,
-                            definition.Amount
-                        },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
+            await AddDefinitionAsync(definition, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -90,6 +100,22 @@ public sealed class PostgreSqlRewardCatalogStore : IRewardCatalogStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    public Task AddDefinitionAsync(
+        EconomyBalanceRewardDefinition definition,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        return connection.ExecuteAsync(new CommandDefinition(
+            AddDefinitionSql,
+            new { Id = definition.Id.Value, DefinitionType = RewardDefinitionTypeCodes.EconomyBalance, definition.Amount },
+            transaction: transaction,
+            cancellationToken: cancellationToken));
     }
 
     /// <inheritdoc />
@@ -135,40 +161,7 @@ public sealed class PostgreSqlRewardCatalogStore : IRewardCatalogStore
 
         try
         {
-            var missingDefinitionIds = await FindMissingDefinitionIdsAsync(
-                    package.RewardDefinitionIds,
-                    transaction.Connection,
-                    transaction.Transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            if (missingDefinitionIds.Count != 0)
-            {
-                throw new RewardDefinitionNotFoundException(missingDefinitionIds);
-            }
-
-            await transaction.Connection.ExecuteAsync(
-                    new CommandDefinition(
-                        AddPackageSql,
-                        new { Id = package.Id.Value },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
-            foreach (var rewardDefinitionId in package.RewardDefinitionIds)
-            {
-                await transaction.Connection.ExecuteAsync(
-                        new CommandDefinition(
-                            AddPackageDefinitionSql,
-                            new
-                            {
-                                RewardPackageId = package.Id.Value,
-                                RewardDefinitionId = rewardDefinitionId.Value
-                            },
-                            transaction: transaction.Transaction,
-                            cancellationToken: cancellationToken))
-                    .ConfigureAwait(false);
-            }
+            await AddPackageAsync(package, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -177,6 +170,58 @@ public sealed class PostgreSqlRewardCatalogStore : IRewardCatalogStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    public async Task AddPackageAsync(
+        RewardPackage package,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var missingDefinitionIds = await FindMissingDefinitionIdsAsync(package.RewardDefinitionIds, connection, transaction, cancellationToken).ConfigureAwait(false);
+        if (missingDefinitionIds.Count != 0) throw new RewardDefinitionNotFoundException(missingDefinitionIds);
+
+        await connection.ExecuteAsync(new CommandDefinition(
+            AddPackageSql,
+            new { Id = package.Id.Value },
+            transaction: transaction,
+            cancellationToken: cancellationToken)).ConfigureAwait(false);
+        foreach (var rewardDefinitionId in package.RewardDefinitionIds)
+        {
+            await connection.ExecuteAsync(new CommandDefinition(
+                AddPackageDefinitionSql,
+                new { RewardPackageId = package.Id.Value, RewardDefinitionId = rewardDefinitionId.Value },
+                transaction: transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+        }
+    }
+
+    public async Task<IReadOnlyList<RewardDefinition>> ListDefinitionsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await connection.QueryAsync<RewardDefinitionRow>(new CommandDefinition(ListDefinitionsSql, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        return Array.AsReadOnly(rows.Select(ToDefinition).ToArray());
+    }
+
+    public async Task<IReadOnlyList<RewardPackage>> ListPackagesAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var rows = (await connection.QueryAsync<RewardPackageMembershipRow>(new CommandDefinition(ListPackagesSql, cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
+        return Array.AsReadOnly(rows.GroupBy(row => row.RewardPackageId).Select(group => RewardPackage.Create(RewardPackageId.Create(group.Key), group.Select(row => RewardDefinitionId.Create(row.RewardDefinitionId)))).ToArray());
+    }
+
+    public async Task<IReadOnlyList<RewardGrant>> ListGrantsAsync(CommunityIdentityId? communityIdentityId = null, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await connection.QueryAsync<RewardGrantRow>(new CommandDefinition(ListGrantsSql, new { CommunityIdentityId = communityIdentityId?.Value }, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        return Array.AsReadOnly(rows.Select(row => RewardGrant.Create(
+            RewardGrantId.Create(row.Id),
+            CommunityIdentityId.Create(row.CommunityIdentityId),
+            RewardDefinitionId.Create(row.RewardDefinitionId),
+            RewardSource.Create(row.SourceType, row.SourceId))).ToArray());
     }
 
     private static async Task<IReadOnlyList<RewardDefinitionId>> FindMissingDefinitionIdsAsync(
@@ -204,5 +249,33 @@ public sealed class PostgreSqlRewardCatalogStore : IRewardCatalogStore
         }
 
         return Array.AsReadOnly(missingDefinitionIds.ToArray());
+    }
+
+    private static RewardDefinition ToDefinition(RewardDefinitionRow row) => row.DefinitionType switch
+    {
+        RewardDefinitionTypeCodes.EconomyBalance => EconomyBalanceRewardDefinition.Create(RewardDefinitionId.Create(row.RewardDefinitionId), row.Amount),
+        _ => throw new InvalidOperationException($"Der persistierte Reward-Definition-Typ '{row.DefinitionType}' wird nicht unterstützt.")
+    };
+
+    private sealed class RewardPackageMembershipRow
+    {
+        public Guid RewardPackageId { get; set; }
+        public Guid RewardDefinitionId { get; set; }
+    }
+
+    private sealed class RewardGrantRow
+    {
+        public Guid Id { get; set; }
+        public Guid CommunityIdentityId { get; set; }
+        public Guid RewardDefinitionId { get; set; }
+        public string SourceType { get; set; } = string.Empty;
+        public string SourceId { get; set; } = string.Empty;
+    }
+
+    private sealed class RewardDefinitionRow
+    {
+        public Guid RewardDefinitionId { get; set; }
+        public string DefinitionType { get; set; } = string.Empty;
+        public long Amount { get; set; }
     }
 }

@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 namespace FlurNetz.Modules.Overlay.Application;
 
 /// <summary>Erzeugt und hasht technische Browser-Source-Credentials.</summary>
-internal static class OverlaySourceKey
+public static class OverlaySourceKey
 {
     public static string Generate()
     {

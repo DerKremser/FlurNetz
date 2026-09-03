@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Dapper;
 using FlurNetz.Modules.Economy.Contracts;
 using FlurNetz.Modules.Identity.Contracts;
@@ -75,120 +76,105 @@ public sealed class PostgreSqlRewardPackageGrantExecutor : IRewardPackageGrantEx
         RewardSource source,
         CancellationToken cancellationToken = default)
     {
-        var validRewardPackageId = RewardPackageId.Create(rewardPackageId.Value);
-        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
-        ArgumentNullException.ThrowIfNull(source);
-
         await using var transaction = await PostgreSqlTransaction
             .BeginAsync(connectionFactory, cancellationToken)
             .ConfigureAwait(false);
 
         try
         {
-            var packageExists = await transaction.Connection.QuerySingleAsync<bool>(
-                    new CommandDefinition(
-                        PackageExistsSql,
-                        new { RewardPackageId = validRewardPackageId.Value },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
+            var result = await ExecuteAsync(
+                    rewardPackageId,
+                    communityIdentityId,
+                    source,
+                    transaction.Connection,
+                    transaction.Transaction,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
-            if (!packageExists)
-            {
-                throw new KeyNotFoundException(
-                    $"Das Reward-Package '{validRewardPackageId.Value}' wurde nicht gefunden.");
-            }
-
-            var persistedRows = (await transaction.Connection.QueryAsync<RewardDefinitionRow>(
-                    new CommandDefinition(
-                        LoadDefinitionsSql,
-                        new { RewardPackageId = validRewardPackageId.Value },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken)))
-                .ToArray();
-
-            if (persistedRows.Length == 0)
-            {
-                throw new InvalidOperationException(
-                    $"Das Reward-Package '{validRewardPackageId.Value}' enthält keine Reward-Definition.");
-            }
-
-            var definitions = persistedRows
-                .Select(ToDomain)
-                .ToArray();
-            var package = RewardPackage.Create(
-                validRewardPackageId,
-                definitions.Select(definition => definition.Id));
-
-            var insertedGrantCount = 0;
-            foreach (var definition in definitions)
-            {
-                var grant = RewardGrant.Create(
-                    RewardGrantId.New(),
-                    validCommunityIdentityId,
-                    definition.Id,
-                    source);
-
-                var insertedGrantId = await transaction.Connection.QuerySingleOrDefaultAsync<Guid?>(
-                        new CommandDefinition(
-                            ReserveGrantSql,
-                            new
-                            {
-                                Id = grant.Id.Value,
-                                CommunityIdentityId = grant.CommunityIdentityId.Value,
-                                RewardDefinitionId = grant.RewardDefinitionId.Value,
-                                SourceType = grant.Source.SourceType,
-                                SourceId = grant.Source.SourceId
-                            },
-                            transaction: transaction.Transaction,
-                            cancellationToken: cancellationToken))
-                    .ConfigureAwait(false);
-
-                if (insertedGrantId.HasValue)
-                {
-                    insertedGrantCount++;
-                }
-            }
-
-            if (insertedGrantCount == 0)
-            {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-                return RewardPackageGrantOutcome.AlreadyGranted;
-            }
-
-            if (insertedGrantCount != package.RewardDefinitionIds.Count)
-            {
-                throw new InvalidOperationException(
-                    "Das Reward-Package befindet sich für diese Quelle in einem inkonsistenten "
-                    + "Partial-Grant-Zustand; der fehlende Rest wird nicht still ausgeführt.");
-            }
-
-            foreach (var definition in definitions)
-            {
-                if (definition is not EconomyBalanceRewardDefinition economyDefinition)
-                {
-                    throw new InvalidOperationException(
-                        $"Der persistierte Reward-Definition-Typ '{definition.GetType().Name}' "
-                        + "wird von diesem Executor nicht unterstützt.");
-                }
-
-                await economyBalanceCredit.CreditAsync(
-                        validCommunityIdentityId,
-                        economyDefinition.Amount,
-                        transaction.Connection,
-                        transaction.Transaction,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return RewardPackageGrantOutcome.Granted;
+            return result;
         }
         catch
         {
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<RewardPackageGrantOutcome> ExecuteAsync(
+        RewardPackageId rewardPackageId,
+        CommunityIdentityId communityIdentityId,
+        RewardSource source,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var validRewardPackageId = RewardPackageId.Create(rewardPackageId.Value);
+        var validCommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
+        var packageExists = await connection.QuerySingleAsync<bool>(new CommandDefinition(
+                PackageExistsSql,
+                new { RewardPackageId = validRewardPackageId.Value },
+                transaction: transaction,
+                cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+        if (!packageExists)
+        {
+            throw new KeyNotFoundException($"Das Reward-Package '{validRewardPackageId.Value}' wurde nicht gefunden.");
+        }
+
+        var persistedRows = (await connection.QueryAsync<RewardDefinitionRow>(new CommandDefinition(
+                LoadDefinitionsSql,
+                new { RewardPackageId = validRewardPackageId.Value },
+                transaction: transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
+        if (persistedRows.Length == 0)
+        {
+            throw new InvalidOperationException($"Das Reward-Package '{validRewardPackageId.Value}' enthält keine Reward-Definition.");
+        }
+
+        var definitions = persistedRows.Select(ToDomain).ToArray();
+        var package = RewardPackage.Create(validRewardPackageId, definitions.Select(definition => definition.Id));
+        var insertedGrantCount = 0;
+        foreach (var definition in definitions)
+        {
+            var grant = RewardGrant.Create(RewardGrantId.New(), validCommunityIdentityId, definition.Id, source);
+            var insertedGrantId = await connection.QuerySingleOrDefaultAsync<Guid?>(new CommandDefinition(
+                    ReserveGrantSql,
+                    new
+                    {
+                        Id = grant.Id.Value,
+                        CommunityIdentityId = grant.CommunityIdentityId.Value,
+                        RewardDefinitionId = grant.RewardDefinitionId.Value,
+                        SourceType = grant.Source.SourceType,
+                        SourceId = grant.Source.SourceId
+                    },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+                .ConfigureAwait(false);
+            if (insertedGrantId.HasValue) insertedGrantCount++;
+        }
+
+        if (insertedGrantCount == 0) return RewardPackageGrantOutcome.AlreadyGranted;
+        if (insertedGrantCount != package.RewardDefinitionIds.Count)
+        {
+            throw new InvalidOperationException("Das Reward-Package befindet sich für diese Quelle in einem inkonsistenten Partial-Grant-Zustand; der fehlende Rest wird nicht still ausgeführt.");
+        }
+
+        foreach (var definition in definitions)
+        {
+            if (definition is not EconomyBalanceRewardDefinition economyDefinition)
+            {
+                throw new InvalidOperationException($"Der persistierte Reward-Definition-Typ '{definition.GetType().Name}' wird von diesem Executor nicht unterstützt.");
+            }
+
+            await economyBalanceCredit.CreditAsync(validCommunityIdentityId, economyDefinition.Amount, connection, transaction, cancellationToken).ConfigureAwait(false);
+        }
+
+        return RewardPackageGrantOutcome.Granted;
     }
 
     private static RewardDefinition ToDomain(RewardDefinitionRow row)

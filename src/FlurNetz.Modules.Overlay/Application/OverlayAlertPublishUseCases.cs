@@ -96,16 +96,9 @@ public sealed class PublishPreviewAlert(
         await using var transaction = await PostgreSqlTransaction.BeginAsync(connectionFactory, cancellationToken).ConfigureAwait(false);
         try
         {
-            var channel = await channelStore.GetForUpdateAsync(request.ChannelId, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
-            if (channel is null) return await CompleteAsync(transaction, new(OverlayAlertPublishStatus.ChannelNotFound), cancellationToken).ConfigureAwait(false);
-            if (channel.IsArchived) return await CompleteAsync(transaction, new(OverlayAlertPublishStatus.ChannelArchived), cancellationToken).ConfigureAwait(false);
-
-            var source = request.SourceType is null && request.SourceId is null
-                ? null
-                : OverlaySourceReference.Create(request.SourceType!, request.SourceId!);
-            var alert = OverlayAlert.Create(OverlayAlertId.New(), request.ChannelId, request.Title, request.Message, request.Variant, request.DurationMilliseconds, source, Canonicalize(clock.UtcNow));
-            await alertStore.AddAsync(alert, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
-            return await CompleteAsync(transaction, new(OverlayAlertPublishStatus.Published, alert.Id.Value), cancellationToken).ConfigureAwait(false);
+            var result = await ExecuteAsync(request, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            return result;
         }
         catch
         {
@@ -114,10 +107,31 @@ public sealed class PublishPreviewAlert(
         }
     }
 
-    private static async Task<OverlayAlertPublishResult> CompleteAsync(PostgreSqlTransaction transaction, OverlayAlertPublishResult result, CancellationToken cancellationToken)
+    public Task<OverlayAlertPublishResult> ExecuteAsync(
+        OverlayAlertPublishRequest request,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
     {
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        return result;
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        return ExecuteWithinTransactionAsync(request, connection, transaction, cancellationToken);
+    }
+
+    private async Task<OverlayAlertPublishResult> ExecuteWithinTransactionAsync(
+        OverlayAlertPublishRequest request,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        var channel = await channelStore.GetForUpdateAsync(request.ChannelId, connection, transaction, cancellationToken).ConfigureAwait(false);
+        if (channel is null) return new(OverlayAlertPublishStatus.ChannelNotFound);
+        if (channel.IsArchived) return new(OverlayAlertPublishStatus.ChannelArchived);
+        var source = request.SourceType is null && request.SourceId is null ? null : OverlaySourceReference.Create(request.SourceType!, request.SourceId!);
+        var alert = OverlayAlert.Create(OverlayAlertId.New(), request.ChannelId, request.Title, request.Message, request.Variant, request.DurationMilliseconds, source, Canonicalize(clock.UtcNow));
+        await alertStore.AddAsync(alert, connection, transaction, cancellationToken).ConfigureAwait(false);
+        return new(OverlayAlertPublishStatus.Published, alert.Id.Value);
     }
 
     private static DateTimeOffset Canonicalize(DateTimeOffset value)

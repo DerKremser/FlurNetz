@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Titles.Domain;
 
@@ -13,6 +14,14 @@ namespace FlurNetz.Modules.Titles.Application;
 public interface ICommunityTitlesStore
 {
     /// <summary>
+    /// Lädt einen vorhandenen Community-Titelzustand ohne eine fehlende Root-Zeile anzulegen.
+    /// </summary>
+    Task<CommunityTitles?> GetAsync(
+        CommunityIdentityId communityIdentityId,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen zustandslosen Read.");
+
+    /// <summary>
     /// Lädt, mutiert und persistiert einen Community-Titelzustand atomar.
     /// </summary>
     /// <typeparam name="TResult">Der fachliche Rückgabewert der Domain-Operation.</typeparam>
@@ -24,4 +33,13 @@ public interface ICommunityTitlesStore
         CommunityIdentityId communityIdentityId,
         Func<CommunityTitles, TResult> operation,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Führt dieselbe Domain-Mutation innerhalb einer externen Transaktion aus.</summary>
+    Task<TResult> ExecuteAsync<TResult>(
+        CommunityIdentityId communityIdentityId,
+        Func<CommunityTitles, TResult> operation,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 }

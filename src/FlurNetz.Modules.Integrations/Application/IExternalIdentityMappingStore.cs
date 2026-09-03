@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Integrations.Contracts;
 using FlurNetz.Modules.Integrations.Domain;
@@ -14,6 +15,14 @@ public interface IExternalIdentityMappingStore
         ExternalIdentityMapping mapping,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Verknüpft ein Mapping innerhalb einer extern gehaltenen Transaktion.</summary>
+    Task<ExternalIdentityLinkResult> LinkAsync(
+        ExternalIdentityMapping mapping,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
+
     /// <summary>Lädt ein Mapping über seine externe Identität.</summary>
     Task<ExternalIdentityMapping?> GetAsync(
         IntegrationProviderKey providerKey,
@@ -25,11 +34,25 @@ public interface IExternalIdentityMappingStore
         CommunityIdentityId communityIdentityId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Listet alle Mappings deterministisch für den Administrationskatalog.</summary>
+    Task<IReadOnlyList<ExternalIdentityMapping>> ListAsync(
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen globalen Mapping-Read.");
+
     /// <summary>Entfernt ein Mapping und meldet, ob eine Zuordnung vorhanden war.</summary>
     Task<bool> UnlinkAsync(
         IntegrationProviderKey providerKey,
         ExternalUserId externalUserId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Entfernt ein Mapping innerhalb einer extern gehaltenen Transaktion.</summary>
+    Task<bool> UnlinkAsync(
+        IntegrationProviderKey providerKey,
+        ExternalUserId externalUserId,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 }
 
 /// <summary>Ergebnis des atomaren Link-Versuchs.</summary>

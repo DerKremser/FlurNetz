@@ -121,7 +121,7 @@ public sealed class PostgreSqlAutomationRuleStore : IAutomationRuleStore
         await using var transaction = await PostgreSqlTransaction.BeginAsync(connectionFactory, cancellationToken).ConfigureAwait(false);
         try
         {
-            await PersistInsertAsync(rule, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
+            await AddAsync(rule, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -162,19 +162,7 @@ public sealed class PostgreSqlAutomationRuleStore : IAutomationRuleStore
         await using var transaction = await PostgreSqlTransaction.BeginAsync(connectionFactory, cancellationToken).ConfigureAwait(false);
         try
         {
-            var row = await transaction.Connection.QuerySingleOrDefaultAsync<RuleRow>(
-                new CommandDefinition(GetForUpdateSql, new { Id = id.Value }, transaction: transaction.Transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
-            if (row is null)
-            {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-                return null;
-            }
-
-            var rule = await RehydrateAsync(row, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
-            if (mutation(rule))
-            {
-                await PersistUpdateAsync(rule, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
-            }
+            var rule = await MutateAsync(id, mutation, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return rule;
@@ -184,6 +172,47 @@ public sealed class PostgreSqlAutomationRuleStore : IAutomationRuleStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    public async Task AddAsync(
+        AutomationRule rule,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        await PersistInsertAsync(rule, connection, transaction, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<AutomationRule?> MutateAsync(
+        AutomationRuleId ruleId,
+        Func<AutomationRule, bool> mutation,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var id = AutomationRuleId.Create(ruleId.Value);
+        var row = await connection.QuerySingleOrDefaultAsync<RuleRow>(
+                new CommandDefinition(GetForUpdateSql, new { Id = id.Value }, transaction: transaction, cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var rule = await RehydrateAsync(row, connection, transaction, cancellationToken).ConfigureAwait(false);
+        if (mutation(rule))
+        {
+            await PersistUpdateAsync(rule, connection, transaction, cancellationToken).ConfigureAwait(false);
+        }
+
+        return rule;
     }
 
     private const string GetForUpdateSql = $"""

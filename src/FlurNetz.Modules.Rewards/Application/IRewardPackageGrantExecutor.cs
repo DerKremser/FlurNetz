@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Rewards.Domain;
 
@@ -25,4 +26,14 @@ public interface IRewardPackageGrantExecutor
         CommunityIdentityId communityIdentityId,
         RewardSource source,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Führt den Grant innerhalb einer vom Kompositor gehaltenen Transaktion aus.</summary>
+    Task<RewardPackageGrantOutcome> ExecuteAsync(
+        RewardPackageId rewardPackageId,
+        CommunityIdentityId communityIdentityId,
+        RewardSource source,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Executor unterstützt keinen externen Transaktionskontext.");
 }

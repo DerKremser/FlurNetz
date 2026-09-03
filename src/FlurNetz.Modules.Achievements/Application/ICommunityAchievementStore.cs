@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Achievements.Domain;
 using FlurNetz.Modules.Identity.Contracts;
 
@@ -17,6 +18,13 @@ public interface ICommunityAchievementStore
     Task<bool> UnlockAsync(
         CommunityAchievement achievement,
         CancellationToken cancellationToken = default);
+
+    Task<bool> UnlockAsync(
+        CommunityAchievement achievement,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 
     /// <summary>
     /// Lädt ein Achievement über den zusammengesetzten Community-Schlüssel.

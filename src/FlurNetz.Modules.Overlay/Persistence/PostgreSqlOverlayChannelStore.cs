@@ -47,7 +47,7 @@ public sealed class PostgreSqlOverlayChannelStore : IOverlayChannelStore
         await using var transaction = await PostgreSqlTransaction.BeginAsync(connectionFactory, cancellationToken).ConfigureAwait(false);
         try
         {
-            await transaction.Connection.ExecuteAsync(new CommandDefinition(InsertSql, Parameters(channel, sourceKeyHash), transaction: transaction.Transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
+            await AddAsync(channel, sourceKeyHash, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -102,21 +102,7 @@ public sealed class PostgreSqlOverlayChannelStore : IOverlayChannelStore
         await using var transaction = await PostgreSqlTransaction.BeginAsync(connectionFactory, cancellationToken).ConfigureAwait(false);
         try
         {
-            var row = await transaction.Connection.QuerySingleOrDefaultAsync<ChannelRow>(new CommandDefinition(GetForUpdateSql, new { Id = id }, transaction: transaction.Transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
-            if (row is null)
-            {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-                return null;
-            }
-
-            var channel = Rehydrate(row);
-            var changed = mutation(channel);
-            var replaceKey = invalidateSourceKey || replacementSourceKeyHash is not null;
-            if (changed || replaceKey)
-            {
-                var updated = await transaction.Connection.ExecuteAsync(new CommandDefinition(UpdateSql, Parameters(channel, replaceKey ? replacementSourceKeyHash : row.SourceKeyHash), transaction: transaction.Transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
-                if (updated != 1) throw new InvalidOperationException("Der Overlay-Kanal konnte nicht eindeutig aktualisiert werden.");
-            }
+            var channel = await MutateAsync(channelId, mutation, transaction.Connection, transaction.Transaction, replacementSourceKeyHash, invalidateSourceKey, cancellationToken).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return channel;
@@ -126,6 +112,62 @@ public sealed class PostgreSqlOverlayChannelStore : IOverlayChannelStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    public Task AddAsync(
+        OverlayChannel channel,
+        string sourceKeyHash,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        EnsureHash(sourceKeyHash);
+        return connection.ExecuteAsync(new CommandDefinition(
+            InsertSql, Parameters(channel, sourceKeyHash), transaction: transaction, cancellationToken: cancellationToken));
+    }
+
+    /// <inheritdoc />
+    public async Task<OverlayChannel?> MutateAsync(
+        OverlayChannelId channelId,
+        Func<OverlayChannel, bool> mutation,
+        DbConnection connection,
+        DbTransaction transaction,
+        string? replacementSourceKeyHash = null,
+        bool invalidateSourceKey = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        if (replacementSourceKeyHash is not null) EnsureHash(replacementSourceKeyHash);
+        var id = EnsureId(channelId);
+        var row = await connection.QuerySingleOrDefaultAsync<ChannelRow>(
+                new CommandDefinition(GetForUpdateSql, new { Id = id }, transaction: transaction, cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+        if (row is null)
+        {
+            return null;
+        }
+
+        var channel = Rehydrate(row);
+        var changed = mutation(channel);
+        var replaceKey = invalidateSourceKey || replacementSourceKeyHash is not null;
+        if (changed || replaceKey)
+        {
+            var updated = await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        UpdateSql,
+                        Parameters(channel, replaceKey ? replacementSourceKeyHash : row.SourceKeyHash),
+                        transaction: transaction,
+                        cancellationToken: cancellationToken))
+                .ConfigureAwait(false);
+            if (updated != 1) throw new InvalidOperationException("Der Overlay-Kanal konnte nicht eindeutig aktualisiert werden.");
+        }
+
+        return channel;
     }
 
     private static Guid EnsureId(OverlayChannelId id)

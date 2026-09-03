@@ -1,4 +1,6 @@
+using System.Data.Common;
 using FlurNetz.Modules.Rewards.Domain;
+using FlurNetz.Modules.Identity.Contracts;
 
 namespace FlurNetz.Modules.Rewards.Application;
 
@@ -22,6 +24,13 @@ public interface IRewardCatalogStore
         EconomyBalanceRewardDefinition definition,
         CancellationToken cancellationToken = default);
 
+    Task AddDefinitionAsync(
+        EconomyBalanceRewardDefinition definition,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
+
     /// <summary>
     /// Ermittelt die Definitionen, die noch nicht im Rewards-Katalog existieren.
     /// </summary>
@@ -41,4 +50,27 @@ public interface IRewardCatalogStore
     Task AddPackageAsync(
         RewardPackage package,
         CancellationToken cancellationToken = default);
+
+    Task AddPackageAsync(
+        RewardPackage package,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
+
+    /// <summary>Lädt alle aktuell unterstützten Reward-Definitionen.</summary>
+    Task<IReadOnlyList<RewardDefinition>> ListDefinitionsAsync(
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen Definitions-Read.");
+
+    /// <summary>Lädt Packages einschließlich ihrer Membership.</summary>
+    Task<IReadOnlyList<RewardPackage>> ListPackagesAsync(
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen Package-Read.");
+
+    /// <summary>Lädt Grant-History optional auf eine Community-Identity begrenzt.</summary>
+    Task<IReadOnlyList<RewardGrant>> ListGrantsAsync(
+        CommunityIdentityId? communityIdentityId = null,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen Grant-History-Read.");
 }

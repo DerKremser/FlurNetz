@@ -118,13 +118,7 @@ public sealed class ShopOfferStore : IShopOfferStore
 
         try
         {
-            var affectedRows = await transaction.Connection.ExecuteAsync(
-                    new CommandDefinition(
-                        AddSql,
-                        ToParameters(offer),
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
+            var affectedRows = await AddAsync(offer, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
 
             EnsureAffectedRows(affectedRows, "eingefügt");
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -189,48 +183,13 @@ public sealed class ShopOfferStore : IShopOfferStore
 
         try
         {
-            var row = await transaction.Connection.QuerySingleOrDefaultAsync<ShopOfferRow>(
-                    new CommandDefinition(
-                        GetForUpdateSql,
-                        new { Id = validShopOfferId.Value },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
+            var result = await ExecuteAsync(
+                    validShopOfferId,
+                    operation,
+                    transaction.Connection,
+                    transaction.Transaction,
+                    cancellationToken)
                 .ConfigureAwait(false);
-
-            if (row is null)
-            {
-                throw new ShopOfferNotFoundException(validShopOfferId);
-            }
-
-            var offer = Rehydrate(row);
-            var before = Snapshot(offer);
-            var result = operation(offer);
-            var after = Snapshot(offer);
-
-            if (before != after)
-            {
-                var affectedRows = await transaction.Connection.ExecuteAsync(
-                        new CommandDefinition(
-                            UpdateSql,
-                            new
-                            {
-                                Id = validShopOfferId.Value,
-                                after.DisplayName,
-                                after.Description,
-                                Price = after.Price.Value,
-                                after.IsEnabled,
-                                after.IsArchived,
-                                AvailableFrom = after.AvailableFrom,
-                                AvailableUntil = after.AvailableUntil,
-                                after.PurchaseLimitPerIdentity,
-                                after.SortOrder
-                            },
-                            transaction: transaction.Transaction,
-                            cancellationToken: cancellationToken))
-                    .ConfigureAwait(false);
-
-                EnsureAffectedRows(affectedRows, "aktualisiert");
-            }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return result;
@@ -240,6 +199,78 @@ public sealed class ShopOfferStore : IShopOfferStore
             await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    public async Task<int> AddAsync(
+        ShopOffer offer,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(offer);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        return await connection.ExecuteAsync(new CommandDefinition(
+            AddSql, ToParameters(offer), transaction: transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ExecuteAsync(
+        ShopOfferId shopOfferId,
+        Func<ShopOffer, bool> operation,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var validShopOfferId = ShopOfferId.Create(shopOfferId.Value);
+        var row = await connection.QuerySingleOrDefaultAsync<ShopOfferRow>(
+                new CommandDefinition(
+                    GetForUpdateSql,
+                    new { Id = validShopOfferId.Value },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        if (row is null)
+        {
+            throw new ShopOfferNotFoundException(validShopOfferId);
+        }
+
+        var offer = Rehydrate(row);
+        var before = Snapshot(offer);
+        var result = operation(offer);
+        var after = Snapshot(offer);
+
+        if (before == after)
+        {
+            return result;
+        }
+
+        var affectedRows = await connection.ExecuteAsync(
+                new CommandDefinition(
+                    UpdateSql,
+                    new
+                    {
+                        Id = validShopOfferId.Value,
+                        after.DisplayName,
+                        after.Description,
+                        Price = after.Price.Value,
+                        after.IsEnabled,
+                        after.IsArchived,
+                        AvailableFrom = after.AvailableFrom,
+                        AvailableUntil = after.AvailableUntil,
+                        after.PurchaseLimitPerIdentity,
+                        after.SortOrder
+                    },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        EnsureAffectedRows(affectedRows, "aktualisiert");
+        return result;
     }
 
     private static object ToParameters(ShopOffer offer) => new

@@ -29,13 +29,26 @@ public static class ProgressionModule
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddScoped<ICommunityProgressionStore, CommunityProgressionStore>();
-        services.AddScoped<GrantExperience>();
+        services.AddProgressionReadModule();
         services.AddScoped<MessageEngagementRecordedIntegrationEventHandler>();
         services.AddScoped<IIntegrationEventHandlerRegistration>(serviceProvider =>
             new IntegrationEventHandlerRegistration<MessageEngagementRecordedIntegrationEvent>(
                 MessageEngagementRecordedIntegrationEventHandler.ConsumerName,
                 serviceProvider.GetRequiredService<MessageEngagementRecordedIntegrationEventHandler>()));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registriert die Progression-Persistenz für Hosts, die nur lesen oder gezielt über
+    /// Owner-Capabilities mutieren. Es werden keine Messaging-Consumer komponiert.
+    /// </summary>
+    public static IServiceCollection AddProgressionReadModule(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddScoped<ICommunityProgressionStore, CommunityProgressionStore>();
+        services.AddScoped<GrantExperience>();
         services.AddSingleton<IMigrationSource, ProgressionMigrationSource>();
 
         return services;

@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Shop.Domain;
 using FlurNetz.Modules.Shop.Contracts;
 
@@ -19,6 +20,13 @@ public interface IShopOfferStore
     Task AddAsync(
         ShopOffer offer,
         CancellationToken cancellationToken = default);
+
+    Task<int> AddAsync(
+        ShopOffer offer,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 
     /// <summary>
     /// Lädt ein Shop-Angebot oder liefert bei unbekannter ID <see langword="null"/>.
@@ -46,4 +54,13 @@ public interface IShopOfferStore
         ShopOfferId shopOfferId,
         Func<ShopOffer, bool> operation,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Mutiert ein Angebot innerhalb einer vom Kompositor gehaltenen Transaktion.</summary>
+    Task<bool> ExecuteAsync(
+        ShopOfferId shopOfferId,
+        Func<ShopOffer, bool> operation,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 }

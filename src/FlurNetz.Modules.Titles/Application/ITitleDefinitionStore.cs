@@ -1,3 +1,4 @@
+using System.Data.Common;
 using FlurNetz.Modules.Titles.Domain;
 
 namespace FlurNetz.Modules.Titles.Application;
@@ -17,6 +18,13 @@ public interface ITitleDefinitionStore
     Task AddAsync(
         TitleDefinition definition,
         CancellationToken cancellationToken = default);
+
+    Task AddAsync(
+        TitleDefinition definition,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 
     /// <summary>
     /// Lädt eine Title-Definition oder liefert bei unbekannter ID <see langword="null"/>.
@@ -38,4 +46,12 @@ public interface ITitleDefinitionStore
         TitleDefinitionId titleDefinitionId,
         Func<TitleDefinition, TResult> operation,
         CancellationToken cancellationToken = default);
+
+    Task<TResult> ExecuteAsync<TResult>(
+        TitleDefinitionId titleDefinitionId,
+        Func<TitleDefinition, TResult> operation,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("Dieser Store unterstützt keinen externen Transaktionskontext.");
 }

@@ -46,6 +46,14 @@ public sealed class PostgreSqlExternalIdentityMappingStore :
         ORDER BY provider_key ASC, external_user_id ASC;
         """;
 
+    private const string SelectAllSql = """
+        SELECT provider_key AS ProviderKey,
+               external_user_id AS ExternalUserId,
+               community_identity_id AS CommunityIdentityId
+        FROM integration_external_identity_mappings
+        ORDER BY provider_key ASC, external_user_id ASC;
+        """;
+
     private const string SelectExistingCommunityIdentitySql = """
         SELECT community_identity_id
         FROM integration_external_identity_mappings
@@ -86,62 +94,73 @@ public sealed class PostgreSqlExternalIdentityMappingStore :
 
         try
         {
-            var exists = await identityExistence.ExistsAsync(
-                    mapping.CommunityIdentityId,
-                    transaction.Connection,
-                    transaction.Transaction,
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            if (!exists)
-            {
-                await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return new ExternalIdentityLinkResult(ExternalIdentityLinkStatus.CommunityIdentityNotFound);
-            }
-
-            var insertedIdentityId = await transaction.Connection.QuerySingleOrDefaultAsync<Guid?>(
-                    new CommandDefinition(
-                        InsertSql,
-                        new
-                        {
-                            ProviderKey = mapping.ProviderKey.Value,
-                            ExternalUserId = mapping.ExternalUserId.Value,
-                            CommunityIdentityId = mapping.CommunityIdentityId.Value
-                        },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
-            if (insertedIdentityId is not null)
-            {
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-                return new ExternalIdentityLinkResult(ExternalIdentityLinkStatus.Linked);
-            }
-
-            var existingIdentityId = await transaction.Connection.QuerySingleAsync<Guid>(
-                    new CommandDefinition(
-                        SelectExistingCommunityIdentitySql,
-                        new
-                        {
-                            ProviderKey = mapping.ProviderKey.Value,
-                            ExternalUserId = mapping.ExternalUserId.Value
-                        },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-            var existing = CommunityIdentityId.Create(existingIdentityId);
-
+            var result = await LinkAsync(mapping, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-
-            return existing == mapping.CommunityIdentityId
-                ? new ExternalIdentityLinkResult(ExternalIdentityLinkStatus.AlreadyLinked, existing)
-                : new ExternalIdentityLinkResult(ExternalIdentityLinkStatus.Conflict, existing);
+            return result;
         }
         catch
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<ExternalIdentityLinkResult> LinkAsync(
+        ExternalIdentityMapping mapping,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(mapping);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        var exists = await identityExistence.ExistsAsync(
+                mapping.CommunityIdentityId,
+                connection,
+                transaction,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!exists)
+        {
+            return new ExternalIdentityLinkResult(ExternalIdentityLinkStatus.CommunityIdentityNotFound);
+        }
+
+        var insertedIdentityId = await connection.QuerySingleOrDefaultAsync<Guid?>(
+                new CommandDefinition(
+                    InsertSql,
+                    new
+                    {
+                        ProviderKey = mapping.ProviderKey.Value,
+                        ExternalUserId = mapping.ExternalUserId.Value,
+                        CommunityIdentityId = mapping.CommunityIdentityId.Value
+                    },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+
+        if (insertedIdentityId is not null)
+        {
+            return new ExternalIdentityLinkResult(ExternalIdentityLinkStatus.Linked);
+        }
+
+        var existingIdentityId = await connection.QuerySingleAsync<Guid>(
+                new CommandDefinition(
+                    SelectExistingCommunityIdentitySql,
+                    new
+                    {
+                        ProviderKey = mapping.ProviderKey.Value,
+                        ExternalUserId = mapping.ExternalUserId.Value
+                    },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+        var existing = CommunityIdentityId.Create(existingIdentityId);
+        return existing == mapping.CommunityIdentityId
+            ? new ExternalIdentityLinkResult(ExternalIdentityLinkStatus.AlreadyLinked, existing)
+            : new ExternalIdentityLinkResult(ExternalIdentityLinkStatus.Conflict, existing);
     }
 
     /// <inheritdoc />
@@ -193,6 +212,14 @@ public sealed class PostgreSqlExternalIdentityMappingStore :
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<ExternalIdentityMapping>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        var rows = await connection.QueryAsync<ExternalIdentityMappingRow>(new CommandDefinition(SelectAllSql, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        return rows.Select(row => row.ToDomain()).ToArray();
+    }
+
+    /// <inheritdoc />
     public async Task<bool> UnlinkAsync(
         IntegrationProviderKey providerKey,
         ExternalUserId externalUserId,
@@ -207,26 +234,41 @@ public sealed class PostgreSqlExternalIdentityMappingStore :
 
         try
         {
-            var affectedRows = await transaction.Connection.ExecuteAsync(
-                    new CommandDefinition(
-                        DeleteSql,
-                        new
-                        {
-                            ProviderKey = validProviderKey.Value,
-                            ExternalUserId = validExternalUserId.Value
-                        },
-                        transaction: transaction.Transaction,
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false);
-
+            var affectedRows = await UnlinkAsync(validProviderKey, validExternalUserId, transaction.Connection, transaction.Transaction, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return affectedRows == 1;
+            return affectedRows;
         }
         catch
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> UnlinkAsync(
+        IntegrationProviderKey providerKey,
+        ExternalUserId externalUserId,
+        System.Data.Common.DbConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var validProviderKey = IntegrationProviderKey.Create(providerKey.Value);
+        var validExternalUserId = ExternalUserId.Create(externalUserId.Value);
+        var affectedRows = await connection.ExecuteAsync(
+                new CommandDefinition(
+                    DeleteSql,
+                    new
+                    {
+                        ProviderKey = validProviderKey.Value,
+                        ExternalUserId = validExternalUserId.Value
+                    },
+                    transaction: transaction,
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false);
+        return affectedRows == 1;
     }
 
     /// <inheritdoc />
