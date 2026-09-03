@@ -11,7 +11,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="..\..\src\FlurNetz.Api\wwwroot\admin\admin.js" Link="UiSource\admin.js" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Account.cshtml" Link="UiSource\Account.cshtml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Setup.cshtml" Link="UiSource\Setup.cshtml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\FlurNetz.Api\FlurNetz.Api.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Administration\FlurNetz.Modules.Administration.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Administration.Contracts\FlurNetz.Modules.Administration.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\FlurNetz.Modules.Identity\FlurNetz.Modules.Identity.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Automation\FlurNetz.Modules.Automation.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Integrations\FlurNetz.Modules.Integrations.csproj" />
     <ProjectReference Include="..\..\src\FlurNetz.Modules.Shop.Contracts\FlurNetz.Modules.Shop.Contracts.csproj" />

@@ -112,7 +112,10 @@ public sealed class ShopArchitectureTests
     [Fact]
     public void ShopOfferStoreMutationBoundaryRemainsNonGenericAndSynchronous()
     {
-        var method = typeof(IShopOfferStore).GetMethod(nameof(IShopOfferStore.ExecuteAsync));
+        var method = typeof(IShopOfferStore).GetMethods()
+            .Single(candidate =>
+                candidate.Name == nameof(IShopOfferStore.ExecuteAsync) &&
+                candidate.GetParameters().Length == 3);
 
         Assert.NotNull(method);
         Assert.False(method!.IsGenericMethod);

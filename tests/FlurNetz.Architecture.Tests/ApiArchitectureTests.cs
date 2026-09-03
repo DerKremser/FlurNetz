@@ -18,6 +18,7 @@ public sealed class ApiArchitectureTests
     [
         "FlurNetz.Messaging",
         "FlurNetz.Modules.Economy",
+        "FlurNetz.Modules.Economy.Contracts",
         "FlurNetz.Persistence",
         "FlurNetz.Modules.Identity",
         "FlurNetz.Modules.Identity.Contracts",
@@ -27,8 +28,18 @@ public sealed class ApiArchitectureTests
         "FlurNetz.Modules.Inventory.Contracts",
         "FlurNetz.Modules.Shop",
         "FlurNetz.Modules.Shop.Contracts",
-        "FlurNetz.Modules.Notifications"
-        ,"FlurNetz.Modules.Automation",
+        "FlurNetz.Modules.Notifications",
+        "FlurNetz.Modules.Automation",
+        "FlurNetz.Modules.Achievements",
+        "FlurNetz.Modules.Achievements.Contracts",
+        "FlurNetz.Modules.Progression",
+        "FlurNetz.Modules.Progression.Contracts",
+        "FlurNetz.Modules.Rewards",
+        "FlurNetz.Modules.Rewards.Contracts",
+        "FlurNetz.Modules.Titles",
+        "FlurNetz.Modules.Titles.Contracts",
+        "FlurNetz.Modules.Administration",
+        "FlurNetz.Modules.Administration.Contracts",
         "FlurNetz.Modules.Overlay",
         "FlurNetz.Modules.Overlay.Contracts",
         "FlurNetz.BuildingBlocks"
@@ -43,6 +54,7 @@ public sealed class ApiArchitectureTests
 
         Assert.Contains("FlurNetz.Messaging", references);
         Assert.Contains("FlurNetz.Modules.Economy", references);
+        Assert.Contains("FlurNetz.Modules.Economy.Contracts", references);
         Assert.Contains("FlurNetz.Persistence", references);
         Assert.Contains("FlurNetz.Modules.Identity", references);
         Assert.Contains("FlurNetz.Modules.Identity.Contracts", references);
@@ -94,6 +106,7 @@ public sealed class ApiArchitectureTests
     public void PublicApiTypesUseTheApiNamespace()
     {
         var invalidTypes = ApiAssembly.GetTypes()
+            .Where(type => type.GetCustomAttributes(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false).Length == 0)
             .Where(type => type.Namespace is null
                 || !type.Namespace.StartsWith("FlurNetz.Api", StringComparison.Ordinal))
             .Select(type => type.FullName)

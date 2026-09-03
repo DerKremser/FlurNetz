@@ -18,8 +18,8 @@ public sealed class AutomationManagementApiPostgreSqlTests(ApiPostgreSqlFixture 
         SkipIfUnavailable();
         await database.ResetDatabaseAsync(TestToken);
 
-        using var host = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = host.CreateClient();
+        using var host = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await host.CreateAdminClientAsync(TestToken);
         var identityId = Guid.NewGuid();
         var request = CreateShopRuleRequest(identityId, sortOrder: 4);
 
@@ -91,8 +91,9 @@ public sealed class AutomationManagementApiPostgreSqlTests(ApiPostgreSqlFixture 
         Assert.Equal(HttpStatusCode.Conflict, (await client.PutAsJsonAsync(route, request, TestToken)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"{route}/disable", null, TestToken)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"{route}/disable", null, TestToken)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"{route}/archive", null, TestToken)).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"{route}/archive", null, TestToken)).StatusCode);
+        var archiveRequest = new AdminActionRequest(Guid.NewGuid(), "archive rule for lifecycle test");
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync($"{route}/archive", archiveRequest, TestToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync($"{route}/archive", archiveRequest, TestToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsync($"{route}/enable", null, TestToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PutAsJsonAsync(route, request, TestToken)).StatusCode);
     }
@@ -103,8 +104,8 @@ public sealed class AutomationManagementApiPostgreSqlTests(ApiPostgreSqlFixture 
         SkipIfUnavailable();
         await database.ResetDatabaseAsync(TestToken);
 
-        using var host = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = host.CreateClient();
+        using var host = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await host.CreateAdminClientAsync(TestToken);
         var valid = CreateEngagementRuleRequest(Guid.NewGuid());
 
         Assert.Equal(HttpStatusCode.BadRequest,
@@ -203,8 +204,8 @@ public sealed class AutomationManagementApiPostgreSqlTests(ApiPostgreSqlFixture 
         SkipIfUnavailable();
         await database.ResetDatabaseAsync(TestToken);
 
-        using var host = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = host.CreateClient();
+        using var host = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await host.CreateAdminClientAsync(TestToken);
         var createResponse = await client.PostAsJsonAsync(
             "/api/admin/automation/rules",
             CreateEngagementRuleRequest(Guid.NewGuid()),

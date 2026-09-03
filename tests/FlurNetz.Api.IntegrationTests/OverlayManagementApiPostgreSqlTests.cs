@@ -14,8 +14,8 @@ public sealed class OverlayManagementApiPostgreSqlTests(ApiPostgreSqlFixture dat
     {
         SkipIfUnavailable();
         await database.ResetDatabaseAsync(TestToken);
-        using var host = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = host.CreateClient();
+        using var host = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await host.CreateAdminClientAsync(TestToken);
 
         using var createResponse = await client.PostAsJsonAsync(
             "/api/admin/overlay/channels",
@@ -64,12 +64,12 @@ public sealed class OverlayManagementApiPostgreSqlTests(ApiPostgreSqlFixture dat
     {
         SkipIfUnavailable();
         await database.ResetDatabaseAsync(TestToken);
-        using var host = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = host.CreateClient();
+        using var host = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await host.CreateAdminClientAsync(TestToken);
         var created = await CreateAsync(client);
         var route = $"/api/admin/overlay/channels/{created.Channel.Id:D}";
 
-        using var rotateResponse = await client.PostAsync($"{route}/rotate-source-key", null, TestToken);
+        using var rotateResponse = await client.PostAsJsonAsync($"{route}/rotate-source-key", new AdminActionRequest(Guid.NewGuid(), "rotate source key for lifecycle test"), TestToken);
         var rotated = await rotateResponse.Content.ReadFromJsonAsync<OverlayChannelSecretResponse>(TestToken);
         Assert.Equal(HttpStatusCode.OK, rotateResponse.StatusCode);
         Assert.NotNull(rotated);
@@ -77,7 +77,7 @@ public sealed class OverlayManagementApiPostgreSqlTests(ApiPostgreSqlFixture dat
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(created.BrowserSourceUrl, TestToken)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(rotated.BrowserSourceUrl, TestToken)).StatusCode);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"{route}/archive", null, TestToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync($"{route}/archive", new AdminActionRequest(Guid.NewGuid(), "archive channel for lifecycle test"), TestToken)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(rotated.BrowserSourceUrl, TestToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsync($"{route}/enable", null, TestToken)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync($"{route}/alerts", new OverlayAlertRequest("Nope", null, null, null, null, null), TestToken)).StatusCode);
@@ -88,8 +88,8 @@ public sealed class OverlayManagementApiPostgreSqlTests(ApiPostgreSqlFixture dat
     {
         SkipIfUnavailable();
         await database.ResetDatabaseAsync(TestToken);
-        using var host = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = host.CreateClient();
+        using var host = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await host.CreateAdminClientAsync(TestToken);
         var created = await CreateAsync(client);
         var route = $"/api/admin/overlay/channels/{created.Channel.Id:D}";
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"{route}/enable", null, TestToken)).StatusCode);

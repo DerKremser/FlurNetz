@@ -18,8 +18,8 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
         SkipIfUnavailable();
         await ResetDatabaseAsync();
 
-        using var factory = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = factory.CreateClient();
+        using var factory = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await factory.CreateAdminClientAsync(TestToken);
         var identityId = await CreateIdentityAsync(client);
         var response = await LinkAsync(client, identityId, "twitch-user");
 
@@ -51,8 +51,8 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
         SkipIfUnavailable();
         await ResetDatabaseAsync();
 
-        using var factory = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = factory.CreateClient();
+        using var factory = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await factory.CreateAdminClientAsync(TestToken);
         var identityId = await CreateIdentityAsync(client);
         var first = await LinkAsync(client, identityId, "same-user");
         var second = await LinkAsync(client, identityId, "same-user");
@@ -76,9 +76,7 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
         Assert.NotNull(listBody);
         Assert.Single(listBody!.Items);
 
-        using var deleteResponse = await client.DeleteAsync(
-            $"{MappingsRoute}/twitch/same-user",
-            TestToken);
+        using var deleteResponse = await UnlinkAsync(client, "twitch", "same-user");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         using var afterDelete = await client.GetAsync(
@@ -94,7 +92,7 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
             "SELECT COUNT(*) FROM community_identities;",
             connection);
         Assert.Equal(0L, (long)(await mappingCountCommand.ExecuteScalarAsync(TestToken))!);
-        Assert.Equal(1L, (long)(await identityCountCommand.ExecuteScalarAsync(TestToken))!);
+        Assert.Equal(2L, (long)(await identityCountCommand.ExecuteScalarAsync(TestToken))!);
     }
 
     [Fact]
@@ -103,8 +101,8 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
         SkipIfUnavailable();
         await ResetDatabaseAsync();
 
-        using var factory = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = factory.CreateClient();
+        using var factory = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await factory.CreateAdminClientAsync(TestToken);
         var identityId = await CreateIdentityAsync(client);
 
         using var invalidProviderResponse = await client.PostAsJsonAsync(
@@ -122,7 +120,7 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
         var unknownIdentity = Guid.NewGuid();
         using var unknownIdentityResponse = await client.PostAsJsonAsync(
             MappingsRoute,
-            new ExternalIdentityMappingRequest("twitch", "unknown", unknownIdentity),
+            new ExternalIdentityMappingRequest("twitch", "unknown", unknownIdentity, "repair mapping", Guid.NewGuid()),
             TestToken);
         Assert.Equal(HttpStatusCode.NotFound, unknownIdentityResponse.StatusCode);
         Assert.Equal("application/problem+json", unknownIdentityResponse.Content.Headers.ContentType?.MediaType);
@@ -132,7 +130,7 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
         var secondIdentity = await CreateIdentityAsync(client);
         using var conflictResponse = await client.PostAsJsonAsync(
             MappingsRoute,
-            new ExternalIdentityMappingRequest("twitch", "reassignment", secondIdentity),
+            new ExternalIdentityMappingRequest("twitch", "reassignment", secondIdentity, "reassign mapping", Guid.NewGuid()),
             TestToken);
         Assert.Equal(HttpStatusCode.Conflict, conflictResponse.StatusCode);
         var problem = await conflictResponse.Content.ReadFromJsonAsync<JsonElement>(TestToken);
@@ -145,8 +143,8 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
         SkipIfUnavailable();
         await ResetDatabaseAsync();
 
-        using var factory = new FlurNetzApiFactory(database.ConnectionString);
-        using var client = factory.CreateClient();
+        using var factory = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         using var unknown = await client.GetAsync(
             $"{MappingsRoute}/twitch/missing",
@@ -154,9 +152,7 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
         using var invalidCommunity = await client.GetAsync(
             $"{MappingsRoute}/community/not-a-guid",
             TestToken);
-        using var unknownDelete = await client.DeleteAsync(
-            $"{MappingsRoute}/twitch/missing",
-            TestToken);
+        using var unknownDelete = await UnlinkAsync(client, "twitch", "missing");
 
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, invalidCommunity.StatusCode);
@@ -179,11 +175,27 @@ public sealed class IntegrationsManagementApiPostgreSqlTests(ApiPostgreSqlFixtur
     {
         using var response = await client.PostAsJsonAsync(
             MappingsRoute,
-            new ExternalIdentityMappingRequest("twitch", externalUserId, communityIdentityId),
+            new ExternalIdentityMappingRequest("twitch", externalUserId, communityIdentityId, "test mapping", Guid.NewGuid()),
             TestToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(TestToken);
+            throw new Xunit.Sdk.XunitException($"Link request failed with {(int)response.StatusCode}: {error}");
+        }
         var body = await response.Content.ReadFromJsonAsync<ExternalIdentityMappingResponse>(TestToken);
         return (response.StatusCode, body);
     }
+
+    private static async Task<HttpResponseMessage> UnlinkAsync(
+        HttpClient client,
+        string provider,
+        string externalUserId) =>
+        await client.SendAsync(new HttpRequestMessage
+        {
+            Method = HttpMethod.Delete,
+            RequestUri = new Uri($"{MappingsRoute}/{provider}/{externalUserId}", UriKind.Relative),
+            Content = JsonContent.Create(new AdminActionRequest(Guid.NewGuid(), "remove mapping"))
+        }, TestToken);
 
     private async Task ResetDatabaseAsync() =>
         await database.ResetDatabaseAsync(TestToken);

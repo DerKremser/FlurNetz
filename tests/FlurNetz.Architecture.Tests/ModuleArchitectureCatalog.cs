@@ -87,6 +87,8 @@ internal static class ModuleArchitectureCatalog
                         "FlurNetz.Modules.Notifications.Contracts",
                         "FlurNetz.Modules.Overlay.Contracts"
                     ],
+                "Administration" =>
+                    [ContractsAssemblyName, "FlurNetz.Modules.Identity.Contracts"],
                 "Overlay" =>
                     [ContractsAssemblyName, "FlurNetz.BuildingBlocks", "FlurNetz.Persistence"],
                 "Integrations" =>

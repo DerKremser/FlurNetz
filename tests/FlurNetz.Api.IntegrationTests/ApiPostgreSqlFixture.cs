@@ -42,6 +42,10 @@ public sealed class ApiPostgreSqlFixture : IAsyncLifetime
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = new NpgsqlCommand(
             """
+            DROP TABLE IF EXISTS public.administration_operations;
+            DROP TABLE IF EXISTS public.administration_audit_entries;
+            DROP TABLE IF EXISTS public.administration_role_assignments;
+            DROP TABLE IF EXISTS public.administration_credentials;
             DROP TABLE IF EXISTS public.shop_purchase_requests;
             DROP TABLE IF EXISTS public.shop_purchase_guards;
             DROP TABLE IF EXISTS public.shop_purchases;

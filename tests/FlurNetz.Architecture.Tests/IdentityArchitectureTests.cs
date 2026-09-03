@@ -51,7 +51,10 @@ public sealed class IdentityArchitectureTests
         Assert.True(exportedTypes.SetEquals(
         [
             typeof(CommunityIdentityId),
-            typeof(ICommunityIdentityExistence)
+            typeof(ICommunityIdentityExistence),
+            typeof(CommunityIdentitySummary),
+            typeof(CommunityIdentityPage),
+            typeof(ICommunityIdentityRead)
         ]));
 
         var method = typeof(ICommunityIdentityExistence).GetMethod(

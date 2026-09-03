@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.8.12105.206 oobstable
+VisualStudioVersion = 18.8.12105.206
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
@@ -176,6 +176,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlurNetz.Modules.Overlay.IntegrationTests", "tests\FlurNetz.Modules.Overlay.IntegrationTests\FlurNetz.Modules.Overlay.IntegrationTests.csproj", "{FA7EFEE2-891A-499A-8E8D-AD49022931B4}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlurNetz.Modules.Integrations.IntegrationTests", "tests\FlurNetz.Modules.Integrations.IntegrationTests\FlurNetz.Modules.Integrations.IntegrationTests.csproj", "{2144EB9E-17DC-4805-8A2D-61693E2A1163}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlurNetz.Modules.Administration.IntegrationTests", "tests\FlurNetz.Modules.Administration.IntegrationTests\FlurNetz.Modules.Administration.IntegrationTests.csproj", "{3CA2DA19-CE03-412A-9932-1A405B1956B1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -1027,6 +1029,18 @@ Global
 		{2144EB9E-17DC-4805-8A2D-61693E2A1163}.Release|x64.Build.0 = Release|Any CPU
 		{2144EB9E-17DC-4805-8A2D-61693E2A1163}.Release|x86.ActiveCfg = Release|Any CPU
 		{2144EB9E-17DC-4805-8A2D-61693E2A1163}.Release|x86.Build.0 = Release|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Debug|x64.Build.0 = Debug|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Debug|x86.Build.0 = Debug|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Release|x64.ActiveCfg = Release|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Release|x64.Build.0 = Release|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Release|x86.ActiveCfg = Release|Any CPU
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1117,5 +1131,6 @@ Global
 		{13CD3A89-9E27-4C0E-87C9-E8FE1330D0BF} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{FA7EFEE2-891A-499A-8E8D-AD49022931B4} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{2144EB9E-17DC-4805-8A2D-61693E2A1163} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{3CA2DA19-CE03-412A-9932-1A405B1956B1} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

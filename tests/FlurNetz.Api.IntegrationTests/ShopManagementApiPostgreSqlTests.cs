@@ -19,7 +19,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var itemDefinitionId = Guid.NewGuid();
         var availableFrom = UtcNow().AddHours(1);
@@ -77,7 +77,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var createdRequest = new CreateShopOfferRequest(
             Guid.NewGuid(),
@@ -143,7 +143,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var offerId = Guid.NewGuid();
         await InsertOfferAsync(new OfferSeed(
@@ -186,7 +186,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var first = await CreateOfferAsync(client, sortOrder: 20);
         var second = await CreateOfferAsync(client, sortOrder: 0);
@@ -244,7 +244,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var offer = await CreateOfferAsync(client);
         var availableFrom = UtcNow().AddDays(1);
@@ -343,18 +343,19 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var offer = await CreateOfferAsync(client);
         await EnableAsync(client, offer.Id);
 
-        using var firstArchiveResponse = await client.PostAsync(
+        var archiveRequest = new AdminActionRequest(Guid.NewGuid(), "archive offer for lifecycle test");
+        using var firstArchiveResponse = await client.PostAsJsonAsync(
             $"/api/admin/shop/offers/{offer.Id}/archive",
-            content: null,
+            archiveRequest,
             TestToken);
-        using var repeatedArchiveResponse = await client.PostAsync(
+        using var repeatedArchiveResponse = await client.PostAsJsonAsync(
             $"/api/admin/shop/offers/{offer.Id}/archive",
-            content: null,
+            archiveRequest,
             TestToken);
         using var enableResponse = await client.PostAsync(
             $"/api/admin/shop/offers/{offer.Id}/enable",
@@ -375,7 +376,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         var persisted = await ReadPersistedOfferAsync(offer.Id);
 
         Assert.Equal(HttpStatusCode.NoContent, firstArchiveResponse.StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, repeatedArchiveResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, repeatedArchiveResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, enableResponse.StatusCode);
         Assert.Equal(
             "application/problem+json",
@@ -397,7 +398,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var offer = await CreateOfferAsync(client);
         var invalidWindowBoundary = UtcNow();
@@ -458,7 +459,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
         var unknownOfferId = Guid.NewGuid();
         var routes = new (string Route, object Body)[]
         {
@@ -470,7 +471,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
             ($"/api/admin/shop/offers/{unknownOfferId}/sort-order", new ChangeShopOfferSortOrderRequest(1)),
             ($"/api/admin/shop/offers/{unknownOfferId}/enable", new { }),
             ($"/api/admin/shop/offers/{unknownOfferId}/disable", new { }),
-            ($"/api/admin/shop/offers/{unknownOfferId}/archive", new { })
+            ($"/api/admin/shop/offers/{unknownOfferId}/archive", new AdminActionRequest(Guid.NewGuid(), "archive missing offer"))
         };
 
         foreach (var route in routes)
@@ -502,7 +503,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
         var offer = await CreateOfferAsync(client);
 
         using var initiallyHidden = await client.GetAsync(
@@ -539,7 +540,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var offer = await CreateOfferAsync(client, price: 3);
         await EnableAsync(client, offer.Id);
@@ -590,7 +591,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var offer = await CreateOfferAsync(client, price: 0);
         await EnableAsync(client, offer.Id);
@@ -633,7 +634,7 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var offer = await CreateOfferAsync(client, price: 0);
         await EnableAsync(client, offer.Id);
@@ -716,8 +717,8 @@ public sealed class ShopManagementApiPostgreSqlTests(ApiPostgreSqlFixture databa
 
     private async Task<FlurNetzApiFactory> StartHostAsync()
     {
-        var factory = new FlurNetzApiFactory(database.ConnectionString);
-        using var startupClient = factory.CreateClient();
+        var factory = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var startupClient = await factory.CreateAdminClientAsync(TestToken);
         using var startupResponse = await startupClient.GetAsync(
             "/api/admin/shop/offers",
             TestToken);

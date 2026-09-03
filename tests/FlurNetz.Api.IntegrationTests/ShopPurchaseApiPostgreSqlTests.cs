@@ -23,7 +23,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var itemDefinitionId = Guid.NewGuid();
@@ -75,7 +75,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var itemDefinitionId = Guid.NewGuid();
@@ -111,7 +111,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var itemDefinitionId = Guid.NewGuid();
@@ -155,7 +155,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var firstItemDefinitionId = Guid.NewGuid();
@@ -212,7 +212,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var itemDefinitionId = Guid.NewGuid();
@@ -238,7 +238,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var offerId = Guid.NewGuid();
         await InsertOfferAsync(new OfferSeed(
@@ -270,7 +270,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         await InsertIdentityAsync(identityId);
@@ -305,7 +305,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var itemDefinitionId = Guid.NewGuid();
@@ -322,9 +322,9 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
             null,
             1));
 
-        using var archiveResponse = await client.PostAsync(
+        using var archiveResponse = await client.PostAsJsonAsync(
             $"/api/admin/shop/offers/{offerId}/archive",
-            content: null,
+            new AdminActionRequest(Guid.NewGuid(), "archive offer before purchase"),
             TestToken);
         using var purchaseResponse = await PurchaseAsync(
             client,
@@ -354,7 +354,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var itemDefinitionId = Guid.NewGuid();
@@ -393,7 +393,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var offerId = Guid.NewGuid();
@@ -428,7 +428,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var validOfferId = Guid.NewGuid();
         var validRequestId = Guid.NewGuid();
@@ -469,7 +469,7 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
         SkipIfDatabaseIsUnavailable();
         await ResetDatabaseAsync();
         using var factory = await StartHostAsync();
-        using var client = factory.CreateClient();
+        using var client = await factory.CreateAdminClientAsync(TestToken);
 
         var identityId = Guid.NewGuid();
         var offerId = Guid.NewGuid();
@@ -508,8 +508,8 @@ public sealed class ShopPurchaseApiPostgreSqlTests(ApiPostgreSqlFixture database
 
     private async Task<FlurNetzApiFactory> StartHostAsync()
     {
-        var factory = new FlurNetzApiFactory(database.ConnectionString);
-        using var startupClient = factory.CreateClient();
+        var factory = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var startupClient = await factory.CreateAdminClientAsync(TestToken);
         using var startupResponse = await startupClient.GetAsync("/api/shop/offers", TestToken);
         Assert.Equal(HttpStatusCode.OK, startupResponse.StatusCode);
         return factory;
