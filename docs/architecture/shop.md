@@ -26,7 +26,7 @@ folgende Tabelle hält die Entscheidungen für die aktuell vorgesehene FlurNetz-
 | Warenkorb | Nicht erforderlich | Der verbindliche V1-Kauf ist ein direkter Offer-Purchase. Ein Cart würde ohne Mehrangebots- oder Checkout-Anforderung nur zusätzliche Transaktions- und Idempotenzsemantik einführen. |
 | Refund/Cancellation | Nicht erforderlich | Erfolgreiche Purchases bleiben unveränderliche Historie. Eine Rückabwicklung müsste Economy, Inventory, History und gegebenenfalls Messaging gemeinsam kompensieren; dafür gibt es im vorgesehenen V1-Einsatz keinen Bedarf. |
 | `shop.purchase-completed`-Consumer | Kein Shop-owned Consumer erforderlich | Das Event wird im Worker durch das eigenständige Notifications-Modul konsumiert. Shop bleibt ausschließlich Eigentümer von Purchase und Event und kennt keine Notification-Implementierung. |
-| Authentication/Authorization | Nicht Shop-owned | Die Management-Grenze bleibt bis zum systemweiten Security-/Host-Auftrag ungeschützt und darf nicht als extern produktionssicher betrachtet werden. Eine isolierte Shop-Security wird nicht erfunden. |
+| Authentication/Authorization | Nicht Shop-owned | Die Management-Grenze ist durch das systemweite Administration-Cookie-Scheme, explizite `Shop.Read`/`Shop.Manage`-Policies, Anti-Forgery, Audit und Operations geschützt. Shop besitzt die Security nicht. |
 
 Damit sind `ShopOfferId`, `ItemDefinitionId`, Anzeigename, Beschreibung, Preis, Availability,
 Kauflimit, SortOrder, Aktivierung und terminale Archivierung die vollständige Shop-owned
@@ -257,8 +257,9 @@ unbekannte Offer-IDs `404 Not Found`, bekannte ungültige Werte und malformed JS
 Request`, jeweils als ProblemDetails. Wiederholtes Enable oder Disable bleibt ein No-op.
 Die Storefront bleibt ausschließlich auf `IsEnabled && !IsArchived && IsAvailableAt(now)`
 beschränkt.
-Die API verfügt derzeit bewusst noch über keine Authentication/Authorization; vor externem
-Produktivbetrieb muss ein separater Security-/Host-Auftrag diese Management-Routen schützen.
+Die Management-Routen sind durch Administration V1 permission- und Anti-Forgery-geschützt;
+High-Risk-Aktionen verlangen Reason und RequestId und werden über Audit/Operations atomar
+mit der Shop-Mutation behandelt. Der Shop besitzt diese Security nicht selbst.
 Der API-Adapter führt Migrationen nicht selbst aus; `Shop:4:AddShopOfferArchiveState` wird wie
 die übrigen Shop-Migrationen über `ShopMigrationSource` registriert. Die Management-Grenze
 veröffentlicht keine Events und registriert keinen Shop-owned Consumer; der separate Worker
@@ -523,15 +524,16 @@ Die Unit Tests prüfen zusätzlich den vollständigen Serialize-/Deserialize-Rou
 
 Die Worker-Integration prüft zusätzlich die Verarbeitung des bekannten Events durch den echten
 Worker und den Notifications-Inbox-Eintrag. Bewusst aus diesem Shop-V1-Scope
-ausgeschlossen bleiben ein Admin-Frontend und produktive Authentication/Authorization,
+ausgeschlossen bleiben Shop-eigene Admin-UI und Shop-eigene Authentication/Authorization;
+die gemeinsame Administration stellt die geschützte Katalogansicht und Management-Grenze,
 ein Shop-owned Event-Consumer, Warenkorb, variable Purchase-Menge, Stock, Kategorien,
 zusätzliche Metadaten, Discounts, Coupons, Refunds, Purchase-Cancellation, Ledger,
 Saga/Compensation, Distributed Transactions, globale Unit-of-Work-Abstraktionen, generische
 Repositories, generische Pagination-Foundations, Inventory-Item-Instanzen, Titles-/Rewards-/
 Achievement-Ausführung oder eine generische `OfferTarget`-Abstraktion. Ebenfalls nicht
 erforderlich sind Drag & Drop, Bulk-Reorder, Delete, Soft Delete, Unarchive und Restore;
-die Archivierung ist terminal. Authentication/Authorization bleibt ein separater
-Security-/Host-Scope; Worker, Consumer, Contracts und Event-Versionen werden für V1 nicht
+die Archivierung ist terminal. Authentication/Authorization erfolgt über Administration V1;
+Worker, Consumer, Contracts und Event-Versionen werden für V1 nicht
 erweitert.
 
 ## Abschlussaudit
@@ -544,7 +546,7 @@ Der Abschlussaudit des zusammenhängenden Shop-V1-Auftrags bestätigt folgende Z
 | Application | Vollständige Katalog-, Storefront-, Purchase- und History-Use-Cases; keine weitere belegte Shop-owned V1-Funktion fehlt. |
 | Persistence | Vier unveränderliche Shop-Migrationen, ausschließlich Shop-eigene Tabellen, gezielte Indizes, Row-Locks, Guard-Semantik, atomarer Commit/Rollback und historische Integrität. Eine Schema-Evolution ist für den beschlossenen Scope nicht erforderlich. |
 | API/Storefront | Öffentliche sichtbare Katalogliste, Einzelangebot, direkter Purchase, Purchase-Lookup und identity-isolierte Keyset-History mit API-eigenen DTOs und ProblemDetails. Interne Zustände bleiben in der Management-Antwort. |
-| Management | Create, vollständige interne Katalogsicht, alle fachlichen Mutationen, Enable/Disable und terminale Archivierung sind HTTP-erreichbar. Die noch ungeschützte Grenze ist als systemweiter Security-Befund dokumentiert. |
+| Management | Create, vollständige interne Katalogsicht, alle fachlichen Mutationen, Enable/Disable und terminale Archivierung sind HTTP-erreichbar. Die Grenze ist durch Administration-Policies, Anti-Forgery, Audit und Operations geschützt. |
 | Messaging/Worker | `shop.purchase-completed` v1 bleibt unverändert, wird atomar über die vorhandene Outbox erzeugt und im Worker vom eigenständigen Notifications-Consumer verarbeitet. |
 | Modulgrenzen | Shop referenziert nur erlaubte Contracts und technische Foundations; kein Cross-Module-SQL und keine fremde Modulimplementierung. |
 | Tests | Domain-, Application-, PostgreSQL-, API-, Messaging-, Worker- und Architekturabdeckung für den vollständigen Scope ist vorhanden. |

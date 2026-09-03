@@ -15,10 +15,11 @@ und keinen OutboxProcessor aus.
 
 `FlurNetz.Api` ist ein eigenständiger ausführbarer FlurNetz-Host und ausschließlich Composition
 Root und HTTP-Adapter. Er konfiguriert den ASP.NET-Core-Host, liest die PostgreSQL-
-Konfiguration, registriert die technische Persistence Foundation, bindet das Identity-Modul,
-den vollständigen Shop-V1-Purchase, die persönliche Notifications-Inbox sowie die schmalen
-Economy-/Inventory-Capabilities ein, führt die Startmigrationen aus und ordnet Storefront-,
-Purchase-, Notifications- und Shop-Management-HTTP-Endpunkte zu. Der unabhängige
+Konfiguration, registriert die technische Persistence Foundation, bindet die Administration
+und die dafür benötigten Owner-Reads/-Capabilities, den vollständigen Shop-V1-Purchase, die
+persönliche Notifications-Inbox sowie die bestehenden Management-Grenzen ein, führt die
+Startmigrationen aus und ordnet Storefront-, Purchase-, Notifications-, Admin-API- und
+Razor-HTTP-Endpunkte zu. Der unabhängige
 `FlurNetz.Worker` ist der separate Runtime-Host für Messaging und wird vom API-Host weder
 referenziert noch gestartet.
 
@@ -44,6 +45,11 @@ Der API-Host referenziert für die Shop-V1-Komposition:
 - `FlurNetz.Modules.Overlay` für `AddOverlayModule()`, Overlay-Use-Cases und die Browser-/SSE-
   Adaptergrenze
 - `FlurNetz.Modules.Overlay.Contracts` für die Overlay-Alert-Contract-Werte
+- `FlurNetz.Modules.Administration` und `FlurNetz.Modules.Administration.Contracts` für
+  Credentials, Policies, Audit, Operations und die Admin-Composition
+- `FlurNetz.Modules.Progression`, `FlurNetz.Modules.Rewards`, `FlurNetz.Modules.Titles`,
+  `FlurNetz.Modules.Achievements`, `FlurNetz.Modules.Automation` und
+  `FlurNetz.Modules.Integrations` für ihre expliziten Owner-Reads und Management-Use-Cases
 
 Die erlaubte Richtung lautet:
 
@@ -138,8 +144,8 @@ POST /api/identities/{communityIdentityId}/notifications/read-all
 Die Liste verwendet `created_at_utc DESC, id DESC`, `pageSize` 1 bis 100 und einen an Identity
 und `unreadOnly` gebundenen API-Cursor. Einzel- und Mutationszugriffe sind identity-isoliert;
 malformed IDs, Cursor, Filter oder Page Sizes liefern `400`, unbekannte oder fremde Notifications
-`404`. Es gibt keinen öffentlichen Create-Endpunkt. Authentifizierung und Authorization bleiben
-ein späterer Security-/Host-Scope.
+`404`. Es gibt keinen öffentlichen Create-Endpunkt; die öffentliche Notifications-API bleibt
+außerhalb des lokalen Admin-Cookie-Schemes.
 
 Der Purchase ist über folgenden zusätzlichen Endpunkt erreichbar:
 
@@ -174,6 +180,36 @@ Der separate Worker kennt `shop.purchase-completed` v1 weiterhin über
 `notifications.shop-purchase`.
 Der API-Host ist nur Producer: Er kann die Outbox beschreiben, startet aber keinen
 `OutboxProcessor`, keinen Messaging-Worker und keinen Inbox-Consumer.
+
+### Administration und Shop-Katalogverwaltung
+
+Die Webadministration ist unter `/admin` erreichbar. Login und Logout verwenden
+`GET/POST /admin/login` beziehungsweise `POST /admin/logout`; das Passwortformular liegt
+unter `/admin/account`; der geschützte Passwort-Setup-Komfortpfad liegt unter `/admin/setup`.
+Beide Passwortseiten bieten einen optionalen clientseitigen 24-Zeichen-Generator auf Basis
+von `window.crypto.getRandomValues()`, ohne Browser-Persistenz oder serverseitigen
+Generator-Endpunkt. Die sichtbaren Razor-Seiten umfassen Dashboard, Identity-Liste und
+-Detail, Shop, Catalog, Automation, Integrations, Overlay, Audit, Account und Setup.
+
+Die permission-geschützten Admin-API-Reads und -Mutationen liegen unter:
+
+```text
+GET/POST /api/admin/identities
+GET      /api/admin/identities/{communityIdentityId}
+GET/POST /api/admin/economy/...
+GET/POST /api/admin/progression/...
+GET/POST /api/admin/inventory/...
+GET/POST /api/admin/achievements/...
+GET/POST /api/admin/titles/...
+GET/POST /api/admin/rewards/...
+GET      /api/admin/audit
+```
+
+Jede Policy verlangt `Administration.Access` und die konkrete Capability-Permission. Cookie-
+authentifizierte Mutationen benötigen Anti-Forgery; High-Risk-Mutationen zusätzlich Reason,
+RequestId, Audit und den idempotenten AdminOperation-Flow. `/api/admin` antwortet bei fehlender
+Session mit `401` statt mit einem Login-HTML-Redirect und bei fehlender Berechtigung mit
+`403`.
 
 ### Shop-Katalogverwaltung
 
@@ -227,8 +263,9 @@ ist ausschließlich implementation-owned beziehungsweise API-eigener Management-
 Zustand. `FlurNetz.Modules.Shop.Contracts` wird nicht erweitert; der Purchase-Snapshot und
 `shop.purchase-completed` v1 bleiben unverändert. Die Notifications-Inbox ist ein separates
 Modul; es gibt keine Verschiebung in das Administration-Modul, kein Admin-Frontend und
-keine Delete-, Unarchive- oder Restore-Route. Authentication/Authorization bleibt ein separater späterer
-Security-/Host-Scope.
+keine Delete-, Unarchive- oder Restore-Route. Authentication/Authorization für die
+Management-Grenze erfolgt über Administration V1; öffentliche Shop-Routen bleiben davon
+getrennt.
 
 ## Messaging-Producer-Runtime
 
@@ -257,10 +294,9 @@ unbekannte Mappings 404, ungültige Eingaben werden mit 400 und ProblemDetails
 beantwortet. Die Response-DTOs gehören ausschließlich zur API und enthalten nur
 Provider, externe User-ID und CommunityIdentityId.
 
-Die Endpunkte besitzen derzeit bewusst keine allgemeine Authentication/Authorization,
-weil FlurNetz noch keine Security-/Administration-Foundation hat. Sie dürfen vor einem
-separaten Security-Slice nicht ungeschützt extern produktiv exponiert werden. Die API
-führt keine Twitch-Verbindung und keine automatische Identity-Erstellung aus.
+Die Endpunkte sind über `Integrations.Read` beziehungsweise `Integrations.ManageMappings`,
+Anti-Forgery und den gemeinsamen Admin-Ausführungskontext geschützt. Die API führt weiterhin
+keine Twitch-Verbindung und keine automatische Identity-Erstellung aus.
 
 ## Fehlerbehandlung und Shop-V1-Umfang
 
@@ -270,13 +306,15 @@ Fehler nicht als unkontrollierte Stacktrace-Antwort ausgeliefert.
 
 Für den API-Host und den beschlossenen Shop-V1-Umfang gibt es bewusst:
 
-- keine Authentifizierung oder Autorisierung
-- kein JWT, Cookie, OAuth oder Identity Framework
+- keine allgemeine Community-Authentifizierung; die Administration verwendet ausschließlich
+  ihr getrenntes lokales Cookie-Scheme
+- kein JWT und keine OAuth-/Identity-Framework-Anbindung für die Administration
 - kein Messaging Runtime Processing, keine Outbox-Loop, kein Inbox-Consumer und keinen Worker im API-Prozess
 - keine Twitch-, Streamer.bot-, Discord-, YouTube- oder Kick-Integration
 - keine HTTP-Endpunkte für Economy oder Inventory
-- kein Admin-Frontend und keine Authentication/Authorization für die Shop-Management-Grenze;
-  vor externem Produktivbetrieb ist dafür ein separater Security-/Host-Auftrag erforderlich
+- keinen öffentlichen Forgot-Password- oder Setup-Endpunkt; `/admin/setup` ist ausschließlich
+  ein geschützter Passwortänderungs-Komfortpfad, kein Bootstrap-Endpunkt. Es gibt kein Remember Me und keinen
+  Source-Key-Readback
 - keinen variablen Mengenparameter; ein Purchase gewährt verbindlich genau eine Inventory-Einheit
 - keinen Cart-, Stock-, Kategorien-, zusätzlichen Metadaten-, Discount-, Coupon-, Refund- oder
   Cancellation-Flow; die fachlichen Entscheidungen sind in [shop.md](shop.md) festgehalten
@@ -289,8 +327,9 @@ ASP.NET-Core-Testhost; Produktionskonfiguration und Secrets werden nicht veränd
 
 Die Tests prüfen:
 
-- Startup gegen eine leere PostgreSQL-Datenbank inklusive aller neun registrierten Identity-,
-  Economy-, Inventory-, Shop-, Notifications- und Messaging-Migrationen
+- Startup gegen eine leere PostgreSQL-Datenbank inklusive der registrierten Identity-,
+  Administration-, Economy-, Progression-, Inventory-, Shop-, Notifications-, Automation-,
+  Integrations-, Overlay- und Messaging-Migrationen
 - `POST /api/identities` mit `201 Created` und gültiger ID
 - Übereinstimmung zwischen Response-ID und `community_identities`
 - mehrere Requests mit unterschiedlichen IDs und persistierten Datensätzen
@@ -310,10 +349,14 @@ Die Tests prüfen:
 - unveränderte Storefront-/Purchase-Semantik nach Management-Mutationen einschließlich
   Preis-Snapshot, Availability und Kauflimit
 - Producer-only-Verhalten: pending Outbox, kein API-Processing und kein Inbox-Eintrag
+- Admin-Login, generische Loginfehler, Login-/Logout-CSRF, Rate-Limit, Session-Revocation und
+  keine HTML-Redirects für `/api/admin`
+- geschützte Regressionen für Shop, Automation, Integrations und Overlay einschließlich
+  High-Risk-Reason, RequestId, Audit und One-Time-Source-Key-Verhalten
 - Notifications-Inbox mit vollständiger DTO-Abbildung, Einzel-Lookup, Cursor-/Filterbindung,
   Identity-Isolation, Unread Count und Read-/Unread-/Read-All-Mutationen
 - Startup-Abbruch bei nicht erreichbarer PostgreSQL-Datenbank
 
 Die Architekturtests prüfen zusätzlich die erlaubten Host-Referenzen, die verbotene Richtung
-`*` → `FlurNetz.Api` und dass der API-Host keine Repository-, Domain- oder Migrationstypen
-enthält.
+`*` → `FlurNetz.Api`, die Administration-Grenzen und dass der API-Host keine direkten SQL-
+Zugriffe oder fremden Repository-/Migrationstypen enthält.

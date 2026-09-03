@@ -55,8 +55,9 @@ integration_external_identity_mappings. Ihr Primary Key auf provider_key plus
 external_user_id schützt die Eindeutigkeit auch bei parallelen Link-Versuchen. Es gibt
 keinen Foreign Key auf community_identities oder andere Modultabellen. Der API-Host
 bindet AddIntegrationsModule() und die vier Routen unter
-/api/admin/integrations/external-identities ein. Diese Management-Grenze besitzt bis zu
-einem späteren Security-/Administration-Slice noch keine Authentication/Authorization.
+/api/admin/integrations/external-identities ein. Diese Management-Grenze ist in
+Administration V1 über `Integrations.Read` beziehungsweise `Integrations.ManageMappings`,
+Cookie-Authentication und Anti-Forgery geschützt; Integrations bleibt Owner des Mappings.
 Twitch OAuth/EventSub, Streamer.bot, OBS, Razor/MVC, RBAC und Plugin-Infrastruktur sind
 nicht Bestandteil dieses Slices. Details stehen in [integrations.md](integrations.md).
 
@@ -140,7 +141,8 @@ liegen im Rewards-Modul. Economy wird über den schmalen öffentlichen Capabilit
 derselben Transaktion gutgeschrieben. `FlurNetz.Modules.Rewards.Contracts` bleibt leer.
 XP bleiben Progression-owned. Die Inventory-Foundation existiert unabhängig von Rewards;
 eine Inventory-Reward-Definition und Title-Rewards folgen erst in eigenen späteren Slices.
-Es gibt noch keinen Runtime-Trigger, keine API und keine Worker-Anbindung.
+Es gibt noch keinen Runtime-Trigger und keine Worker-Anbindung; die API bindet Rewards nur
+über die geschützte Administration-Managementgrenze ein.
 
 ## Aktueller Stand des Inventory-Moduls
 
@@ -160,9 +162,10 @@ Sparse-Lifecycle. Shop ist der erste Aufrufer, Inventory kennt Shop jedoch nicht
 
 `AddInventoryGrantCapability()` registriert für gemeinsame atomare Flows nur Store, Grant-
 Capability und die bestehende Migration; normale Add-/Remove-Use-Cases werden dabei nicht
-aktiviert. Der API-Host nutzt diese Capability ausschließlich innerhalb des Shop-Purchases und
-bietet keinen Inventory-Endpunkt. Item-Katalog, Messaging, Rewards-Ausführung, Admin UI und
-Worker bleiben außerhalb des Inventory-Moduls. Details stehen in [inventory.md](inventory.md).
+aktiviert. Der API-Host nutzt diese Capability innerhalb des Shop-Purchases und bindet für die
+Administration zusätzlich owner-owned Read-/Add-/Remove-Pfade ein. Item-Katalog, Messaging,
+Rewards-Ausführung und Worker bleiben außerhalb des Inventory-Moduls. Details stehen in
+[inventory.md](inventory.md).
 
 ## Shop-V1-Endzustand
 
@@ -191,14 +194,15 @@ einen Kauf.
 Shop referenziert dabei ausschließlich fremde Contracts, niemals fremde
 Implementierungsassemblies oder Tabellen. `FlurNetz.Api` registriert `AddShopModule()` und
 stellt Storefront-, History-, Purchase- und eine getrennte
-`/api/admin/shop/offers`-Management-Grenze bereit. Die Management-Grenze verwendet die
+`/api/admin/shop/offers`-Management-Grenze bereit. Diese ist in Administration V1 über
+`Shop.Read`/`Shop.Manage`, Anti-Forgery, High-Risk-Reason/RequestId sowie Audit und
+idempotente Operations geschützt. Die Management-Grenze verwendet die
 vorhandenen Katalog-Use-Cases und eigene API-Verträge; sie sieht den vollständigen internen
 Katalog, während die Storefront weiterhin nur `IsEnabled && !IsArchived && IsAvailableAt(now)`
 erfüllt.
 Der HTTP-Adapter führt dafür keine neue Migration oder fachliche Shop-Änderung ein; er führt
-selbst keine Events oder Consumer aus. Die Management-Routen besitzen bewusst noch keine
-Authentication/Authorization und benötigen vor externem Produktivbetrieb einen separaten
-Security-/Host-Auftrag.
+selbst keine Events oder Consumer aus. Die Shop-Administration bleibt ein hostseitiger
+Management-Adapter; Fachzustand und Fachregeln bleiben im Shop-Owner.
 Der separate Worker referenziert
 für `shop.purchase-completed` v1 nur `Shop.Contracts`, kennt den Eventtyp explizit und
 registriert den fachlichen Notifications-Consumer `notifications.shop-purchase`. Die Shop-
@@ -237,8 +241,9 @@ Die beiden expliziten Worker-Consumer automation.engagement-message-recorded und
 automation.shop-purchase-completed laden stabile Rule-Snapshots mit FOR SHARE und reservieren
 AutomationExecutions idempotent. Economy und Notifications werden ausschließlich über ihre
 transaction-aware Contracts in der bestehenden Messaging-Transaktion geschrieben.
-Die Management-API unter /api/admin/automation/rules ist API-owned; der API-Host führt keine
-Consumer aus. Automation.Contracts bleibt leer. Cron, Scheduler, eigene Queues, Replay,
+Die Management-API unter /api/admin/automation/rules ist API-owned, permission-geschützt und
+anti-forgery-gesichert; der API-Host führt keine Consumer aus. Automation.Contracts bleibt
+leer. Cron, Scheduler, eigene Queues, Replay,
 Backfill, Delete, Run Now und Dry Run gehören nicht zum V1-Scope. Details stehen in
 [automation.md](automation.md).
 
@@ -268,10 +273,13 @@ interne Foreign Keys; `title_definitions` besitzt keine Foreign Keys. Es gibt au
 keinen Unlock→Definition-Foreign-Key und keine Katalog-Existenzprüfung beim Unlock.
 `community_identity_id` bleibt ein fachlicher Identifier ohne Cross-Module-Foreign-Key.
 `TitlesModule` registriert beide Stores, alle internen Use Cases und beide Migrationen;
-es gibt noch keine Host-Verdrahtung.
+der API-Host bindet den Katalog sowie die communitybezogenen Read-/Unlock-/Lock-Management-
+Routen über explizite Administration-Permissions ein. Der Owner bleibt für den Zustand
+verantwortlich.
 
 `FlurNetz.Modules.Titles.Contracts` bleibt leer. Messaging, Rewards-, Achievement- und
-Shop-Anbindung, API, Admin UI, Worker und Overlay bleiben bewusst außerhalb dieses Slices.
+Shop-Anbindung sowie Worker und Overlay bleiben bewusst außerhalb dieses Slices; die
+administrative API/UI ist eine hostseitige Composition über die bestehenden Owner-Use-Cases.
 Echte PostgreSQL-Integrationstests prüfen Migration, Katalog-Constraints, Create/Get/List,
 Rename, Description-Änderung, Rollback, Rehydration und Nebenläufigkeit. Details stehen in
 [titles.md](titles.md).
@@ -324,7 +332,7 @@ Rehydration, Rollback, Idempotenz und parallele Unlocks beziehungsweise Katalogm
 
 Ausgeschlossen bleiben Progress, Counter, TargetValue, Regeln, Conditions, Evaluator,
 Trigger-Konfiguration, Domain- und Integration-Events, Messaging, Inbox, Outbox, Worker, API,
-Admin UI, Rewards-, Economy-, Inventory-, Titles-, Shop-, Notifications- und Overlay-
+Rewards-, Economy-, Inventory-, Titles-, Shop-, Notifications- und Overlay-
 Anbindung, Seed-Daten, Standard-Achievements, Delete, Revoke, Reset, Archive, Enable/Disable,
 Hidden/Secret, Localization, Icon, Farbe, Rarity, Category, Points, SortOrder, Slug,
 TechnicalName und RewardPackageId.
@@ -365,10 +373,11 @@ der unabhängige Worker-Host verdrahtet diesen Slice für die Runtime. Economy n
 Application, einen atomaren Store, Migration und Registrierung; der API-Host verdrahtet für den
 Shop-Purchase ausschließlich die schmale Debit-Capability, aber keine Economy-HTTP-Endpunkte.
 Rewards nutzt Domain, Application, gezielte Katalog- und Grant-Persistence, Migration und
-Registrierung; kein Host verdrahtet den Slice und es gibt keine öffentliche API. Inventory nutzt
-Domain, Application, einen atomaren PostgreSQL-Store, Migration und Registrierung; der API-Host
-verdrahtet ausschließlich die schmale Grant-Capability innerhalb des Shop-Purchases und bietet
-keine Inventory-HTTP-Endpunkte. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`,
+Registrierung; der API-Host verdrahtet die explizite read-/create-/grant-Management-Grenze,
+aber keine Runtime-Trigger. Inventory nutzt Domain, Application, einen atomaren PostgreSQL-
+Store, Migration und Registrierung; der API-Host verdrahtet zusätzlich die schmalen Read-/Add-
+/Remove-Managementpfade für Administration und weiterhin die Grant-Capability im Shop-
+Purchase. Shop nutzt Domain, Application, den gezielten `ShopOfferStore`,
 die Purchase-History-Stores, vier fachliche Migrationen sowie `ShopModule` mit Read-Basis;
 der Mutation-Callback ist als `Func<ShopOffer, bool>` synchron begrenzt. Der API-Host verdrahtet
 `AddShopModule()`, mappt Storefront-, History-, Purchase- und die getrennte Management-
@@ -379,7 +388,8 @@ PostgreSQL-Store, eine Migration und Registrierung; die API mappt die persönlic
 Worker registriert zusätzlich die Consumer-Policy. Titles nutzt Domain, Rehydration, Application, getrennte
 Community- und Katalog-PostgreSQL-Stores, zwei Migrationen und Registrierung; Achievements nutzt
 Domain, Application, getrennte Katalog- und Community-PostgreSQL-Stores, eine Migration und
-Registrierung; Titles und Achievements sind nicht in API oder Worker verdrahtet. Die übrigen
+Registrierung; API bindet die expliziten Administration-Reads und Mutationen ein, Worker nicht.
+Die übrigen
 Implementierungs-Assemblies bleiben fachlich leer.
 
 Eine Implementierung darf keine andere Modulimplementierung direkt referenzieren. Engagement
@@ -404,7 +414,9 @@ Cross-Module-Kommunikation erfolgt über freigegebene öffentliche Contracts
 und Integration Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und keine
 vorsorglichen Shared-Entities.
 
-Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
+Die Administration besitzt zusätzlich eigene Unit-, PostgreSQL-Integration-, API- und
+Architekturtests für Credentials, Bootstrap, Recovery, Audit, Operations, Policies, CSRF,
+Atomizität, Parallelität und Secret-Redaction. Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
 und Engagement-Unit- sowie PostgreSQL-Integrationstests prüfen jeweils die vorhandenen Domain-
 und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Progression wird
 zusätzlich mit Domain-, Use-Case-, Migration-, Rollback-, Load- und echten PostgreSQL-
@@ -436,11 +448,11 @@ Atomicity und Inbox-Deduplizierung.
 11. Automation
 12. Overlay
 13. Integrations (umgesetzt: External-Identity-Mapping V1)
-14. Administration
+14. Administration (umgesetzt: Administration V1)
 
-Diese Reihenfolge dokumentiert die Umsetzung. Identity ist als erstes Referenzmodul mit einem
-minimalen Vertical Slice umgesetzt; weitere fachliche Identity-Funktionalität folgt erst mit
-konkretem Bedarf.
+Diese Reihenfolge dokumentiert die Umsetzung. Administration ist der hostseitige
+Security-/Operations-Slice für die vorhandenen Owner-Module; weitere fachliche
+Identity-Funktionalität folgt erst mit konkretem Bedarf.
 
 ## Cross-Cutting-Fähigkeiten
 

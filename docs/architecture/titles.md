@@ -111,9 +111,10 @@ und `FlurNetz.Modules.Identity.Contracts` ausschließlich `FlurNetz.Persistence`
 Nicht enthalten sind Delete, Soft Delete, Archive, Enable/Disable, Visibility, Slug,
 TechnicalName, Icon, Farbe, Badge, Rarity, Kategorie, SortOrder, Localization,
 Unlock Conditions, Preise, Messaging, Domain Events, Integration Events, Inbox, Outbox,
-Rewards-, Achievements-, Shop-, Inventory-, Progression- oder Economy-Anbindung, API,
-Controller, Admin UI, Worker, Overlay und Plattformintegrationen.
-Der Slice ist noch nicht in API oder Worker verdrahtet.
+Rewards-, Achievements-, Shop-, Inventory-, Progression- oder Economy-Anbindung, fachliche
+Runtime-API, Controller, Worker, Overlay und Plattformintegrationen. Die geschützte
+Administration ist als hostseitige Composition für Katalog- und Community-Management
+verdrahtet.
 
 ## Tests
 

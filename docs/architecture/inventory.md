@@ -95,9 +95,9 @@ registriert ausschließlich:
 
 Die Capability registriert keine normalen `AddInventoryQuantity`- oder
 `RemoveInventoryQuantity`-Use-Cases. `AddInventoryModule()` baut weiterhin auf ihr auf und
-ergänzt beide vollständigen Inventory-Use-Cases. Der API-Host verwendet nur die Grant-Capability
-als Teil der atomaren Shop-Purchase-Transaktion und bietet keine Inventory-HTTP-Endpunkte; der
-Worker bleibt ohne Inventory-Runtime.
+ergänzt beide vollständigen Inventory-Use-Cases. Der API-Host verwendet die Grant-Capability
+als Teil der atomaren Shop-Purchase-Transaktion und bindet für Administration zusätzlich
+owner-owned Read-/Add-/Remove-Routen ein; der Worker bleibt ohne Inventory-Runtime.
 
 ## Contracts und bewusste Ausschlüsse
 

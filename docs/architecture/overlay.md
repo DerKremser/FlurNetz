@@ -166,9 +166,9 @@ Composition Root; der MigrationRunner bleibt die gemeinsame technische Infrastru
 
 ## Security-Grenzen
 
-Die Management-Route ist im aktuellen Repository eine ausdrücklich interne Grenze. Es gibt
-noch keine allgemeine Authentication-/Authorization-Foundation; Overlay erfindet dafür keine
-Teillösung. Vor externem Produktivbetrieb müssen Zugriffsschutz, Secret-Handling und
+Die Management-Route ist eine ausdrücklich interne Grenze. Administration V1 schützt sie mit
+dem getrennten Admin-Cookie-Scheme, expliziten Permissions, Anti-Forgery sowie Audit und
+Operations. Vor externem Produktivbetrieb müssen zusätzlich Deployment-, Secret-Handling- und
 Transport-/Proxy-Konfiguration durch eine separate Security Foundation geregelt werden.
 Source Keys sind Bearer-Credentials und dürfen nicht in Logs, Tickets oder öffentliche
 Storefronts gelangen.
@@ -191,5 +191,5 @@ Action-Shape, Migration 2, atomare Ausführung und die bestehende Hosttrennung.
 Nicht Bestandteil sind Audio, Bilder, Videos, benutzerdefiniertes HTML/CSS, Overlay-Editor,
 Chat-Overlay, permanente XP-/Coin-/Goal-Widgets, plattformspezifische Twitch-/YouTube- /
 Kick-/Discord-Logik, komplexe Templates, Variableninterpolation, SignalR, externer Broker,
-Cloud-Push, freie Layout-Positionierung sowie die allgemeine Authentication-/Authorization-
-Foundation.
+Cloud-Push, freie Layout-Positionierung sowie eine allgemeine Community-Authentication/-
+Authorization-Foundation.

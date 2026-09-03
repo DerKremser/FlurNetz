@@ -89,8 +89,9 @@ Implementierungen oder Tabellen. Die API stellt Storefront-, History- und
 `/api/admin/shop/offers`-Management-Grenze bereit, verwendet dafür `AddShopModule()` sowie
 schmale Economy-/Inventory-Capabilities. Die Management-Grenze verwendet die bestehenden
 Shop-Use-Cases, führt keine neue Migration oder Events ein und verändert den Worker nicht.
-Authentication/Authorization ist im API-Host bewusst noch nicht vorhanden und bleibt ein
-separater Security-/Host-Scope vor externem Produktivbetrieb. Der API-Host produziert
+Die Administration besitzt im API-Host ein getrenntes lokales Cookie-Scheme mit Policies,
+CSRF, Audit und Operations; eine allgemeine Community-Authentication bleibt außerhalb des
+Scopes. Der API-Host produziert
 `shop.purchase-completed` v1 in die Outbox; der separate Worker kennt das Event über
 `Shop.Contracts` und verarbeitet es mit dem Notifications-Consumer
 `notifications.shop-purchase`. Shop-Implementierung und Shop-Migrationen werden dort nicht

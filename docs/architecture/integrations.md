@@ -72,9 +72,9 @@ Der API-Host registriert AddIntegrationsModule() und mappt:
 Die API verwendet eigene Request-/Response-DTOs und ProblemDetails. Ungültige Eingaben
 liefern 400, eine unbekannte Community-Identität beim Link 404, ein unbekanntes
 Mapping bei Get/Unlink 404 und ein Reassignment 409. Die Route ist eine interne
-Management-Grenze. FlurNetz besitzt derzeit noch keine allgemeine Authentication- oder
-Authorization-Foundation; vor einem externen Produktiveinsatz ist ein separater
-Security-/Administration-Slice erforderlich.
+Management-Grenze und wird in Administration V1 über das Admin-Cookie-Scheme, explizite
+Permissions, Anti-Forgery sowie Audit/Operations geschützt. Eine allgemeine Community-
+Authentication und die Provider-Anbindungen bleiben außerhalb dieses Slices.
 
 ## Bewusst nicht enthalten
 

@@ -121,4 +121,5 @@ Noch nicht enthalten sind:
 - generische Reward-Engine-, Pipeline-, Executor- oder Repository-Infrastruktur
 - Messaging, Integration Events, Domain Events, Inbox oder Outbox
 - zusätzliche Application Use Cases für Lesen, Ändern oder Löschen
-- API, Admin UI oder Worker-Anbindung
+- öffentliche Runtime-API oder Worker-Anbindung; die geschützte Administration bindet den
+  Owner-Katalog und die Package-Grant-Grenze über die vorhandenen Application-Contracts ein

@@ -11,6 +11,28 @@ nutzt FOR UPDATE auf der Root-Zeile; die Runtime lädt aktive Rules deterministi
 FOR SHARE innerhalb der vom Messaging-Processor vorgegebenen Transaktion. Die History wird
 über executed_at_utc DESC und id DESC keyset-paginiert.
 
+## Administration-Persistenz
+
+Administration besitzt mit `Administration:1:CreateAdministrationState` eine eigene
+unveränderliche SQL-Migration. Sie legt ausschließlich `administration_credentials`,
+`administration_role_assignments`, `administration_audit_entries` und
+`administration_operations` an. Die Tabellen enthalten keine Cross-Module-Foreign-Keys und
+keine Kopien von Identity-, Economy-, Progression-, Inventory-, Titles-, Achievements-,
+Rewards-, Shop-, Notifications-, Automation-, Integrations- oder Overlay-Zustand.
+
+Credentials verwenden einen ASP.NET-Core-PasswordHasher-Hash, einen monoton erhöhten
+CredentialVersion-Wert und einen eindeutigen normalisierten LoginName. Der Bootstrap nutzt
+die Identity-Existence-Capability und schreibt Credential und Administrator-Rolle atomar.
+Operational Recovery ist über eine eindeutige Operation-RequestId idempotent.
+
+`AdminMutationCoordinator` öffnet für High-Risk-Operationen eine gemeinsame
+`PostgreSqlTransaction` und reserviert die RequestId in `administration_operations`. Owner-
+Mutation und Audit-Insert verwenden dieselbe Connection/Transaction und werden nur gemeinsam
+committed. Auch normale, nicht idempotente Admin-Katalogänderungen schreiben ihr Audit in
+dieselbe Owner-Transaktion. Reservation, Owner-Write oder Audit-Fehler führen zum vollständigen
+Rollback. Request-Fingerprints verhindern, dass eine RequestId mit veränderten fachlichen
+Parametern erneut mutiert.
+
 ## Datenzugriff
 
 PostgreSQL ist die primäre relationale Datenbank. Npgsql stellt über eine gemeinsam verwaltete `NpgsqlDataSource` die asynchrone Connection-Erzeugung bereit. `PostgreSqlConnectionFactory` öffnet konfigurierte Connections; Connection Strings werden nicht im Repository hinterlegt.
@@ -73,8 +95,10 @@ Bereits angewendete Migrationen werden übersprungen, wenn Identität und Checks
 Der ausführbare API-Host stellt die Connection-Konfiguration als Composition Root bereit und
 ruft den bestehenden Runner vor dem Listener-Start auf. Ein Fehler wird geloggt und beendet den
 Startup, damit kein nicht initialisierter Host als betriebsbereit erscheint. Der API-Host
-registriert die Identity- und die Shop-Migrationsquelle und führt damit die
-vorhandenen Migrationen `Identity:1:CreateCommunityIdentities`,
+registriert die Identity-, Administration-, Economy-, Progression-, Inventory-, Shop-,
+Notifications-, Automation-, Integrations-, Overlay- und Messaging-Migrationsquellen und
+führt damit unter anderem die vorhandenen Migrationen `Identity:1:CreateCommunityIdentities`,
+`Administration:1:CreateAdministrationState`,
 `Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder` und
 `Shop:4:AddShopOfferArchiveState` aus. Der erste fachliche
 Besitzer einer Migration ist Identity: `Identity:1:CreateCommunityIdentities` legt die Tabelle
@@ -158,8 +182,11 @@ vollständiger Rollback bei unzureichendem Saldo.
 `FlurNetz.Modules.Notifications.IntegrationTests` prüft Migration, Idempotenz, History und
 Checksum, Tabellen-/Constraint-Grenzen, Snapshot-Roundtrip, Identity-Isolation, newest-first-
 Keyset-Pagination, Unread-Lifecycle sowie transaction-aware Commit und Rollback gegen echtes
-PostgreSQL. `FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, alle zehn
-registrierten Identity-, Economy-, Inventory-, Shop-, Notifications-, Automation- und Messaging-Migrationen, die read-only
+PostgreSQL. `FlurNetz.Modules.Administration.IntegrationTests` prüft zusätzlich Administration-
+Migration, Constraints, Audit, Operations, Bootstrap, Recovery, Atomicity und Parallelität.
+`FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, die registrierten
+Identity-, Administration-, Economy-, Progression-, Inventory-, Shop-, Notifications-, Automation-,
+Integrations-, Overlay- und Messaging-Migrationen, die read-only
 Offer-Storefront, vollständige DTO-Abbildung, den HTTP-Purchase mit Snapshot, Location,
 Idempotenz, Fehler-Rollback und Producer-only-Outbox sowie den Purchase-Lookup und die
 identity-isolierte newest-first History mit mehrseitigem API-Keyset-Cursor. Die Testdaten werden

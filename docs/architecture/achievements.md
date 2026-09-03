@@ -147,7 +147,7 @@ Namespace-Grenzen, leere Contracts, Migration-Ownership und Modulregistrierung.
 
 Nicht enthalten sind Achievement Progress, Counter, TargetValue, Rules, Conditions, eine
 Generic Rule Engine, Evaluator, Trigger-Konfiguration, Domain Events, Integration Events,
-Messaging, Inbox, Outbox, Worker, API, Admin UI, Rewards-, Economy-, Inventory-, Titles-,
+Messaging, Inbox, Outbox, Worker und fachliche Runtime-API, Rewards-, Economy-, Inventory-, Titles-,
 Shop-, Notifications-, Overlay- oder sonstige Integrations-Anbindung, Seed-Daten,
 Standard-Achievements, Delete, Revoke, Reset, Archive, Enable/Disable, Hidden/Secret,
 Localization, Icon, Farbe, Rarity, Category, Points, SortOrder, Slug, TechnicalName und
