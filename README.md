@@ -464,7 +464,7 @@ Für die vollständige Prüfung sind Docker für Testcontainers oder alternativ 
 ```text
 dotnet restore
 dotnet build
-dotnet test
+dotnet test --solution FlurNetz.sln --no-build --no-restore
 ```
 
 Die Architektur des Hosts ist in [docs/architecture/api.md](docs/architecture/api.md) beschrieben. Die initiale Gesamtrichtung steht in [docs/architecture/overview.md](docs/architecture/overview.md); die Regeln für BuildingBlocks stehen in [docs/architecture/building-blocks.md](docs/architecture/building-blocks.md).
