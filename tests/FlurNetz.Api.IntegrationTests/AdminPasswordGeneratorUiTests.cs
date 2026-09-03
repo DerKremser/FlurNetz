@@ -8,7 +8,9 @@ public sealed class AdminPasswordGeneratorUiTests
         var script = ReadUiSource("admin.js");
 
         Assert.Contains("window.crypto.getRandomValues", script, StringComparison.Ordinal);
+        Assert.Contains("const passwordLength = 24", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Math.random", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("fetch(", script, StringComparison.Ordinal);
         Assert.DoesNotContain("localStorage", script, StringComparison.Ordinal);
         Assert.DoesNotContain("sessionStorage", script, StringComparison.Ordinal);
         Assert.DoesNotContain("document.cookie", script, StringComparison.Ordinal);

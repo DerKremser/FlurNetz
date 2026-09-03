@@ -44,7 +44,7 @@ public sealed class IdentityArchitectureTests
     }
 
     [Fact]
-    public void IdentityContractsExposeOnlyIdentifierAndTransactionAwareExistenceCapability()
+    public void IdentityContractsExposeOnlyIdentifiersReadsAndTransactionAwareCapabilities()
     {
         var exportedTypes = IdentityContractsAssembly.GetExportedTypes().ToHashSet();
 
@@ -54,7 +54,8 @@ public sealed class IdentityArchitectureTests
             typeof(ICommunityIdentityExistence),
             typeof(CommunityIdentitySummary),
             typeof(CommunityIdentityPage),
-            typeof(ICommunityIdentityRead)
+            typeof(ICommunityIdentityRead),
+            typeof(ICommunityIdentityCreator)
         ]));
 
         var method = typeof(ICommunityIdentityExistence).GetMethod(
@@ -68,6 +69,12 @@ public sealed class IdentityArchitectureTests
 
         Assert.NotNull(method);
         Assert.Equal(typeof(Task<bool>), method!.ReturnType);
+
+        var creatorMethod = typeof(ICommunityIdentityCreator).GetMethod(
+            nameof(ICommunityIdentityCreator.CreateAsync),
+            [typeof(DbConnection), typeof(DbTransaction), typeof(CancellationToken)]);
+        Assert.NotNull(creatorMethod);
+        Assert.Equal(typeof(Task<CommunityIdentityId>), creatorMethod!.ReturnType);
     }
 
     [Fact]

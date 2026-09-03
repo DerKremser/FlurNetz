@@ -46,6 +46,7 @@ public sealed class ApiPostgreSqlFixture : IAsyncLifetime
             DROP TABLE IF EXISTS public.administration_audit_entries;
             DROP TABLE IF EXISTS public.administration_role_assignments;
             DROP TABLE IF EXISTS public.administration_credentials;
+            DROP TABLE IF EXISTS public.administration_setup_state;
             DROP TABLE IF EXISTS public.shop_purchase_requests;
             DROP TABLE IF EXISTS public.shop_purchase_guards;
             DROP TABLE IF EXISTS public.shop_purchases;

@@ -28,16 +28,16 @@ public sealed class AdministrationSecurityTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("ab")]
-    public void LoginNameRejectsMissingAndTooShortValues(string? value)
+    public void EmailRejectsMissingAndTooShortValues(string? value)
     {
-        Assert.Throws<ArgumentException>(() => AdminLoginName.Normalize(value));
+        Assert.Throws<ArgumentException>(() => AdminEmail.Normalize(value));
     }
 
     [Fact]
-    public void LoginNameNormalizationIsCaseInsensitiveButKeepsTheCanonicalDisplayValue()
+    public void EmailNormalizationIsCaseInsensitiveButKeepsTheCanonicalDisplayValue()
     {
-        Assert.Equal("Admin Operator", AdminLoginName.Canonicalize("  Admin Operator  "));
-        Assert.Equal("ADMIN OPERATOR", AdminLoginName.Normalize("  Admin Operator  "));
+        Assert.Equal("Admin.Operator@example.com", AdminEmail.Canonicalize("  Admin.Operator@example.com  "));
+        Assert.Equal("ADMIN.OPERATOR@EXAMPLE.COM", AdminEmail.Normalize("  Admin.Operator@example.com  "));
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class AdministrationSecurityTests
     public void CredentialVersionStartsAtOneAndIncrementsOnPasswordChange()
     {
         var id = FlurNetz.Modules.Identity.Contracts.CommunityIdentityId.New();
-        var credential = AdminCredential.Create(id, "operator", "hash", DateTimeOffset.UtcNow);
+        var credential = AdminCredential.Create(id, "operator@example.com", "hash", DateTimeOffset.UtcNow);
         Assert.Equal(1, credential.CredentialVersion);
         credential.ChangePassword("new-hash", DateTimeOffset.UtcNow);
         Assert.Equal(2, credential.CredentialVersion);

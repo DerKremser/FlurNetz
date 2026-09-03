@@ -1,6 +1,7 @@
 using FlurNetz.Modules.Identity.Application;
 using FlurNetz.Modules.Identity.Contracts;
 using FlurNetz.Modules.Identity.Domain;
+using System.Data.Common;
 
 namespace FlurNetz.Modules.Identity.Tests;
 
@@ -42,6 +43,13 @@ public sealed class CreateCommunityIdentityTests
             Identities.Add(identity);
             return Task.CompletedTask;
         }
+
+        public Task AddAsync(
+            CommunityIdentity identity,
+            DbConnection connection,
+            DbTransaction transaction,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The in-memory test repository does not provide ADO.NET persistence.");
 
         public Task<CommunityIdentity?> GetByIdAsync(
             CommunityIdentityId id,

@@ -51,6 +51,7 @@ public sealed class AdministrationPostgreSqlFixture : IAsyncLifetime
             DROP TABLE IF EXISTS administration_audit_entries;
             DROP TABLE IF EXISTS administration_role_assignments;
             DROP TABLE IF EXISTS administration_credentials;
+            DROP TABLE IF EXISTS administration_setup_state;
             DROP TABLE IF EXISTS community_identities;
             DROP SCHEMA IF EXISTS flurnetz_persistence CASCADE;
             """,

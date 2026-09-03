@@ -1,14 +1,11 @@
+using Dapper;
 using FlurNetz.Api;
-using FlurNetz.Modules.Administration.Application;
-using FlurNetz.Modules.Administration.Contracts.Security;
-using FlurNetz.Modules.Identity.Application;
-using FlurNetz.Modules.Identity.Contracts;
-using FlurNetz.Modules.Identity.Domain;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
@@ -20,9 +17,9 @@ namespace FlurNetz.Api.IntegrationTests;
 /// </summary>
 public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin = false) : WebApplicationFactory<Program>
 {
-    public const string TestAdminLoginName = "TestAdmin";
+    public const string TestAdminEmail = "test-admin@example.com";
+    public const string TestAdminSetupSecret = "test-admin-setup-secret";
     public const string TestAdminPassword = "test-admin-sentinel-passphrase-123";
-    public static readonly Guid TestAdminIdentityId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -41,22 +38,12 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
             };
             if (enableAdmin)
             {
-                values["Administration:Bootstrap:CommunityIdentityId"] = TestAdminIdentityId.ToString("D");
-                values["Administration:Bootstrap:LoginName"] = TestAdminLoginName;
-                values["Administration:Bootstrap:InitialPassword"] = TestAdminPassword;
+                values["Administration:Setup:Secret"] = TestAdminSetupSecret;
             }
 
             configuration.AddInMemoryCollection(values);
         });
 
-        if (enableAdmin)
-        {
-            builder.ConfigureTestServices(services =>
-            {
-                services.AddScoped<AdminBootstrapper>();
-                services.AddScoped<IAdminBootstrapper, TestAdminBootstrapper>();
-            });
-        }
     }
 
     public async Task<HttpClient> CreateAdminClientAsync(CancellationToken cancellationToken = default)
@@ -67,6 +54,7 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
         }
 
         var client = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        await SetupTestAdminAsync(client, connectionString, cancellationToken).ConfigureAwait(false);
         var loginPage = await client.GetStringAsync("/admin/login", cancellationToken).ConfigureAwait(false);
         var loginToken = ExtractAntiforgeryToken(loginPage);
         if (loginToken is null)
@@ -80,7 +68,7 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
             new FormUrlEncodedContent(
             [
                 new KeyValuePair<string, string>("__RequestVerificationToken", loginToken),
-                new KeyValuePair<string, string>("LoginName", TestAdminLoginName),
+                new KeyValuePair<string, string>("Email", TestAdminEmail),
                 new KeyValuePair<string, string>("Password", TestAdminPassword),
                 new KeyValuePair<string, string>("ReturnUrl", "/admin")
             ]),
@@ -93,6 +81,11 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
         }
 
         var authenticatedPage = await client.GetStringAsync("/admin/account", cancellationToken).ConfigureAwait(false);
+        if (!authenticatedPage.Contains("Passwort ändern", StringComparison.Ordinal))
+        {
+            client.Dispose();
+            throw new InvalidOperationException($"The test admin login did not produce an authenticated account page. Final response excerpt: {authenticatedPage[..Math.Min(authenticatedPage.Length, 180)]}");
+        }
         var authenticatedToken = ExtractAntiforgeryToken(authenticatedPage);
         if (authenticatedToken is null)
         {
@@ -104,6 +97,52 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
         return client;
     }
 
+    public async Task<Guid> GetTestAdminIdentityIdAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        return await connection.QuerySingleAsync<Guid>(new Dapper.CommandDefinition(
+            "SELECT community_identity_id FROM administration_credentials WHERE normalized_email = @Email;",
+            new { Email = TestAdminEmail.ToUpperInvariant() },
+            cancellationToken: cancellationToken)).ConfigureAwait(false);
+    }
+
+    private static async Task SetupTestAdminAsync(HttpClient client, string connectionString, CancellationToken cancellationToken)
+    {
+        using var setupPage = await client.GetAsync("/admin/setup", cancellationToken).ConfigureAwait(false);
+        if (setupPage.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return;
+        }
+
+        setupPage.EnsureSuccessStatusCode();
+        var setupBody = await setupPage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var setupToken = ExtractAntiforgeryToken(setupBody)
+            ?? throw new InvalidOperationException("The first-run setup page did not expose an antiforgery token.");
+        using var setupResponse = await client.PostAsync(
+            "/admin/setup",
+            new FormUrlEncodedContent(
+            [
+                new KeyValuePair<string, string>("__RequestVerificationToken", setupToken),
+                new KeyValuePair<string, string>("Email", TestAdminEmail),
+                new KeyValuePair<string, string>("NewPassword", TestAdminPassword),
+                new KeyValuePair<string, string>("NewPasswordConfirmation", TestAdminPassword),
+                new KeyValuePair<string, string>("SetupSecret", TestAdminSetupSecret)
+            ]),
+            cancellationToken).ConfigureAwait(false);
+        setupResponse.EnsureSuccessStatusCode();
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var credentialCount = await connection.ExecuteScalarAsync<int>(new Dapper.CommandDefinition(
+            "SELECT count(*) FROM administration_credentials WHERE normalized_email = @Email;",
+            new { Email = TestAdminEmail.ToUpperInvariant() },
+            cancellationToken: cancellationToken)).ConfigureAwait(false);
+        if (credentialCount != 1)
+        {
+            throw new InvalidOperationException($"The first-run setup response succeeded but did not create the test admin credential (count: {credentialCount}).");
+        }
+    }
+
     private static string? ExtractAntiforgeryToken(string html)
     {
         var tokenMatch = Regex.Match(
@@ -111,21 +150,5 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
             "name=\\\"__RequestVerificationToken\\\"[^>]*value=\\\"([^\\\"]+)\\\"",
             RegexOptions.CultureInvariant);
         return tokenMatch.Success ? tokenMatch.Groups[1].Value : null;
-    }
-}
-
-internal sealed class TestAdminBootstrapper(
-    AdminBootstrapper inner,
-    ICommunityIdentityRepository identityRepository) : IAdminBootstrapper
-{
-    public async Task<bool> BootstrapAsync(AdminBootstrapConfiguration configuration, CancellationToken cancellationToken = default)
-    {
-        var identityId = CommunityIdentityId.Create(FlurNetzApiFactory.TestAdminIdentityId);
-        if (await identityRepository.GetByIdAsync(identityId, cancellationToken).ConfigureAwait(false) is null)
-        {
-            await identityRepository.AddAsync(CommunityIdentity.Create(identityId), cancellationToken).ConfigureAwait(false);
-        }
-
-        return await inner.BootstrapAsync(configuration, cancellationToken).ConfigureAwait(false);
     }
 }

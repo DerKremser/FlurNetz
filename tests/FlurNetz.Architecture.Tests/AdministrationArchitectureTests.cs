@@ -46,6 +46,7 @@ public sealed class AdministrationArchitectureTests
         Assert.Contains("administration_role_assignments", sql, StringComparison.Ordinal);
         Assert.Contains("administration_audit_entries", sql, StringComparison.Ordinal);
         Assert.Contains("administration_operations", sql, StringComparison.Ordinal);
+        Assert.Contains("administration_setup_state", sql, StringComparison.Ordinal);
 
         foreach (var foreignTable in new[]
         {
