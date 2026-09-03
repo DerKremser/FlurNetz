@@ -25,10 +25,11 @@ Identity besitzt weiterhin den minimalen persistierten Vertical Slice für die z
 interne `CommunityIdentityId`. `CommunityIdentity`, `CreateCommunityIdentity`, der
 moduleigene Repository-Port und `Identity:1:CreateCommunityIdentities` bleiben unverändert.
 
-`Identity.Contracts` enthält jetzt genau zwei öffentliche Typen:
-`CommunityIdentityId` und die caller-neutrale `ICommunityIdentityExistence`-Capability.
-Die Capability prüft die Existenz einer internen Identität innerhalb einer vom aufrufenden
-Slice bereitgestellten `DbConnection`/`DbTransaction` und führt keinen Commit aus.
+`Identity.Contracts` enthält die zentrale ID, read-only Identity-Reads sowie zwei neutrale
+transaction-aware Capabilities: `ICommunityIdentityExistence` zum Prüfen und
+`ICommunityIdentityCreator` zum Erzeugen interner Identitäten.
+Beide arbeiten innerhalb einer vom aufrufenden Slice bereitgestellten
+`DbConnection`/`DbTransaction`; die Capabilities führen keinen Commit aus.
 Der Shop-Purchase ist der erste Aufrufer. Identity kennt Shop nicht und veröffentlicht weder
 Repository noch Domainobjekt oder SQL-Persistenz.
 
@@ -415,8 +416,8 @@ und Integration Events. Es gibt keine gemeinsamen fachlichen Domain-Modelle und 
 vorsorglichen Shared-Entities.
 
 Die Administration besitzt zusätzlich eigene Unit-, PostgreSQL-Integration-, API- und
-Architekturtests für Credentials, Bootstrap, Recovery, Audit, Operations, Policies, CSRF,
-Atomizität, Parallelität und Secret-Redaction. Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
+Architekturtests für Credentials, gate-geschützten First-Run, Recovery, Audit, Operations,
+Policies, CSRF, Atomizität, Parallelität und Secret-Redaction. Die modulbezogenen Testprojekte bleiben für die übrigen Module technisch minimal. Die Identity-
 und Engagement-Unit- sowie PostgreSQL-Integrationstests prüfen jeweils die vorhandenen Domain-
 und Use-Case-Flows, Migration, Commit/Rollback, Primärschlüssel und Laden. Progression wird
 zusätzlich mit Domain-, Use-Case-, Migration-, Rollback-, Load- und echten PostgreSQL-

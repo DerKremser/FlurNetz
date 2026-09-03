@@ -14,7 +14,7 @@ Worker-Schleife, keinen Outbox-Processor und keine Automation- oder anderen Mess
 Consumer.
 
 `FlurNetz.Modules.Administration` referenziert nur die eigenen Contracts, Identity.Contracts
-für die strukturelle Identity-Existenzprüfung sowie die technische Persistence Foundation.
+für die öffentliche Identity-Capability sowie die technische Persistence Foundation.
 Fremde Fachzustände werden nicht gespiegelt und nicht per SQL gelesen oder verändert. Für
 atomare Owner-Mutationen stellt das jeweilige Owner-Modul eine geeignete transaction-aware
 Capability bereit; die Administration kennt weder fremde Stores noch fremde
@@ -29,26 +29,35 @@ Administration-eigenen Tabellen an:
 - `administration_role_assignments`
 - `administration_audit_entries`
 - `administration_operations`
+- `administration_setup_state` als Singleton für den First-Run-Abschluss
 
 Es gibt keine Cross-Module-Foreign-Keys, insbesondere keinen Foreign Key auf
-`community_identities`. Die Identity-Zugehörigkeit wird über `ICommunityIdentityExistence`
-geprüft. Der unveränderte MigrationRunner verwaltet Identität, Reihenfolge und SQL-Checksum.
+`community_identities`. Eine neue Identity für den First-Run wird ausschließlich über den
+öffentlichen `ICommunityIdentityCreator`-Vertrag des Identity-Moduls angelegt. Der
+unveränderte MigrationRunner verwaltet Identität, Reihenfolge und SQL-Checksum.
 
-Credentials enthalten `CommunityIdentityId`, LoginName, NormalizedLoginName, einen
+Credentials enthalten `CommunityIdentityId`, Email, NormalizedEmail, einen
 ASP.NET-Core-PasswordHasher-Hash, CredentialVersion sowie Erstellungs- und
-Passwortänderungszeitpunkt. LoginName ist case-insensitive eindeutig und wird kanonisch
-begrenzt. Passwörter werden mit dem etablierten Microsoft-Hasher verarbeitet: 15 bis 128
+Passwortänderungszeitpunkt. Email ist case-insensitive eindeutig und wird für den Lookup
+kanonisch normalisiert. Passwörter werden mit dem etablierten Microsoft-Hasher verarbeitet: 15 bis 128
 Zeichen, ohne Trim, Case- oder Unicode-Normalisierung und ohne eigene Kryptographie.
 
-## Bootstrap und Recovery
+## First-Run-Setup und Recovery
 
-Der Bootstrap liest ausschließlich eine vollständig gesetzte Runtime-Konfiguration:
-`Administration:Bootstrap:CommunityIdentityId`, `LoginName` und `InitialPassword`. Er läuft
-nur bei vollständiger Konfiguration, prüft die Identity über Identity.Contracts, hasht das
-Initialpasswort und legt Credential und Administrator-Rollenzuweisung in einer gemeinsamen
-Transaktion an. Der Vorgang ist create-if-missing und synchronisiert ein bestehendes Passwort
-bei späteren Starts nicht zurück. Teilzustände und LoginName-Konflikte schlagen eindeutig
-fehl; es gibt keinen Fallback-Admin und keinen öffentlichen Setup-Endpunkt.
+`GET/POST /admin/setup` ist ein anonymer, einmaliger First-Run-Flow. Er ist nur verfügbar,
+solange `administration_setup_state.completed_at_utc` leer ist und noch kein Credential mit
+Administrator-Rolle existiert. Die Konfiguration `Administration:Setup:Secret` kommt aus
+User-Secrets oder der Umgebung; sie wird nur zur Laufzeit gehalten und nie persistiert,
+geloggt, auditiert oder als Operation registriert. Fehlt das Gate oder stimmt es nicht,
+bleibt der Setup-Versuch ohne Datenbankeffekt und zeigt nur einen generischen Fehler.
+
+Der Setup-Service sperrt die Singleton-Zeile mit `FOR UPDATE`, erzeugt die neue
+`CommunityIdentity` über `ICommunityIdentityCreator` und schreibt Identity, Credential,
+Administrator-Rolle sowie den Abschlussstatus in derselben PostgreSQL-Transaktion. Dadurch
+gewinnt bei parallelen First-Run-Requests genau ein Vorgang; danach antwortet der Flow mit
+`404 Not Found`. Der Setup-POST ist Anti-Forgery- und rate-limit-geschützt und setzt
+`Cache-Control: no-store`; Passwörter, Setup-Gate und E-Mail werden nicht geloggt oder in
+Audit/Operations geschrieben. Der Login erfolgt anschließend mit der E-Mail-Adresse.
 
 Operational Recovery ist als Application-Service vorhanden und kein Forgot-Password-Webflow.
 Sie verlangt explizite Identity, neues Secret, neue RequestId und eine vorhandene
@@ -59,25 +68,24 @@ ein High-Risk-Audit ohne Secret, Passwort oder Hash.
 ## Authentication und Session
 
 Die Webgrenze verwendet das eigene ASP.NET-Core-Cookie-Scheme `FlurNetz.Admin` mit
-`__Host-FlurNetz.Admin`. Das Cookie enthält nur Identity-ID, LoginName, CredentialVersion und
+`__Host-FlurNetz.Admin`. Das Cookie enthält nur Identity-ID, Email, CredentialVersion und
 Scheme-Kennung. Es ist HttpOnly, SameSite Strict und in Production Secure. Die Idle-Lifetime
 beträgt 30 Minuten; eine serverseitig geprüfte absolute Grenze beendet Sessions spätestens
 nach acht Stunden. Es gibt kein Remember Me, kein JWT und keinen LocalStorage-Token.
 
-`GET /admin/login` zeigt das Loginformular, `POST /admin/login` normalisiert den LoginName,
-führt immer einen sicheren Dummy-Verify-Pfad für unbekannte Namen aus und verlangt eine
+`GET /admin/login` zeigt das Loginformular, `POST /admin/login` normalisiert die E-Mail,
+führt immer einen sicheren Dummy-Verify-Pfad für unbekannte Adressen aus und verlangt eine
 Administrator-Rolle. Alle Fehler lauten einheitlich „Anmeldedaten sind ungültig.“. Der Login
 ist über die vorhandene ASP.NET-Core-Rate-Limit-Infrastruktur auf zehn Versuche pro Minute
 und Quelladresse begrenzt. `POST /admin/logout` ist die einzige Logout-Methode.
 
-Bei jedem authentifizierten Request werden Credential, CredentialVersion, LoginName und
+Bei jedem authentifizierten Request werden Credential, CredentialVersion, Email und
 Administrator-Rollenzuweisung serverseitig validiert. Passwortänderung unter
-`/admin/account` und der geschützte Komfortpfad `/admin/setup` prüfen das aktuelle Passwort,
-erzwingen die Password Policy, erhöhen die CredentialVersion, schreiben nur
-`Administration.CredentialChanged` mit `CredentialChanged=true` und stellen die aktuelle
-Session neu aus. Alte Sessions werden damit ungültig. `/admin/setup` ist kein Initial-
-Bootstrap und nicht öffentlich; der Initialadministrator bleibt ausschließlich über
-Runtime-Konfiguration kontrolliert.
+`/admin/account` prüft das aktuelle Passwort, erzwingt die Password Policy, erhöht die
+CredentialVersion, schreibt nur `Administration.CredentialChanged` mit
+`CredentialChanged=true` und stellt die aktuelle Session neu aus. Alte Sessions werden damit
+ungültig. `/admin/setup` ist ausschließlich der anonyme First-Run-Flow und nach dem ersten
+Administrator dauerhaft geschlossen.
 
 ## Permissions und Policies
 
@@ -99,7 +107,7 @@ keine GET-Mutation.
 
 ## Audit, Operations und Atomizität
 
-`AdminExecutionContext` enthält ActorCommunityIdentityId, ActorLoginName, CorrelationId und
+`AdminExecutionContext` enthält ActorCommunityIdentityId, ActorEmail, CorrelationId und
 die aktuelle Permission-Menge. Die API leitet die Correlation aus Activity TraceId oder dem
 HTTP-TraceIdentifier ab; Application-Code greift nicht auf HttpContext zu.
 
@@ -172,10 +180,12 @@ Invarianten, Password Policy, Fingerprint, Reason und Versionierung. Das separat
 `FlurNetz.Modules.Administration.IntegrationTests` verwendet echtes PostgreSQL über
 Testcontainers oder `FLURNETZ_TEST_CONNECTION_STRING` und prüft Migration/Checksum,
 Constraints, Role/Credential-Roundtrip, Audit, Operation-Reservation, Fingerprint-Konflikt,
-Bootstrap, Recovery, atomaren Rollback und 20-fache parallele Idempotenz.
+Gate-geschützten First-Run, genau einen parallelen Setup-Gewinner, Recovery, atomaren
+Rollback und 20-fache parallele Idempotenz.
 
 `FlurNetz.Api.IntegrationTests` prüft den echten Cookie-Login, generische Fehler, CSRF,
-Rate-Limit, Logout-Methode, CredentialVersion-Revocation sowie die Regressionen der
+First-Run-Verfügbarkeit/-Schließung, fehlendes/falsches Setup-Gate, Rate-Limit,
+Logout-Methode, CredentialVersion-Revocation sowie die Regressionen der
 bestehenden Management-Grenzen. Zusätzlich prüfen statische UI-Sicherheitstests den
 Generator auf `window.crypto.getRandomValues()`, die Abwesenheit von `Math.random()` und
 persistenten Browser-Speichern sowie die Verdrahtung beider Passwortseiten. Architekturtests sichern Contract-/Implementierungs-

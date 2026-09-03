@@ -15,15 +15,19 @@ FOR SHARE innerhalb der vom Messaging-Processor vorgegebenen Transaktion. Die Hi
 
 Administration besitzt mit `Administration:1:CreateAdministrationState` eine eigene
 unveränderliche SQL-Migration. Sie legt ausschließlich `administration_credentials`,
-`administration_role_assignments`, `administration_audit_entries` und
-`administration_operations` an. Die Tabellen enthalten keine Cross-Module-Foreign-Keys und
+`administration_role_assignments`, `administration_audit_entries`,
+`administration_operations` und den First-Run-Singleton `administration_setup_state` an. Die
+Tabellen enthalten keine Cross-Module-Foreign-Keys und
 keine Kopien von Identity-, Economy-, Progression-, Inventory-, Titles-, Achievements-,
 Rewards-, Shop-, Notifications-, Automation-, Integrations- oder Overlay-Zustand.
 
 Credentials verwenden einen ASP.NET-Core-PasswordHasher-Hash, einen monoton erhöhten
-CredentialVersion-Wert und einen eindeutigen normalisierten LoginName. Der Bootstrap nutzt
-die Identity-Existence-Capability und schreibt Credential und Administrator-Rolle atomar.
-Operational Recovery ist über eine eindeutige Operation-RequestId idempotent.
+CredentialVersion-Wert sowie eindeutige Email/NormalizedEmail-Werte. Das First-Run-Setup
+prüft und sperrt `administration_setup_state` mit `FOR UPDATE`, erzeugt die Identity über
+`ICommunityIdentityCreator` und schreibt Identity, Credential, Administrator-Rolle und
+Abschlussstatus atomar. Das Setup-Gate stammt ausschließlich aus Runtime-Konfiguration und
+gelangt nicht in die Datenbank. Operational Recovery ist über eine eindeutige
+Operation-RequestId idempotent.
 
 `AdminMutationCoordinator` öffnet für High-Risk-Operationen eine gemeinsame
 `PostgreSqlTransaction` und reserviert die RequestId in `administration_operations`. Owner-
@@ -183,7 +187,8 @@ vollständiger Rollback bei unzureichendem Saldo.
 Checksum, Tabellen-/Constraint-Grenzen, Snapshot-Roundtrip, Identity-Isolation, newest-first-
 Keyset-Pagination, Unread-Lifecycle sowie transaction-aware Commit und Rollback gegen echtes
 PostgreSQL. `FlurNetz.Modules.Administration.IntegrationTests` prüft zusätzlich Administration-
-Migration, Constraints, Audit, Operations, Bootstrap, Recovery, Atomicity und Parallelität.
+Migration, Constraints, Audit, Operations, gate-geschützten First-Run, Recovery, Atomicity
+und Parallelität.
 `FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, die registrierten
 Identity-, Administration-, Economy-, Progression-, Inventory-, Shop-, Notifications-, Automation-,
 Integrations-, Overlay- und Messaging-Migrationen, die read-only

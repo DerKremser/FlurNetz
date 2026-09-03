@@ -335,7 +335,7 @@ Der Shop-Purchase koordiniert Request-, Guard- und Purchase-Writes mit Identity-
 Economy-Debit, Inventory-Grant und Outbox in einer zweiten konkreten gemeinsamen
 PostgreSQL-Transaktion. Die read-only Kaufhistorie nutzt dagegen gezielte Einzel-Reads gegen
 `shop_purchases` ohne zusätzliche Transaktion, Locks, Identity-Existenzprüfung oder neue
-Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. Administration besitzt zusätzlich ausschließlich seine vier eigenen Tabellen ohne Foreign Keys auf andere Module. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; der API-Host bindet für den Shop-Purchase die Economy-/Inventory-Capabilities und für Administration die expliziten Owner-Reads und -Mutationen ein. Der Worker bindet für Automation zusätzlich Economy-Credit und Notification-Create-Capabilities ein. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression, Economy und Automation sind weiterhin nicht als öffentliche Fach-HTTP-Endpunkte registriert. Live-Plattformverbindungen sind weiterhin nicht implementiert; Integrations V1 bietet die persistierte External-Identity-Mapping-Grenze. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md) und [docs/architecture/administration.md](docs/architecture/administration.md).
+Migration. Beide Kompositionen erzeugen keine Cross-Module-Foreign-Keys. Inventory, Titles und Achievements bleiben ebenfalls frei von Cross-Module-Foreign-Keys auf Identity; Achievements besitzt nur einen internen Foreign Key von Community-Achievements auf seine Definition. Der Titles-Katalog liegt in `title_definitions` und besitzt keinen Unlock→Definition-Foreign-Key. Administration besitzt zusätzlich ausschließlich seine eigenen Tabellen ohne Foreign Keys auf andere Module. API und Worker stellen ihre jeweilige Connection-Konfiguration als unabhängige Composition Roots bereit und führen ihre benötigten Migrationen vor dem Start ihrer Runtime aus; der API-Host bindet für den Shop-Purchase die Economy-/Inventory-Capabilities und für Administration die expliziten Owner-Reads und -Mutationen ein. Der Worker bindet für Automation zusätzlich Economy-Credit und Notification-Create-Capabilities ein. Der Worker verarbeitet die Outbox kontinuierlich über den bestehenden Processor; Engagement, Progression, Economy und Automation sind weiterhin nicht als öffentliche Fach-HTTP-Endpunkte registriert. Live-Plattformverbindungen sind weiterhin nicht implementiert; Integrations V1 bietet die persistierte External-Identity-Mapping-Grenze. Details stehen in [docs/architecture/persistence.md](docs/architecture/persistence.md) und [docs/architecture/administration.md](docs/architecture/administration.md).
 
 ## Fachmodule
 
@@ -412,9 +412,26 @@ Die erfolgreiche Antwort hat den Status `201 Created` und die Form:
 }
 ```
 
-Der Entwicklungsstand enthält noch kein Authentifizierungssystem und keine Live-Twitch-,
-Streamer.bot- oder sonstige Plattformverbindung. Integrations V1 unterstützt lediglich
-das persistierte externe Identity-Mapping.
+### Lokale Administration-Ersteinrichtung
+
+Vor der ersten Anmeldung wird einmalig `GET/POST /admin/setup` verwendet. Dafür muss ein
+Setup-Schlüssel ausschließlich über User-Secrets oder eine Umgebungsvariable gesetzt werden:
+
+```text
+dotnet user-secrets set "Administration:Setup:Secret" "<setup-schluessel>" --project src/FlurNetz.Api
+```
+
+Die Seite verlangt E-Mail-Adresse, Passwort, Bestätigung und diesen Schlüssel. Sie erzeugt
+eine neue Identity, ein Administrator-Credential und die statische Administratorrolle atomar.
+Nach dem ersten erfolgreichen Setup ist die Route geschlossen; die Anmeldung erfolgt unter
+`/admin/login` mit der E-Mail-Adresse. `/admin/account` erlaubt anschließend die geschützte
+Passwortänderung. Beide Passwortformulare bieten optional einen clientseitigen Generator mit
+24 Zeichen auf Basis von `window.crypto.getRandomValues()`; der erzeugte Wert wird nicht in
+Browser-Speichern, Cookies, Logs, Auditdaten oder Operations persistiert.
+
+Der Entwicklungsstand enthält keine Live-Twitch-, Streamer.bot- oder sonstige
+Plattformverbindung. Integrations V1 unterstützt lediglich das persistierte externe
+Identity-Mapping.
 
 ## Lokale Worker-Ausführung
 

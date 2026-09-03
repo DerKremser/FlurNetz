@@ -185,11 +185,15 @@ Der API-Host ist nur Producer: Er kann die Outbox beschreiben, startet aber kein
 
 Die Webadministration ist unter `/admin` erreichbar. Login und Logout verwenden
 `GET/POST /admin/login` beziehungsweise `POST /admin/logout`; das Passwortformular liegt
-unter `/admin/account`; der geschützte Passwort-Setup-Komfortpfad liegt unter `/admin/setup`.
-Beide Passwortseiten bieten einen optionalen clientseitigen 24-Zeichen-Generator auf Basis
-von `window.crypto.getRandomValues()`, ohne Browser-Persistenz oder serverseitigen
+unter `/admin/account`. Der anonyme First-Run-Flow liegt unter `GET/POST /admin/setup` und
+ist nur verfügbar, solange noch kein Administrator eingerichtet wurde. Er verlangt E-Mail,
+Passwort, Bestätigung und das ausschließlich aus `Administration:Setup:Secret` gelesene
+Setup-Gate. Nach erfolgreichem Setup ist die Route geschlossen. Beide Passwortseiten bieten
+einen optionalen clientseitigen 24-Zeichen-Generator auf Basis von
+`window.crypto.getRandomValues()`, ohne Browser-Persistenz oder serverseitigen
 Generator-Endpunkt. Die sichtbaren Razor-Seiten umfassen Dashboard, Identity-Liste und
--Detail, Shop, Catalog, Automation, Integrations, Overlay, Audit, Account und Setup.
+-Detail, Shop, Catalog, Automation, Integrations, Overlay, Audit, Account und den
+einmaligen Setup-Flow.
 
 Die permission-geschützten Admin-API-Reads und -Mutationen liegen unter:
 
@@ -312,9 +316,10 @@ Für den API-Host und den beschlossenen Shop-V1-Umfang gibt es bewusst:
 - kein Messaging Runtime Processing, keine Outbox-Loop, kein Inbox-Consumer und keinen Worker im API-Prozess
 - keine Twitch-, Streamer.bot-, Discord-, YouTube- oder Kick-Integration
 - keine HTTP-Endpunkte für Economy oder Inventory
-- keinen öffentlichen Forgot-Password- oder Setup-Endpunkt; `/admin/setup` ist ausschließlich
-  ein geschützter Passwortänderungs-Komfortpfad, kein Bootstrap-Endpunkt. Es gibt kein Remember Me und keinen
-  Source-Key-Readback
+- keinen öffentlichen Forgot-Password-Flow; `/admin/setup` ist nur während des einmaligen,
+  gate-geschützten First-Run-Setups öffentlich verfügbar und danach geschlossen. Setup-POSTs
+  sind CSRF- und rate-limit-geschützt und antworten mit `no-store`; es gibt kein Remember Me
+  und keinen Source-Key-Readback
 - keinen variablen Mengenparameter; ein Purchase gewährt verbindlich genau eine Inventory-Einheit
 - keinen Cart-, Stock-, Kategorien-, zusätzlichen Metadaten-, Discount-, Coupon-, Refund- oder
   Cancellation-Flow; die fachlichen Entscheidungen sind in [shop.md](shop.md) festgehalten
@@ -351,6 +356,8 @@ Die Tests prüfen:
 - Producer-only-Verhalten: pending Outbox, kein API-Processing und kein Inbox-Eintrag
 - Admin-Login, generische Loginfehler, Login-/Logout-CSRF, Rate-Limit, Session-Revocation und
   keine HTML-Redirects für `/api/admin`
+- First-Run-Setup mit E-Mail-Login, Gate-Fehlern, Einmaligkeit, `no-store`, CSRF und ohne
+  Passwort-/Setup-Geheimnis in Persistenz, Audit oder Operations
 - geschützte Regressionen für Shop, Automation, Integrations und Overlay einschließlich
   High-Risk-Reason, RequestId, Audit und One-Time-Source-Key-Verhalten
 - Notifications-Inbox mit vollständiger DTO-Abbildung, Einzel-Lookup, Cursor-/Filterbindung,
