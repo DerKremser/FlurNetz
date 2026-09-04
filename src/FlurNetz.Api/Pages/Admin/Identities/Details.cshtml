@@ -74,4 +74,3 @@
         else { foreach (var entry in Model.AuditEntries) { <div class="audit-row"><span class="status-dot @(entry.Result == FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded ? "success" : "warning")"></span><div><strong>@entry.Action</strong><small>@entry.ActorIdentitySnapshot · @entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div><span class="badge">@entry.Result</span></div> } }
     </article>
 </section>
-@section Scripts { <script src="~/admin/admin.js" asp-append-version="true"></script> }

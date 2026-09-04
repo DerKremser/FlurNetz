@@ -12,7 +12,10 @@
 
   <ItemGroup>
     <None Include="..\..\src\FlurNetz.Api\wwwroot\admin\admin.js" Link="UiSource\admin.js" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\FlurNetz.Api\Pages\Shared\_AdminLayout.cshtml" Link="UiSource\_AdminLayout.cshtml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Account.cshtml" Link="UiSource\Account.cshtml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Catalog.cshtml" Link="UiSource\Catalog.cshtml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Identities\Index.cshtml" Link="UiSource\IdentitiesIndex.cshtml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Setup.cshtml" Link="UiSource\Setup.cshtml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

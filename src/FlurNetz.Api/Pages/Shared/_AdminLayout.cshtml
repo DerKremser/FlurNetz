@@ -1,6 +1,15 @@
 @{
     var path = Context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
     var email = User.FindFirst(AdminAuthenticationDefaults.EmailClaim)?.Value ?? "Admin";
+    var isDashboard = path == "/admin";
+    var isIdentities = path.StartsWith("/admin/identities", StringComparison.Ordinal);
+    var isShop = path.StartsWith("/admin/shop", StringComparison.Ordinal);
+    var isCatalog = path == "/admin/catalog";
+    var isAutomation = path.StartsWith("/admin/automation", StringComparison.Ordinal);
+    var isIntegrations = path.StartsWith("/admin/integrations", StringComparison.Ordinal);
+    var isOverlay = path.StartsWith("/admin/overlay", StringComparison.Ordinal);
+    var isAudit = path.StartsWith("/admin/audit", StringComparison.Ordinal);
+    var isAccount = path.StartsWith("/admin/account", StringComparison.Ordinal);
 }
 <!doctype html>
 <html lang="de">
@@ -11,34 +20,35 @@
     <link rel="stylesheet" href="~/admin/admin.css" asp-append-version="true" />
 </head>
 <body class="admin-shell">
+    <a class="skip-link" href="#main-content">Zum Hauptinhalt springen</a>
     <div class="admin-frame">
-        <aside class="sidebar" aria-label="Administration">
+        <aside id="admin-navigation-drawer" class="sidebar" aria-label="Administration">
             <a class="brand" href="/admin">
                 <span class="brand-mark" aria-hidden="true">F</span>
                 <span><strong>FlurNetz</strong><small>Administration</small></span>
             </a>
-            <nav class="nav-groups">
-                <div class="nav-group">
-                    <span class="nav-label">Übersicht</span>
-                    <a class="nav-link @(path == "/admin" ? "active" : "")" href="/admin"><span aria-hidden="true">⌂</span>Dashboard</a>
-                    <a class="nav-link @(path.StartsWith("/admin/identities") ? "active" : "")" href="/admin/identities"><span aria-hidden="true">◎</span>Identitäten</a>
+            <nav class="nav-groups" aria-label="Hauptnavigation">
+                <div class="nav-group" role="group" aria-labelledby="nav-overview-label">
+                    <span id="nav-overview-label" class="nav-label">Übersicht</span>
+                    <a class="nav-link @(isDashboard ? "active" : "")" data-admin-nav-link data-nav-key="dashboard" href="/admin" @if (isDashboard) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-link-label">Dashboard</span></a>
+                    <a class="nav-link @(isIdentities ? "active" : "")" data-admin-nav-link data-nav-key="identities" href="/admin/identities" @if (isIdentities) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-link-label">Identitäten</span></a>
                 </div>
-                <div class="nav-group">
-                    <span class="nav-label">Inhalte</span>
-                    <a class="nav-link @(path.StartsWith("/admin/shop") ? "active" : "")" href="/admin/shop"><span aria-hidden="true">▣</span>Shop</a>
-                    <a class="nav-link @(path.StartsWith("/admin/catalog") ? "active" : "")" href="/admin/catalog"><span aria-hidden="true">✦</span>Achievements &amp; Titles</a>
-                    <a class="nav-link @(path.StartsWith("/admin/catalog") ? "active" : "")" href="/admin/catalog#rewards"><span aria-hidden="true">◈</span>Rewards</a>
+                <div class="nav-group" role="group" aria-labelledby="nav-content-label">
+                    <span id="nav-content-label" class="nav-label">Inhalte</span>
+                    <a class="nav-link @(isShop ? "active" : "")" data-admin-nav-link data-nav-key="shop" href="/admin/shop" @if (isShop) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">▣</span><span class="nav-link-label">Shop</span></a>
+                    <a class="nav-link @(isCatalog ? "active" : "")" data-admin-nav-link data-nav-key="catalog" href="/admin/catalog" @if (isCatalog) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">✦</span><span class="nav-link-label">Erfolge &amp; Titel</span></a>
+                    <a class="nav-link" data-admin-nav-link data-nav-key="rewards" data-nav-fragment="rewards" href="/admin/catalog#rewards"><span class="nav-icon" aria-hidden="true">◈</span><span class="nav-link-label">Belohnungen</span></a>
                 </div>
-                <div class="nav-group">
-                    <span class="nav-label">System</span>
-                    <a class="nav-link @(path.StartsWith("/admin/automation") ? "active" : "")" href="/admin/automation"><span aria-hidden="true">↗</span>Automation</a>
-                    <a class="nav-link @(path.StartsWith("/admin/integrations") ? "active" : "")" href="/admin/integrations"><span aria-hidden="true">⌁</span>Integrations</a>
-                    <a class="nav-link @(path.StartsWith("/admin/overlay") ? "active" : "")" href="/admin/overlay"><span aria-hidden="true">◌</span>Overlay</a>
+                <div class="nav-group" role="group" aria-labelledby="nav-system-label">
+                    <span id="nav-system-label" class="nav-label">System</span>
+                    <a class="nav-link @(isAutomation ? "active" : "")" data-admin-nav-link data-nav-key="automation" href="/admin/automation" @if (isAutomation) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">↗</span><span class="nav-link-label">Automatisierung</span></a>
+                    <a class="nav-link @(isIntegrations ? "active" : "")" data-admin-nav-link data-nav-key="integrations" href="/admin/integrations" @if (isIntegrations) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">⌁</span><span class="nav-link-label">Integrationen</span></a>
+                    <a class="nav-link @(isOverlay ? "active" : "")" data-admin-nav-link data-nav-key="overlay" href="/admin/overlay" @if (isOverlay) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-link-label">Overlay</span></a>
                 </div>
-                <div class="nav-group">
-                    <span class="nav-label">Administration</span>
-                    <a class="nav-link @(path.StartsWith("/admin/audit") ? "active" : "")" href="/admin/audit"><span aria-hidden="true">▤</span>Audit</a>
-                    <a class="nav-link @(path.StartsWith("/admin/account") ? "active" : "")" href="/admin/account"><span aria-hidden="true">⚙</span>Account</a>
+                <div class="nav-group" role="group" aria-labelledby="nav-administration-label">
+                    <span id="nav-administration-label" class="nav-label">Administration</span>
+                    <a class="nav-link @(isAudit ? "active" : "")" data-admin-nav-link data-nav-key="audit" href="/admin/audit" @if (isAudit) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-link-label">Audit</span></a>
+                    <a class="nav-link @(isAccount ? "active" : "")" data-admin-nav-link data-nav-key="account" href="/admin/account" @if (isAccount) { <text>aria-current="page"</text> }><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-link-label">Konto</span></a>
                 </div>
             </nav>
             <div class="sidebar-footer">
@@ -46,11 +56,23 @@
                 <form method="post" action="/admin/logout">@Html.AntiForgeryToken()<button class="logout-button" type="submit">Abmelden</button></form>
             </div>
         </aside>
-        <main class="main-content">
-            <div class="mobile-topbar"><a class="brand" href="/admin"><span class="brand-mark">F</span><strong>FlurNetz</strong></a></div>
-            @RenderBody()
+        <main id="main-content" class="main-content" tabindex="-1">
+            <header class="mobile-topbar" aria-label="Mobile Administration">
+                <button class="mobile-nav-toggle secondary-button" type="button" data-nav-toggle aria-controls="admin-navigation-drawer" aria-expanded="false" aria-label="Hauptmenü öffnen">
+                    <span class="nav-toggle-icon" aria-hidden="true"></span><span>Menü</span>
+                </button>
+                <a class="brand" href="/admin">
+                    <span class="brand-mark" aria-hidden="true">F</span>
+                    <span><strong>FlurNetz</strong><small>Administration</small></span>
+                </a>
+            </header>
+            <div class="page-content" data-nav-main>
+                @RenderBody()
+            </div>
         </main>
+        <button class="nav-scrim" type="button" data-nav-close aria-label="Navigation schließen" hidden></button>
     </div>
+    <script src="~/admin/admin.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

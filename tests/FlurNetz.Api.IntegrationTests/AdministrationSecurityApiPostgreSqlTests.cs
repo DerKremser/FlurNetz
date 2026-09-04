@@ -40,6 +40,13 @@ public sealed class AdministrationSecurityApiPostgreSqlTests(ApiPostgreSqlFixtur
         Assert.Equal("text/css", css.Content.Headers.ContentType?.MediaType);
         var cssBody = await css.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.False(string.IsNullOrWhiteSpace(cssBody));
+        Assert.Contains("--surface", cssBody, StringComparison.Ordinal);
+        Assert.Contains("--color-text-primary", cssBody, StringComparison.Ordinal);
+        Assert.Contains("--space-1: 4px", cssBody, StringComparison.Ordinal);
+        Assert.Contains("--focus-ring", cssBody, StringComparison.Ordinal);
+        Assert.Contains("prefers-reduced-motion", cssBody, StringComparison.Ordinal);
+        Assert.Contains(".mobile-topbar .brand { color: var(--color-text-primary); }", cssBody, StringComparison.Ordinal);
+        Assert.Contains(".mobile-topbar .brand small { color: var(--color-text-secondary); }", cssBody, StringComparison.Ordinal);
 
         using var javascript = await client.GetAsync("/admin/admin.js", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, javascript.StatusCode);
@@ -50,6 +57,72 @@ public sealed class AdministrationSecurityApiPostgreSqlTests(ApiPostgreSqlFixtur
             $"Unexpected JavaScript content type: {javascriptContentType ?? "<missing>"}");
         var javascriptBody = await javascript.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.False(string.IsNullOrWhiteSpace(javascriptBody));
+    }
+
+    [Fact]
+    public async Task AuthenticatedAdminShellMarksOnlyTheCurrentNavigationEntry()
+    {
+        SkipIfUnavailable();
+        await database.ResetDatabaseAsync(TestContext.Current.CancellationToken);
+        using var factory = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await factory.CreateAdminClientAsync(TestContext.Current.CancellationToken);
+
+        foreach (var (path, key) in new[]
+        {
+            ("/admin", "dashboard"),
+            ("/admin/identities", "identities"),
+            ("/admin/shop", "shop"),
+            ("/admin/catalog", "catalog"),
+            ("/admin/automation", "automation"),
+            ("/admin/integrations", "integrations"),
+            ("/admin/overlay", "overlay"),
+            ("/admin/audit", "audit"),
+            ("/admin/account", "account")
+        })
+        {
+            using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            var activeLinks = Regex.Matches(
+                body,
+                @"<a\b(?=[^>]*data-admin-nav-link)(?=[^>]*class=""nav-link active"")[^>]*>",
+                RegexOptions.CultureInvariant);
+
+            Assert.Single(activeLinks);
+            Assert.Contains($"data-nav-key=\"{key}\"", activeLinks[0].Value, StringComparison.Ordinal);
+            Assert.Contains("aria-current=\"page\"", activeLinks[0].Value, StringComparison.Ordinal);
+            Assert.Contains("id=\"main-content\"", body, StringComparison.Ordinal);
+            Assert.Contains("data-nav-toggle", body, StringComparison.Ordinal);
+            Assert.Contains("aria-controls=\"admin-navigation-drawer\"", body, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task IdentityListRendersCanonicalDetailLinkThatResolves()
+    {
+        SkipIfUnavailable();
+        await database.ResetDatabaseAsync(TestContext.Current.CancellationToken);
+        using var factory = new FlurNetzApiFactory(database.ConnectionString, enableAdmin: true);
+        using var client = await factory.CreateAdminClientAsync(TestContext.Current.CancellationToken);
+        var identityId = await factory.GetTestAdminIdentityIdAsync(TestContext.Current.CancellationToken);
+        var canonicalId = identityId.ToString("D");
+
+        using var listResponse = await client.GetAsync("/admin/identities", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var listBody = await listResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var detailLink = Regex.Match(
+            listBody,
+            $@"href=""(/admin/identities/{Regex.Escape(canonicalId)})""",
+            RegexOptions.CultureInvariant);
+
+        Assert.True(detailLink.Success, $"Expected a canonical detail link for identity {canonicalId}.");
+        Assert.DoesNotContain(":D", detailLink.Groups[1].Value, StringComparison.Ordinal);
+        Assert.Contains($">{canonicalId}</a>", listBody, StringComparison.Ordinal);
+
+        using var detailResponse = await client.GetAsync(detailLink.Groups[1].Value, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, detailResponse.StatusCode);
+        var detailBody = await detailResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains($"<h1>{canonicalId}</h1>", detailBody, StringComparison.Ordinal);
     }
 
     [Fact]
