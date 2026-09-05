@@ -195,6 +195,16 @@ Generator-Endpunkt. Die sichtbaren Razor-Seiten umfassen Dashboard, Identity-Lis
 -Detail, Shop, Catalog, Automation, Integrations, Overlay, Audit, Account und den
 einmaligen Setup-Flow.
 
+Administration UI V1.1 ist serverseitig gerendert und nutzt die gemeinsame Admin-Shell mit
+Design-Tokens, responsiver Navigation, Mobile-Drawer, Skip-Link, `aria-current`, sichtbarem
+Keyboard-Fokus und `prefers-reduced-motion`. Die Accessibility-Baseline ist an WCAG 2.2 AA
+orientiert, ohne eine formale Konformitätszertifizierung zu behaupten. Native Ressourcen
+unterstützen Deutsch als Default/Fallback und Englisch als zweite Sprache. Die Auswahl wird
+unter `/admin/account` pro Administrator persistiert (`preferred_culture` mit `NULL`, `de` oder
+`en`) und beim nächsten Login erneut angewendet; sie ist keine globale UI-Einstellung. Die
+Razor-UI lokalisiert auch bekannte Audit-Aktionen und Ressourcentypen und fällt bei unbekannten
+technischen Werten sicher auf den Ausgangswert zurück.
+
 Die permission-geschützten Admin-API-Reads und -Mutationen liegen unter:
 
 ```text
@@ -266,8 +276,9 @@ Archivierung ist terminal und ausschließlich über die Management-Mutation mög
 ist ausschließlich implementation-owned beziehungsweise API-eigener Management-
 Zustand. `FlurNetz.Modules.Shop.Contracts` wird nicht erweitert; der Purchase-Snapshot und
 `shop.purchase-completed` v1 bleiben unverändert. Die Notifications-Inbox ist ein separates
-Modul; es gibt keine Verschiebung in das Administration-Modul, kein Admin-Frontend und
-keine Delete-, Unarchive- oder Restore-Route. Authentication/Authorization für die
+Modul; es gibt keine Verschiebung in das Administration-Modul und keine Delete-, Unarchive-
+oder Restore-Route. Die bestehende Admin-Razor-UI bleibt ein hostseitiger Management-Adapter;
+Authentication/Authorization für die
 Management-Grenze erfolgt über Administration V1; öffentliche Shop-Routen bleiben davon
 getrennt.
 
@@ -360,6 +371,10 @@ Die Tests prüfen:
   Passwort-/Setup-Geheimnis in Persistenz, Audit oder Operations
 - geschützte Regressionen für Shop, Automation, Integrations und Overlay einschließlich
   High-Risk-Reason, RequestId, Audit und One-Time-Source-Key-Verhalten
+- Admin-Shell, Static Assets, ARIA-/responsive Navigationssemantik, Skip-Link und
+  Reduced-Motion-Styles
+- symmetrische DE-/EN-Ressourcen, persistierte individuelle Administrator-Sprache,
+  lokalisierte Auditdarstellung und Identity-Detailnavigation
 - Notifications-Inbox mit vollständiger DTO-Abbildung, Einzel-Lookup, Cursor-/Filterbindung,
   Identity-Isolation, Unread Count und Read-/Unread-/Read-All-Mutationen
 - Startup-Abbruch bei nicht erreichbarer PostgreSQL-Datenbank

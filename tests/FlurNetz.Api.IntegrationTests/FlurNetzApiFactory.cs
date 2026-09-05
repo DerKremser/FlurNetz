@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using System.Net.Http;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
 
@@ -46,15 +47,21 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
 
     }
 
-    public async Task<HttpClient> CreateAdminClientAsync(CancellationToken cancellationToken = default)
+    public async Task<HttpClient> CreateAdminClientAsync(
+        CancellationToken cancellationToken = default,
+        bool allowAutoRedirect = true)
     {
         if (!enableAdmin)
         {
             throw new InvalidOperationException("The factory must be created with enableAdmin=true.");
         }
 
-        var client = CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
-        await SetupTestAdminAsync(client, connectionString, cancellationToken).ConfigureAwait(false);
+        var client = CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = allowAutoRedirect,
+            HandleCookies = true
+        });
+        await SetupTestAdminAsync(client, connectionString, cancellationToken, allowAutoRedirect).ConfigureAwait(false);
         var loginPage = await client.GetStringAsync("/admin/login", cancellationToken).ConfigureAwait(false);
         var loginToken = ExtractAntiforgeryToken(loginPage);
         if (loginToken is null)
@@ -73,7 +80,8 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
                 new KeyValuePair<string, string>("ReturnUrl", "/admin")
             ]),
             cancellationToken).ConfigureAwait(false);
-        if (!loginResponse.IsSuccessStatusCode)
+        if (!loginResponse.IsSuccessStatusCode
+            && (allowAutoRedirect || !IsRedirect(loginResponse.StatusCode)))
         {
             var body = await loginResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             client.Dispose();
@@ -81,7 +89,7 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
         }
 
         var authenticatedPage = await client.GetStringAsync("/admin/account", cancellationToken).ConfigureAwait(false);
-        if (!authenticatedPage.Contains("Passwort ändern", StringComparison.Ordinal))
+        if (!WebUtility.HtmlDecode(authenticatedPage).Contains("Passwort ändern", StringComparison.Ordinal))
         {
             client.Dispose();
             throw new InvalidOperationException($"The test admin login did not produce an authenticated account page. Final response excerpt: {authenticatedPage[..Math.Min(authenticatedPage.Length, 180)]}");
@@ -107,7 +115,11 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
             cancellationToken: cancellationToken)).ConfigureAwait(false);
     }
 
-    private static async Task SetupTestAdminAsync(HttpClient client, string connectionString, CancellationToken cancellationToken)
+    private static async Task SetupTestAdminAsync(
+        HttpClient client,
+        string connectionString,
+        CancellationToken cancellationToken,
+        bool allowAutoRedirect)
     {
         using var setupPage = await client.GetAsync("/admin/setup", cancellationToken).ConfigureAwait(false);
         if (setupPage.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -130,7 +142,11 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
                 new KeyValuePair<string, string>("SetupSecret", TestAdminSetupSecret)
             ]),
             cancellationToken).ConfigureAwait(false);
-        setupResponse.EnsureSuccessStatusCode();
+        if (!setupResponse.IsSuccessStatusCode
+            && (allowAutoRedirect || !IsRedirect(setupResponse.StatusCode)))
+        {
+            setupResponse.EnsureSuccessStatusCode();
+        }
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         var credentialCount = await connection.ExecuteScalarAsync<int>(new Dapper.CommandDefinition(
@@ -151,4 +167,7 @@ public sealed class FlurNetzApiFactory(string connectionString, bool enableAdmin
             RegexOptions.CultureInvariant);
         return tokenMatch.Success ? tokenMatch.Groups[1].Value : null;
     }
+
+    private static bool IsRedirect(HttpStatusCode statusCode) =>
+        (int)statusCode is >= 300 and < 400;
 }

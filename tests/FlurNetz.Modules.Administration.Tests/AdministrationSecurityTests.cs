@@ -82,4 +82,18 @@ public sealed class AdministrationSecurityTests
         credential.ChangePassword("new-hash", DateTimeOffset.UtcNow);
         Assert.Equal(2, credential.CredentialVersion);
     }
+
+    [Fact]
+    public void PreferredCultureAllowsOnlyGermanAndEnglishAndDefaultsToGerman()
+    {
+        var id = FlurNetz.Modules.Identity.Contracts.CommunityIdentityId.New();
+        var credential = AdminCredential.Create(id, "operator@example.com", "hash", DateTimeOffset.UtcNow);
+
+        Assert.Null(credential.PreferredCulture);
+        Assert.Equal(AdminPreferredCulture.Default, AdminPreferredCulture.Resolve(credential.PreferredCulture));
+        credential.SetPreferredCulture(" EN ");
+        Assert.Equal(AdminPreferredCulture.English, credential.PreferredCulture);
+        Assert.Throws<ArgumentException>(() => credential.SetPreferredCulture("fr"));
+        Assert.Equal(AdminPreferredCulture.Default, AdminPreferredCulture.Resolve("invalid"));
+    }
 }

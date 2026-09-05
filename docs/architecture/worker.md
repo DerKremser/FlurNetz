@@ -58,8 +58,10 @@ Scheduler noch einen zweiten BackgroundService.
 Die PostgreSQL-Verbindung wird ausschließlich aus ConnectionStrings:FlurNetz gelesen. Fehlt
 der Wert oder ist er ungültig, schlägt die Erstellung der bestehenden
 PostgreSqlConnectionFactory früh fehl und der Host startet nicht. Zugangsdaten werden über
-User Secrets, Umgebungsvariablen oder eine andere normale .NET-Konfigurationsquelle
-bereitgestellt und nicht in Repository-Dateien versioniert.
+Umgebungsvariablen oder eine andere normale .NET-Konfigurationsquelle bereitgestellt und nicht
+in Repository-Dateien versioniert. Das Worker-Projekt besitzt keine eigene `UserSecretsId`;
+für lokale Worker-Läufe ist daher beispielsweise `ConnectionStrings__FlurNetz` als
+Umgebungsvariable geeignet.
 
 Vor dem Start des Processing-Loops führt der Worker den bestehenden MigrationRunner aus.
 Registriert werden genau die Migrationsquellen der Messaging Foundation, des Progression-,

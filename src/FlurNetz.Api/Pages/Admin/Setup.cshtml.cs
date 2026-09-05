@@ -1,35 +1,39 @@
 using System.ComponentModel.DataAnnotations;
 using FlurNetz.Api.Administration;
 using FlurNetz.Modules.Administration.Contracts.Security;
+using FlurNetz.Modules.Administration.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Localization;
 
 namespace FlurNetz.Api.Pages.Admin;
 
 [AllowAnonymous]
 [EnableRateLimiting("AdminSetup")]
 [ValidateAntiForgeryToken]
-public sealed class SetupModel(IAdminFirstRunSetup firstRunSetup) : PageModel
+public sealed class SetupModel(
+    IAdminFirstRunSetup firstRunSetup,
+    IStringLocalizer<SharedResource> localizer) : PageModel
 {
     [BindProperty]
-    [Required(ErrorMessage = "Die E-Mail-Adresse ist erforderlich.")]
-    [EmailAddress(ErrorMessage = "Die E-Mail-Adresse ist ungültig.")]
+    [Required(ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_EmailRequired))]
+    [EmailAddress(ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_EmailInvalid))]
     public string? Email { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "Das Passwort ist erforderlich.")]
+    [Required(ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_PasswordRequired))]
     public string? NewPassword { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "Die Passwortbestätigung ist erforderlich.")]
-    [Compare(nameof(NewPassword), ErrorMessage = "Die Passwortbestätigung stimmt nicht überein.")]
+    [Required(ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_PasswordConfirmationRequired))]
+    [Compare(nameof(NewPassword), ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_PasswordConfirmationMismatch))]
     public string? NewPasswordConfirmation { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "Der Einrichtungsschlüssel ist erforderlich.")]
+    [Required(ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_SetupSecretRequired))]
     public string? SetupSecret { get; set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
@@ -68,6 +72,7 @@ public sealed class SetupModel(IAdminFirstRunSetup firstRunSetup) : PageModel
                     IssuedUtc = DateTimeOffset.UtcNow,
                     ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30)
                 }).ConfigureAwait(false);
+            AdminCultureCookie.Append(HttpContext, AdminPreferredCulture.Default);
             return LocalRedirect("/admin");
         }
         catch (AdminSetupClosedException)
@@ -113,5 +118,5 @@ public sealed class SetupModel(IAdminFirstRunSetup firstRunSetup) : PageModel
 
     private void AddGenericSetupError() => ModelState.AddModelError(
         string.Empty,
-        "Die Ersteinrichtung konnte nicht abgeschlossen werden.");
+        localizer["Error_SetupFailed"].Value);
 }

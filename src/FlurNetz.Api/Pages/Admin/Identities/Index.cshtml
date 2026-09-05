@@ -1,19 +1,51 @@
 @page "/admin/identities"
 @model FlurNetz.Api.Pages.Admin.Identities.IndexModel
 @{
-    ViewData["Title"] = "Identitäten";
+    ViewData["Title"] = L["Page_Identities"].Value;
 }
-<header class="page-header"><div><div class="eyebrow">Community</div><h1>Identitäten</h1><p class="muted">Stabile CommunityIdentityIds als zentrale Navigationsgrenze.</p></div></header>
-<section class="panel">
-    <div class="filter-bar"><div class="search-box search-box-disabled"><span aria-hidden="true">⌕</span><label class="visually-hidden" for="identity-search">Identity-ID-Suche (derzeit nicht verfügbar)</label><input id="identity-search" type="search" placeholder="Suche derzeit nicht verfügbar" aria-describedby="identity-search-note" disabled /><span id="identity-search-note" class="visually-hidden">Die Identitätssuche ist in dieser Version noch nicht verdrahtet.</span></div><span class="muted">Keyset-Pagination · @Model.Items.Count geladen</span></div>
-    @if (Model.Error is not null) { <div class="notice error" role="alert">@Model.Error</div> }
-    @if (Model.Items.Count == 0 && Model.Error is null) { <div class="empty-state"><span class="empty-icon">◎</span><strong>Keine Identitäten vorhanden</strong><p>Es wurden noch keine Community-Identitäten angelegt.</p></div> }
+<header class="page-header">
+    <div>
+        <div class="eyebrow">@L["Identities_Eyebrow"]</div>
+        <h1>@L["Page_Identities"]</h1>
+        <p class="muted">@L["Identities_Description"]</p>
+    </div>
+</header>
+<section class="panel" aria-labelledby="identities-table-title">
+    <div class="filter-bar">
+        <div class="search-box search-box-disabled">
+            <span aria-hidden="true">⌕</span>
+            <label class="visually-hidden" for="identity-search">@L["Identities_SearchLabel"]</label>
+            <input id="identity-search" type="search" placeholder="@L["Identities_SearchUnavailable"]" aria-describedby="identity-search-note" disabled />
+            <span id="identity-search-note" class="visually-hidden">@L["Identities_SearchHelp"]</span>
+        </div>
+        <span class="muted">@L["Identities_PageSummary", Model.Items.Count.ToString("N0", CultureInfo.CurrentCulture)]</span>
+    </div>
+    @if (Model.Error is not null)
+    {
+        <div class="notice error" role="alert">@Model.Error</div>
+    }
+    @if (Model.Items.Count == 0 && Model.Error is null)
+    {
+        <div class="empty-state"><span class="empty-icon" aria-hidden="true">◎</span><strong>@L["Identities_Empty"]</strong><p>@L["Identities_EmptyHelp"]</p></div>
+    }
     else if (Model.Items.Count > 0)
     {
-        <div class="table-wrap"><table><caption class="visually-hidden">Community-Identitäten</caption><thead><tr><th>CommunityIdentityId</th><th>Typ</th><th></th></tr></thead><tbody>
-        @foreach (var item in Model.Items)
-        { <tr><td><a class="id-link" href="/admin/identities/@(item.CommunityIdentityId.Value.ToString("D"))">@(item.CommunityIdentityId.Value.ToString("D"))</a></td><td><span class="badge neutral">Community Identity</span></td><td class="row-action"><a class="text-link" href="/admin/identities/@(item.CommunityIdentityId.Value.ToString("D"))">Details →</a></td></tr> }
-        </tbody></table></div>
-        @if (Model.NextCursor is not null) { <div class="pagination"><a class="secondary-button" href="/admin/identities?after=@(Model.NextCursor.Value.Value.ToString("D"))">Nächste Seite →</a></div> }
+        <div class="table-wrap">
+            <table>
+                <caption id="identities-table-title" class="visually-hidden">@L["Identities_TableCaption"]</caption>
+                <thead><tr><th scope="col">@L["Identities_ColumnId"]</th><th scope="col">@L["Identities_ColumnType"]</th><th scope="col" class="row-action">@L["Identities_ColumnActions"]</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    var identityId = item.CommunityIdentityId.Value.ToString("D");
+                    <tr><td><a class="id-link" href="/admin/identities/@identityId">@identityId</a></td><td><span class="badge neutral">@L["Identities_Type"]</span></td><td class="row-action"><a class="text-link" href="/admin/identities/@identityId">@L["Identities_Details"] <span aria-hidden="true">→</span></a></td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.NextCursor is not null)
+        {
+            <div class="pagination"><a class="secondary-button" href="/admin/identities?after=@(Model.NextCursor.Value.Value.ToString("D"))">@L["Identities_NextPage"] <span aria-hidden="true">→</span></a></div>
+        }
     }
 </section>

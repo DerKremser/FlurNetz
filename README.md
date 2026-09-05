@@ -6,10 +6,33 @@ mit read-only Storefront, HTTP-Purchase und HTTP-Katalogverwaltung sowie unabhä
 Ende zu Ende gegen PostgreSQL getestet und kann durch den Worker kontinuierlich verarbeitet
 werden; die persönliche Notifications-Inbox V1 ist über HTTP lesbar und wird im Worker aus
 `shop.purchase-completed` v1 befüllt. Die Administration V1 ergänzt eine geschützte lokale
-Cookie-Administration mit Login, Permissions, Audit, idempotenten Operations, Owner-Reads und
-Razor-UI für die vereinbarten Adminbereiche. Engagement besitzt weiterhin keine eigene
+Cookie-Administration mit Login, Permissions, Audit, idempotenten Operations und Owner-Reads.
+Administration UI V1.1 poliert darauf aufbauend die gemeinsame serverseitig gerenderte Razor-
+Administration für die vereinbarten Adminbereiche, einschließlich responsiver Navigation,
+Keyboard-/Focus-Baseline, Skip-Link, Reduced-Motion-Unterstützung und deutscher beziehungsweise
+englischer Oberfläche. Engagement besitzt weiterhin keine eigene
 öffentliche HTTP-Schnittstelle, Automation bewusst keine öffentliche Runtime-API, sondern nur
 die interne Management-Grenze.
+
+## Module und Hosts
+
+Die fachlichen beziehungsweise administrativen Modulgrenzen sind als getrennte Contracts- und
+Implementierungs-Assemblies organisiert:
+
+`Identity`, `Engagement`, `Progression`, `Economy`, `Rewards`, `Inventory`, `Titles`,
+`Achievements`, `Shop`, `Notifications`, `Automation`, `Overlay`, `Integrations` und
+`Administration`.
+
+`FlurNetz.Api` ist die ASP.NET-Core-Composition-Root und der HTTP-Host. Er registriert die für
+HTTP und Administration benötigten Module, führt die zugehörigen Startmigrationen aus und
+bleibt beim Messaging ausschließlich Producer. `FlurNetz.Worker` ist ein unabhängiger
+.NET-10-Generic-Host ohne HTTP-Server; er verarbeitet die PostgreSQL-Outbox kontinuierlich über
+den vorhandenen Processor und die explizit registrierten Consumer. Der Worker lädt weder die
+API noch die Shop-Implementierung oder Administration.
+
+Die vollständige Zuordnung von Contracts, Implementierungen und Host-Verantwortlichkeiten steht
+in [docs/architecture/modules.md](docs/architecture/modules.md), [docs/architecture/api.md](docs/architecture/api.md)
+und [docs/architecture/worker.md](docs/architecture/worker.md).
 
 ## Automation V1
 
@@ -68,6 +91,45 @@ Messaging-Inbox-Eintrag atomar. Die Outbox ist kein Event Store und kein Replay-
 früher ohne diesen Consumer verarbeitete Shop-Events werden nicht historisch backgefüllt.
 
 Details und die technischen Tabellen stehen in [docs/architecture/messaging.md](docs/architecture/messaging.md). Die Tests in `FlurNetz.Messaging.IntegrationTests` verwenden echtes PostgreSQL über Testcontainers; Docker oder alternativ `FLURNETZ_TEST_CONNECTION_STRING` ist dafür erforderlich.
+
+## Administration V1 und Administration UI V1.1
+
+Administration V1 ist die lokale Security- und Operations-Grenze. Die API verwendet ein
+separates ASP.NET-Core-Cookie-Scheme mit HttpOnly-, SameSite-Strict- und Production-Secure-
+Eigenschaften, serverseitiger Credential-Version-Prüfung, Idle-/absoluter Session-Grenze,
+Rate-Limits, Permissions, Anti-Forgery, Audit und idempotenten Operations. Das einmalige,
+anonyme First-Run-Setup unter `GET/POST /admin/setup` wird durch
+`Administration:Setup:Secret` aus User-Secrets oder Umgebung geschützt und erzeugt Identity,
+Credential, Administrator-Rolle und Setup-Abschluss atomar. Es gibt keinen öffentlichen
+Forgot-Password-Flow, kein Remember-Me, kein JWT-Adminlogin und keine Role-/Permission-
+Management-UI.
+
+Administration UI V1.1 liegt als serverseitig gerenderte Razor Pages im API-Host und verwendet
+keine SPA-, Frontend-Build- oder externe UI-/Lokalisierungsbibliothek. Die gemeinsame Admin-
+Shell umfasst Dashboard, Identity-Liste und -Detail, Shop, Katalog, Automation, Integrations,
+Overlay, Audit, Account, Login, Setup und Forbidden. Design-Tokens, gemeinsame Panels und
+Formzustände bilden die visuelle Basis; responsive Layouts, Mobile-Drawer, Skip-Link,
+`aria-current`, Drawer-ARIA-Zustände, sichtbarer Keyboard-Fokus und `prefers-reduced-motion`
+bilden die WCAG-2.2-AA-orientierte Accessibility-Baseline. Fachliche Zustände werden als echte
+Werte, Empty States oder „Nicht verfügbar“ präsentiert; keine Defaultdaten werden erfunden.
+
+Die UI unterstützt `de` und `en`, standardmäßig Deutsch. Die Übersetzungen liegen in den
+symmetrischen nativen Ressourcen `SharedResource.de.resx` und `SharedResource.en.resx`.
+Die Sprache ist eine individuelle, persistierte Administratorpräferenz unter `/admin/account`;
+sie ist nicht global. `preferred_culture` erlaubt `de`, `en` oder `NULL`, wobei `NULL` auf Deutsch
+zurückfällt. Beim Login wird die gespeicherte Präferenz erneut angewendet; anonyme Login-/Setup-
+Aufrufe besitzen nur den sicheren Fallback beziehungsweise die explizite DE/EN-Auswahl. Audit-
+Aktionen und Ressourcentypen werden in der Oberfläche lokalisiert, unbekannte zukünftige Werte
+fallen sicher auf ihren technischen Wert zurück.
+
+Die Administration-eigene Migration `Administration:1:CreateAdministrationSecurityState` legt
+Credentials, Rollen, Audit, Operations und Setup-State an. `Administration:2:AddAdministratorPreferredCulture`
+ergänzt die nullable Spalte `administration_credentials.preferred_culture` mit der Datenbank-
+Prüfung auf `NULL`, `de` oder `en`. Fachzustand bleibt in den Owner-Modulen; die Administration
+liest und mutiert ihn nur über die vorgesehenen Owner-Contracts und Capabilities.
+
+Details zu Security, Atomizität, Tabellen, UI und Testabdeckung stehen in
+[docs/architecture/administration.md](docs/architecture/administration.md).
 
 ## BuildingBlocks und Architekturtests
 
@@ -398,10 +460,12 @@ dotnet user-secrets set "ConnectionStrings:FlurNetz" "Host=localhost;Port=5432;D
 dotnet run --project src/FlurNetz.Api
 ```
 
-Alternativ kann `ConnectionStrings__FlurNetz` als Umgebungsvariable gesetzt werden. Danach kann der Use Case ohne Request-Body aufgerufen werden:
+Alternativ kann `ConnectionStrings__FlurNetz` als Umgebungsvariable gesetzt werden. Danach kann
+der Use Case ohne Request-Body aufgerufen werden. Verwende dafür die von `dotnet run` ausgegebene
+API-URL, da die lokale URL je nach Startprofil oder Umgebung variieren kann:
 
 ```text
-curl -i -X POST http://localhost:5000/api/identities
+curl -i -X <API-URL>/api/identities
 ```
 
 Die erfolgreiche Antwort hat den Status `201 Created` und die Form:
@@ -424,10 +488,12 @@ dotnet user-secrets set "Administration:Setup:Secret" "<setup-schluessel>" --pro
 Die Seite verlangt E-Mail-Adresse, Passwort, Bestätigung und diesen Schlüssel. Sie erzeugt
 eine neue Identity, ein Administrator-Credential und die statische Administratorrolle atomar.
 Nach dem ersten erfolgreichen Setup ist die Route geschlossen; die Anmeldung erfolgt unter
-`/admin/login` mit der E-Mail-Adresse. `/admin/account` erlaubt anschließend die geschützte
-Passwortänderung. Beide Passwortformulare bieten optional einen clientseitigen Generator mit
-24 Zeichen auf Basis von `window.crypto.getRandomValues()`; der erzeugte Wert wird nicht in
-Browser-Speichern, Cookies, Logs, Auditdaten oder Operations persistiert.
+`/admin/login` mit der E-Mail-Adresse. Die Passwort-Policy verlangt 15 bis 128 Zeichen, ohne
+Trim-, Case- oder Unicode-Normalisierung. `/admin/account` erlaubt anschließend die geschützte
+Passwortänderung und die individuelle DE-/EN-Sprachpräferenz. Beide Passwortformulare bieten
+optional einen clientseitigen Generator mit 24 Zeichen auf Basis von
+`window.crypto.getRandomValues()`; der erzeugte Wert wird nicht in Browser-Speichern, Cookies,
+Logs, Auditdaten oder Operations persistiert.
 
 Der Entwicklungsstand enthält keine Live-Twitch-, Streamer.bot- oder sonstige
 Plattformverbindung. Integrations V1 unterstützt lediglich das persistierte externe
@@ -436,7 +502,9 @@ Identity-Mapping.
 ## Lokale Worker-Ausführung
 
 Der unabhängige Worker-Host verwendet dieselbe Konfigurationskonvention
-ConnectionStrings:FlurNetz und benötigt eine erreichbare PostgreSQL-Datenbank. Beim Start führt
+`ConnectionStrings:FlurNetz` und benötigt eine erreichbare PostgreSQL-Datenbank. Für einen
+lokalen Worker-Lauf kann `ConnectionStrings__FlurNetz` als Umgebungsvariable gesetzt werden;
+das Worker-Projekt besitzt keine eigene `UserSecretsId`. Beim Start führt
 er ausschließlich die Messaging-, Progression-, Economy-, Notifications- und Automation-Migrationen aus, validiert die explizite
 Registry-/Consumer-Komposition und verarbeitet die Outbox danach kontinuierlich. Die Registry
 enthält zusätzlich `shop.purchase-completed` v1 aus `FlurNetz.Modules.Shop.Contracts`; die
@@ -466,5 +534,12 @@ dotnet restore
 dotnet build
 dotnet test --solution FlurNetz.sln --no-build --no-restore
 ```
+
+Die Testprojekte prüfen zusätzlich die echte API-/PostgreSQL-Komposition, Security und
+Administration, Static Assets, Razor-Shell, responsive Navigationssemantik, native DE-/EN-
+Ressourcen, persistierte individuelle Administrator-Sprache, lokalisierte Auditdarstellung,
+Identity-Detailnavigation sowie die vorhandenen Modul-, Messaging-, Worker- und Architektur-
+Grenzen. Ein fester Testfallzähler wird hier bewusst nicht dokumentiert, weil er sich mit jeder
+legitimen Testergänzung ändern kann.
 
 Die Architektur des Hosts ist in [docs/architecture/api.md](docs/architecture/api.md) beschrieben. Die initiale Gesamtrichtung steht in [docs/architecture/overview.md](docs/architecture/overview.md); die Regeln für BuildingBlocks stehen in [docs/architecture/building-blocks.md](docs/architecture/building-blocks.md).

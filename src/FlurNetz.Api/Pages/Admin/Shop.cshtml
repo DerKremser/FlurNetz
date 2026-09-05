@@ -1,5 +1,63 @@
 @page "/admin/shop"
 @model FlurNetz.Api.Pages.Admin.ShopModel
-@{ ViewData["Title"] = "Shop"; }
-<header class="page-header"><div><div class="eyebrow">Inhalte</div><h1>Shop</h1><p class="muted">Angebote und Lifecycle-Zustände des Owner-Moduls.</p></div></header>
-<section class="panel"><div class="panel-heading"><div><div class="eyebrow">Katalog</div><h2>Angebote</h2></div><span class="badge">@Model.Items.Count</span></div>@if (Model.Error is not null) { <div class="notice error" role="alert">@Model.Error</div> } else if (Model.Items.Count == 0) { <div class="empty-state"><strong>Keine Angebote</strong><p>Der Owner-Katalog enthält noch keine Angebote.</p></div> } else { <div class="table-wrap"><table><caption class="visually-hidden">Shop-Angebote</caption><thead><tr><th>Name</th><th>Preis</th><th>Status</th><th>ItemDefinitionId</th></tr></thead><tbody>@foreach (var item in Model.Items) { <tr><td><strong>@item.DisplayName</strong><small>@item.Description</small></td><td>@item.Price.Value</td><td><span class="badge @(item.IsArchived ? "neutral" : item.IsEnabled ? "green-badge" : "neutral")">@(item.IsArchived ? "Archiviert" : item.IsEnabled ? "Aktiv" : "Deaktiviert")</span></td><td><code>@item.ItemDefinitionIdValue</code></td></tr> }</tbody></table></div> }</section>
+@{
+    ViewData["Title"] = L["Page_Shop"].Value;
+    string StatusLabel(bool archived, bool enabled) => archived
+        ? L["Status_Archived"].Value
+        : enabled ? L["Status_Active"].Value : L["Status_Disabled"].Value;
+    string StatusClass(bool archived, bool enabled) => archived
+        ? "archived"
+        : enabled ? "active" : "disabled";
+}
+<header class="page-header">
+    <div>
+        <div class="eyebrow">@L["Layout_Content"]</div>
+        <h1>@L["Page_Shop"]</h1>
+        <p class="muted">@L["Shop_Description"]</p>
+    </div>
+</header>
+<section class="panel" aria-labelledby="offers-title">
+    <div class="panel-heading"><div><div class="eyebrow">@L["Shop_Offers"]</div><h2 id="offers-title">@L["Shop_Offers"]</h2></div><span class="badge">@L["Shop_OffersCount", Model.Items.Count.ToString("N0", CultureInfo.CurrentCulture)]</span></div>
+    @if (Model.Error is not null)
+    {
+        <div class="notice error" role="alert">@Model.Error</div>
+    }
+    else if (Model.Items.Count == 0)
+    {
+        <div class="empty-state"><span class="empty-icon" aria-hidden="true">▣</span><strong>@L["Shop_Empty"]</strong><p>@L["Shop_EmptyHelp"]</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <caption class="visually-hidden">@L["Shop_Offers"]</caption>
+                <thead><tr><th scope="col">@L["Shop_ColumnName"]</th><th scope="col">@L["Shop_ColumnPrice"]</th><th scope="col">@L["Shop_ColumnAvailability"]</th><th scope="col">@L["Shop_ColumnStatus"]</th><th scope="col">@L["Shop_ColumnSortOrder"]</th><th scope="col">@L["Shop_ColumnPurchaseLimit"]</th><th scope="col">@L["Shop_ColumnItemDefinition"]</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td><strong>@item.DisplayName</strong>@if (!string.IsNullOrWhiteSpace(item.Description)) { <small class="table-subtext">@item.Description</small> }</td>
+                        <td><strong>@item.Price.Value.ToString("N0", CultureInfo.CurrentCulture)</strong></td>
+                        <td>
+                            @if (item.Availability.AvailableFrom is null && item.Availability.AvailableUntil is null)
+                            {
+                                <span>@L["Shop_AlwaysAvailable"]</span>
+                            }
+                            else
+                            {
+                                @if (item.Availability.AvailableFrom is not null) { <span class="table-subtext">@L["Shop_AvailableFrom", item.Availability.AvailableFrom.Value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)]</span> }
+                                @if (item.Availability.AvailableUntil is not null) { <span class="table-subtext">@L["Shop_AvailableUntil", item.Availability.AvailableUntil.Value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)]</span> }
+                            }
+                        </td>
+                        <td><span class="status-chip @StatusClass(item.IsArchived, item.IsEnabled)"><span class="status-dot" aria-hidden="true"></span>@StatusLabel(item.IsArchived, item.IsEnabled)</span></td>
+                        <td>@item.SortOrder.ToString("N0", CultureInfo.CurrentCulture)</td>
+                        <td>@(item.PurchaseLimitPerIdentity is int limit ? limit.ToString("N0", CultureInfo.CurrentCulture) : L["Shop_NoLimit"].Value)</td>
+                        <td><code>@item.ItemDefinitionIdValue.ToString("D")</code></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="panel-footnote">@L["Shop_ReadOnlyNote"]</p>
+    }
+</section>

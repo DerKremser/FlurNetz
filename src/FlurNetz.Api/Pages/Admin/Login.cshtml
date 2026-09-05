@@ -2,35 +2,49 @@
 @model FlurNetz.Api.Pages.Admin.LoginModel
 @{
     Layout = null;
-    ViewData["Title"] = "Anmelden";
+    ViewData["Title"] = L["Page_Login"].Value;
+    var culture = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var returnUrl = $"{Request.PathBase}{Request.Path}";
 }
 <!doctype html>
-<html lang="de">
+<html lang="@culture">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Anmelden – FlurNetz</title>
+    <title>@L["Page_Login"] – FlurNetz</title>
     <link rel="stylesheet" href="~/admin/admin.css" asp-append-version="true" />
 </head>
 <body class="login-page">
     <main class="login-card" aria-labelledby="login-title">
-        <div class="brand login-brand"><span class="brand-mark">F</span><span><strong>FlurNetz</strong><small>Administration</small></span></div>
-        <div class="eyebrow">Sicherer Bereich</div>
-        <h1 id="login-title">Willkommen zurück</h1>
-        <p class="muted">Melde dich an, um die Community-Verwaltung zu öffnen.</p>
+        <div class="brand login-brand"><span class="brand-mark" aria-hidden="true">F</span><span><strong>FlurNetz</strong><small>@L["Brand_AdminSubtitle"]</small></span></div>
+        <div class="eyebrow">@L["Login_Eyebrow"]</div>
+        <h1 id="login-title">@L["Login_Heading"]</h1>
+        <p class="muted">@L["Login_Description"]</p>
         <form method="post" class="stack-form">
             @Html.AntiForgeryToken()
             <input type="hidden" asp-for="ReturnUrl" />
             <div asp-validation-summary="ModelOnly" class="form-error" role="alert"></div>
-            <label asp-for="Email">E-Mail-Adresse</label>
-            <input asp-for="Email" type="email" autocomplete="username" autofocus />
+            <label asp-for="Email">@L["Login_Email"]</label>
+            <input asp-for="Email" type="email" autocomplete="username" autofocus aria-describedby="login-email-help" />
+            <span id="login-email-help" class="visually-hidden">@L["Login_Email"]</span>
             <span asp-validation-for="Email" class="field-error"></span>
-            <label asp-for="Password">Passwort</label>
+            <label asp-for="Password">@L["Login_Password"]</label>
             <input asp-for="Password" type="password" autocomplete="current-password" />
             <span asp-validation-for="Password" class="field-error"></span>
-            <button class="primary-button" type="submit">Anmelden</button>
+            <button class="primary-button" type="submit">@L["Login_Submit"]</button>
         </form>
-        <p class="login-footnote">Zugriff wird protokolliert. Es gibt keinen öffentlichen Passwort-Recovery-Flow.</p>
+        <p class="login-footnote">@L["Login_Footnote"]</p>
+        <form class="login-language-switcher" method="get" action="/admin/culture">
+            <label for="login-language">@L["Language_Label"]</label>
+            <div class="language-control">
+                <select id="login-language" name="culture" aria-label="@L["Language_Label"]">
+                    @if (culture == "de") { <option value="de" selected>@L["Language_German"]</option> } else { <option value="de">@L["Language_German"]</option> }
+                    @if (culture == "en") { <option value="en" selected>@L["Language_English"]</option> } else { <option value="en">@L["Language_English"]</option> }
+                </select>
+                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                <button class="secondary-button" type="submit">@L["Language_Apply"]</button>
+            </div>
+        </form>
     </main>
 </body>
 </html>

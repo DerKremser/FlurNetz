@@ -5,6 +5,7 @@ public static class AdminAuditActions
 {
     public const string CredentialChanged = "Administration.CredentialChanged";
     public const string CredentialRecovered = "Administration.CredentialRecovered";
+    public const string PreferredCultureChanged = "Administration.PreferredCultureChanged";
     public const string BalanceCredited = "Economy.BalanceCredited";
     public const string BalanceDebited = "Economy.BalanceDebited";
     public const string ExperienceGranted = "Progression.ExperienceGranted";

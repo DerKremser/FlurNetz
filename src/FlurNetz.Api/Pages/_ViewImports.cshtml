@@ -1,5 +1,8 @@
 @using FlurNetz.Api
 @using FlurNetz.Api.Administration
 @using FlurNetz.Modules.Administration.Contracts.Security
+@using Microsoft.Extensions.Localization
+@using System.Globalization
 @namespace FlurNetz.Api.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@inject IStringLocalizer<SharedResource> L

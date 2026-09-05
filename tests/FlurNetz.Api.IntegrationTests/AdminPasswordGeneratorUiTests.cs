@@ -30,7 +30,10 @@ public sealed class AdminPasswordGeneratorUiTests
         Assert.Contains("data-password-generator-confirm", page, StringComparison.Ordinal);
         Assert.Contains("data-password-toggle", page, StringComparison.Ordinal);
         Assert.Contains("data-password-copy", page, StringComparison.Ordinal);
-        Assert.Contains("Sicheres Passwort generieren", page, StringComparison.Ordinal);
+        var generateResourceKey = pageName == "Account.cshtml"
+            ? "@L[\"Account_Generate\"]"
+            : "@L[\"Setup_Generate\"]";
+        Assert.Contains(generateResourceKey, page, StringComparison.Ordinal);
         Assert.Contains("autocomplete=\"off\"", page, StringComparison.Ordinal);
         Assert.Contains("@Html.AntiForgeryToken()", page, StringComparison.Ordinal);
     }

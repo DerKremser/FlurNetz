@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Validation_EmailRequired" xml:space="preserve"><value>Email address is required.</value></data>
+  <data name="Validation_EmailInvalid" xml:space="preserve"><value>Email address is invalid.</value></data>
+  <data name="Validation_PasswordRequired" xml:space="preserve"><value>Password is required.</value></data>
+  <data name="Validation_PasswordConfirmationRequired" xml:space="preserve"><value>Password confirmation is required.</value></data>
+  <data name="Validation_PasswordConfirmationMismatch" xml:space="preserve"><value>Password confirmation does not match.</value></data>
+  <data name="Validation_SetupSecretRequired" xml:space="preserve"><value>Setup secret is required.</value></data>
+  <data name="Validation_CurrentPasswordRequired" xml:space="preserve"><value>Current password is required.</value></data>
+  <data name="Validation_NewPasswordRequired" xml:space="preserve"><value>New password is required.</value></data>
+  <data name="Validation_PasswordLength" xml:space="preserve"><value>Password must be between {0} and {1} characters long.</value></data>
+  <data name="Language_Label" xml:space="preserve"><value>Language</value></data>
+  <data name="Language_German" xml:space="preserve"><value>German</value></data>
+  <data name="Language_English" xml:space="preserve"><value>English</value></data>
+  <data name="Language_Apply" xml:space="preserve"><value>Apply</value></data>
+  <data name="Layout_PageTitle" xml:space="preserve"><value>{0} – FlurNetz Administration</value></data>
+  <data name="Brand_AdminSubtitle" xml:space="preserve"><value>Administration</value></data>
+  <data name="Layout_AdminRole" xml:space="preserve"><value>Administrator</value></data>
+  <data name="Layout_AdminFallback" xml:space="preserve"><value>Admin</value></data>
+  <data name="Layout_SkipToContent" xml:space="preserve"><value>Skip to main content</value></data>
+  <data name="Layout_Administration" xml:space="preserve"><value>Administration</value></data>
+  <data name="Layout_MainNavigation" xml:space="preserve"><value>Main navigation</value></data>
+  <data name="Layout_Overview" xml:space="preserve"><value>Overview</value></data>
+  <data name="Layout_Content" xml:space="preserve"><value>Content</value></data>
+  <data name="Layout_System" xml:space="preserve"><value>System</value></data>
+  <data name="Layout_AdministrationGroup" xml:space="preserve"><value>Administration</value></data>
+  <data name="Nav_Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Nav_Identities" xml:space="preserve"><value>Identities</value></data>
+  <data name="Nav_Shop" xml:space="preserve"><value>Shop</value></data>
+  <data name="Nav_AchievementsTitles" xml:space="preserve"><value>Achievements &amp; titles</value></data>
+  <data name="Nav_Rewards" xml:space="preserve"><value>Rewards</value></data>
+  <data name="Nav_Automation" xml:space="preserve"><value>Automation</value></data>
+  <data name="Nav_Integrations" xml:space="preserve"><value>Integrations</value></data>
+  <data name="Nav_Overlay" xml:space="preserve"><value>Overlay</value></data>
+  <data name="Nav_Audit" xml:space="preserve"><value>Audit</value></data>
+  <data name="Nav_Account" xml:space="preserve"><value>Account</value></data>
+  <data name="Nav_Logout" xml:space="preserve"><value>Sign out</value></data>
+  <data name="Nav_Menu" xml:space="preserve"><value>Menu</value></data>
+  <data name="Nav_MenuOpen" xml:space="preserve"><value>Open main menu</value></data>
+  <data name="Nav_MenuClose" xml:space="preserve"><value>Close main menu</value></data>
+  <data name="Nav_Close" xml:space="preserve"><value>Close navigation</value></data>
+  <data name="Page_Login" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Page_Setup" xml:space="preserve"><value>Initial setup</value></data>
+  <data name="Page_Forbidden" xml:space="preserve"><value>Access denied</value></data>
+  <data name="Page_Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Page_Account" xml:space="preserve"><value>Account</value></data>
+  <data name="Page_Identities" xml:space="preserve"><value>Identities</value></data>
+  <data name="Page_IdentityDetail" xml:space="preserve"><value>Identity details</value></data>
+  <data name="Page_Catalog" xml:space="preserve"><value>Content</value></data>
+  <data name="Page_Shop" xml:space="preserve"><value>Shop</value></data>
+  <data name="Page_Automation" xml:space="preserve"><value>Automation</value></data>
+  <data name="Page_Integrations" xml:space="preserve"><value>Integrations</value></data>
+  <data name="Page_Overlay" xml:space="preserve"><value>Overlay</value></data>
+  <data name="Page_Audit" xml:space="preserve"><value>Audit</value></data>
+  <data name="Login_Eyebrow" xml:space="preserve"><value>Secure area</value></data>
+  <data name="Login_Heading" xml:space="preserve"><value>Welcome back</value></data>
+  <data name="Login_Description" xml:space="preserve"><value>Sign in to open community administration.</value></data>
+  <data name="Login_Email" xml:space="preserve"><value>Email address</value></data>
+  <data name="Login_Password" xml:space="preserve"><value>Password</value></data>
+  <data name="Login_Submit" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Login_Footnote" xml:space="preserve"><value>Access is logged. There is no public password recovery flow.</value></data>
+  <data name="Setup_Eyebrow" xml:space="preserve"><value>One-time initial setup</value></data>
+  <data name="Setup_Heading" xml:space="preserve"><value>Set up administrator</value></data>
+  <data name="Setup_Description" xml:space="preserve"><value>Create the first administrator with an email address and a strong password. This flow closes permanently afterwards.</value></data>
+  <data name="Setup_Email" xml:space="preserve"><value>Email address</value></data>
+  <data name="Setup_Password" xml:space="preserve"><value>Password</value></data>
+  <data name="Setup_ConfirmPassword" xml:space="preserve"><value>Confirm password</value></data>
+  <data name="Setup_Secret" xml:space="preserve"><value>Setup secret</value></data>
+  <data name="Setup_Generate" xml:space="preserve"><value>Generate strong password</value></data>
+  <data name="Setup_Copy" xml:space="preserve"><value>Copy</value></data>
+  <data name="Setup_Show" xml:space="preserve"><value>Show</value></data>
+  <data name="Setup_Hide" xml:space="preserve"><value>Hide</value></data>
+  <data name="Setup_PasswordHelp" xml:space="preserve"><value>The generator runs only in this browser. Store the password securely now; it is not written to browser storage, cookies, logs, audit data or operations.</value></data>
+  <data name="Setup_SecretHelp" xml:space="preserve"><value>Use the one-time setup secret from secure runtime configuration. It is never stored or logged.</value></data>
+  <data name="Setup_Submit" xml:space="preserve"><value>Set up administrator securely</value></data>
+  <data name="Setup_Generated" xml:space="preserve"><value>Strong password generated. Store it securely now.</value></data>
+  <data name="Setup_GenerationError" xml:space="preserve"><value>Password could not be generated securely. Please use your own passphrase.</value></data>
+  <data name="Setup_CopyUnavailable" xml:space="preserve"><value>Copying is not available in this browser.</value></data>
+  <data name="Setup_Copied" xml:space="preserve"><value>Password copied. Store it securely now.</value></data>
+  <data name="Setup_CopyDenied" xml:space="preserve"><value>The browser rejected the copy request.</value></data>
+  <data name="Forbidden_Description" xml:space="preserve"><value>This action requires an Administration permission you do not have.</value></data>
+  <data name="Forbidden_Back" xml:space="preserve"><value>Go to dashboard</value></data>
+  <data name="Account_Eyebrow" xml:space="preserve"><value>Administration</value></data>
+  <data name="Account_Description" xml:space="preserve"><value>Change your admin password. All older sessions will be invalidated.</value></data>
+  <data name="Account_Security" xml:space="preserve"><value>Credential security</value></data>
+  <data name="Account_ChangePassword" xml:space="preserve"><value>Change password</value></data>
+  <data name="Account_PasswordHelp" xml:space="preserve"><value>Use a long passphrase with at least 15 characters. The password is never stored in plain text.</value></data>
+  <data name="Account_CurrentPassword" xml:space="preserve"><value>Current password</value></data>
+  <data name="Account_NewPassword" xml:space="preserve"><value>New password</value></data>
+  <data name="Account_ConfirmPassword" xml:space="preserve"><value>Confirm new password</value></data>
+  <data name="Account_Generate" xml:space="preserve"><value>Generate strong password</value></data>
+  <data name="Account_Copy" xml:space="preserve"><value>Copy</value></data>
+  <data name="Account_Show" xml:space="preserve"><value>Show</value></data>
+  <data name="Account_Hide" xml:space="preserve"><value>Hide</value></data>
+  <data name="Account_PasswordHelpShort" xml:space="preserve"><value>The generator runs only in this browser. Store the password securely now; it is not written to browser storage, cookies, logs or audit data.</value></data>
+  <data name="Account_Submit" xml:space="preserve"><value>Change password securely</value></data>
+  <data name="Account_Success" xml:space="preserve"><value>Password changed. The other sessions were ended.</value></data>
+  <data name="Account_Generated" xml:space="preserve"><value>Strong password generated. Store it securely now.</value></data>
+  <data name="Account_GenerationError" xml:space="preserve"><value>Password could not be generated securely. Please use your own passphrase.</value></data>
+  <data name="Account_CopyUnavailable" xml:space="preserve"><value>Copying is not available in this browser.</value></data>
+  <data name="Account_Copied" xml:space="preserve"><value>Password copied. Store it securely now.</value></data>
+  <data name="Account_CopyDenied" xml:space="preserve"><value>The browser rejected the copy request.</value></data>
+  <data name="Account_Preferences" xml:space="preserve"><value>Preferences</value></data>
+  <data name="Account_Language" xml:space="preserve"><value>Language</value></data>
+  <data name="Account_LanguageHelp" xml:space="preserve"><value>Preferred language for your administration.</value></data>
+  <data name="Account_LanguageGerman" xml:space="preserve"><value>Deutsch</value></data>
+  <data name="Account_LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="Account_LanguageSave" xml:space="preserve"><value>Save</value></data>
+  <data name="Account_LanguageSaved" xml:space="preserve"><value>Your preferred language was saved.</value></data>
+  <data name="Account_LanguageInvalid" xml:space="preserve"><value>Please choose Deutsch or English.</value></data>
+  <data name="Dashboard_Eyebrow" xml:space="preserve"><value>Overview</value></data>
+  <data name="Dashboard_Description" xml:space="preserve"><value>Your current administration overview.</value></data>
+  <data name="Dashboard_OpenIdentities" xml:space="preserve"><value>Open identities</value></data>
+  <data name="Dashboard_CurrentData" xml:space="preserve"><value>Current data</value></data>
+  <data name="Dashboard_IdentityCount" xml:space="preserve"><value>Identities loaded</value></data>
+  <data name="Dashboard_FirstPage" xml:space="preserve"><value>first page</value></data>
+  <data name="Dashboard_AuditCount" xml:space="preserve"><value>Audit loaded</value></data>
+  <data name="Dashboard_LastEntries" xml:space="preserve"><value>latest entries</value></data>
+  <data name="Dashboard_AdminStatus" xml:space="preserve"><value>Administration</value></data>
+  <data name="Dashboard_ServerProtected" xml:space="preserve"><value>protected server-side</value></data>
+  <data name="Dashboard_History" xml:space="preserve"><value>History</value></data>
+  <data name="Dashboard_RecentAudit" xml:space="preserve"><value>Recent audit actions</value></data>
+  <data name="Dashboard_ViewAll" xml:space="preserve"><value>View all</value></data>
+  <data name="Dashboard_NoAudit" xml:space="preserve"><value>No audit actions yet</value></data>
+  <data name="Dashboard_NoAuditHelp" xml:space="preserve"><value>Successful administrative changes appear here.</value></data>
+  <data name="Dashboard_QuickAccess" xml:space="preserve"><value>Quick access</value></data>
+  <data name="Dashboard_Workspaces" xml:space="preserve"><value>Workspaces</value></data>
+  <data name="Dashboard_IdentityLookup" xml:space="preserve"><value>Identity Lookup</value></data>
+  <data name="Dashboard_IdentityLookupHelp" xml:space="preserve"><value>Balances, XP and notifications</value></data>
+  <data name="Dashboard_AuditCheck" xml:space="preserve"><value>Review audit</value></data>
+  <data name="Dashboard_AuditCheckHelp" xml:space="preserve"><value>Traceable history</value></data>
+  <data name="Dashboard_SecureAccount" xml:space="preserve"><value>Secure account</value></data>
+  <data name="Dashboard_SecureAccountHelp" xml:space="preserve"><value>Password and sessions</value></data>
+  <data name="Dashboard_Unavailable" xml:space="preserve"><value>A section is currently unavailable: {0}</value></data>
+  <data name="Dependency_Identities" xml:space="preserve"><value>identities</value></data>
+  <data name="Dependency_Audit" xml:space="preserve"><value>audit</value></data>
+  <data name="Dependency_IdentitiesAndAudit" xml:space="preserve"><value>identities and audit</value></data>
+  <data name="Identities_Eyebrow" xml:space="preserve"><value>Community</value></data>
+  <data name="Identities_Description" xml:space="preserve"><value>Stable community identities as the central navigation boundary.</value></data>
+  <data name="Identities_SearchUnavailable" xml:space="preserve"><value>Search currently unavailable</value></data>
+  <data name="Identities_SearchLabel" xml:space="preserve"><value>Identity ID search (currently unavailable)</value></data>
+  <data name="Identities_SearchHelp" xml:space="preserve"><value>Identity search is not wired up in this version yet.</value></data>
+  <data name="Identities_PageSummary" xml:space="preserve"><value>Keyset pagination · {0} loaded</value></data>
+  <data name="Identities_TableCaption" xml:space="preserve"><value>Community identities</value></data>
+  <data name="Identities_ColumnId" xml:space="preserve"><value>CommunityIdentityId</value></data>
+  <data name="Identities_ColumnType" xml:space="preserve"><value>Type</value></data>
+  <data name="Identities_ColumnActions" xml:space="preserve"><value>Actions</value></data>
+  <data name="Identities_Type" xml:space="preserve"><value>Community identity</value></data>
+  <data name="Identities_Details" xml:space="preserve"><value>Details</value></data>
+  <data name="Identities_NextPage" xml:space="preserve"><value>Next page</value></data>
+  <data name="Identities_Empty" xml:space="preserve"><value>No identities found</value></data>
+  <data name="Identities_EmptyHelp" xml:space="preserve"><value>No community identities have been created yet.</value></data>
+  <data name="IdentityDetail_Back" xml:space="preserve"><value>Identities</value></data>
+  <data name="IdentityDetail_Description" xml:space="preserve"><value>Permission-aware areas for the central community identity.</value></data>
+  <data name="IdentityDetail_CopyId" xml:space="preserve"><value>Copy ID</value></data>
+  <data name="IdentityDetail_Copied" xml:space="preserve"><value>Copied</value></data>
+  <data name="IdentityDetail_Central" xml:space="preserve"><value>Central identity</value></data>
+  <data name="IdentityDetail_CentralHelp" xml:space="preserve"><value>The CommunityIdentityId remains the business identity across all modules.</value></data>
+  <data name="IdentityDetail_Mappings" xml:space="preserve"><value>External mappings</value></data>
+  <data name="IdentityDetail_MappingsHelp" xml:space="preserve"><value>Provider mappings for this community identity.</value></data>
+  <data name="IdentityDetail_Economy" xml:space="preserve"><value>Economy</value></data>
+  <data name="IdentityDetail_Balance" xml:space="preserve"><value>Balance</value></data>
+  <data name="IdentityDetail_BalanceHelp" xml:space="preserve"><value>Current economy balance</value></data>
+  <data name="IdentityDetail_Progression" xml:space="preserve"><value>Progression</value></data>
+  <data name="IdentityDetail_Experience" xml:space="preserve"><value>Experience</value></data>
+  <data name="IdentityDetail_ExperienceHelp" xml:space="preserve"><value>Experience points</value></data>
+  <data name="IdentityDetail_Inventory" xml:space="preserve"><value>Inventory</value></data>
+  <data name="IdentityDetail_Achievements" xml:space="preserve"><value>Achievements</value></data>
+  <data name="IdentityDetail_AchievementsUnlocked" xml:space="preserve"><value>Unlocked</value></data>
+  <data name="IdentityDetail_Titles" xml:space="preserve"><value>Titles</value></data>
+  <data name="IdentityDetail_TitlesUnlocked" xml:space="preserve"><value>Unlocked</value></data>
+  <data name="IdentityDetail_Shop" xml:space="preserve"><value>Shop</value></data>
+  <data name="IdentityDetail_PurchaseHistory" xml:space="preserve"><value>Purchase history</value></data>
+  <data name="IdentityDetail_Notifications" xml:space="preserve"><value>Notifications</value></data>
+  <data name="IdentityDetail_Inbox" xml:space="preserve"><value>Inbox</value></data>
+  <data name="IdentityDetail_Audit" xml:space="preserve"><value>Traceability</value></data>
+  <data name="IdentityDetail_AdminHistory" xml:space="preserve"><value>Admin history</value></data>
+  <data name="IdentityDetail_NoMappings" xml:space="preserve"><value>No external mappings found.</value></data>
+  <data name="IdentityDetail_NoEconomy" xml:space="preserve"><value>No economy state exists for this identity yet.</value></data>
+  <data name="IdentityDetail_NoProgression" xml:space="preserve"><value>No progression state exists for this identity yet.</value></data>
+  <data name="IdentityDetail_NoInventory" xml:space="preserve"><value>No inventory state yet.</value></data>
+  <data name="IdentityDetail_NoAchievements" xml:space="preserve"><value>No achievements unlocked yet.</value></data>
+  <data name="IdentityDetail_NoTitlesState" xml:space="preserve"><value>No title state yet.</value></data>
+  <data name="IdentityDetail_NoTitles" xml:space="preserve"><value>No titles unlocked yet.</value></data>
+  <data name="IdentityDetail_NoPurchases" xml:space="preserve"><value>No purchases found.</value></data>
+  <data name="IdentityDetail_NoNotifications" xml:space="preserve"><value>No notifications found.</value></data>
+  <data name="IdentityDetail_NoAudit" xml:space="preserve"><value>No audit actions for this identity.</value></data>
+  <data name="IdentityDetail_Unavailable" xml:space="preserve"><value>Unavailable · {0} could not be loaded.</value></data>
+  <data name="IdentityDetail_Unread" xml:space="preserve"><value>{0} unread</value></data>
+  <data name="Catalog_Description" xml:space="preserve"><value>Owner-owned definitions and rewards – without artificial activation or deletion semantics.</value></data>
+  <data name="Catalog_Achievements" xml:space="preserve"><value>Achievements</value></data>
+  <data name="Catalog_Titles" xml:space="preserve"><value>Titles</value></data>
+  <data name="Catalog_Rewards" xml:space="preserve"><value>Reward definitions</value></data>
+  <data name="Catalog_Packages" xml:space="preserve"><value>Packages</value></data>
+  <data name="Catalog_NoDefinitions" xml:space="preserve"><value>No definitions found.</value></data>
+  <data name="Catalog_NoPackages" xml:space="preserve"><value>No packages found.</value></data>
+  <data name="Catalog_EconomyBalance" xml:space="preserve"><value>Economy balance</value></data>
+  <data name="Catalog_GenericReward" xml:space="preserve"><value>Reward</value></data>
+  <data name="Catalog_DefinitionCount" xml:space="preserve"><value>{0} definitions</value></data>
+  <data name="Shop_Description" xml:space="preserve"><value>Offers and separate lifecycle states from the owner module.</value></data>
+  <data name="Shop_Offers" xml:space="preserve"><value>Offers</value></data>
+  <data name="Shop_OffersCount" xml:space="preserve"><value>{0} offers</value></data>
+  <data name="Shop_ColumnName" xml:space="preserve"><value>Name</value></data>
+  <data name="Shop_ColumnPrice" xml:space="preserve"><value>Price</value></data>
+  <data name="Shop_ColumnAvailability" xml:space="preserve"><value>Availability</value></data>
+  <data name="Shop_ColumnStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="Shop_ColumnSortOrder" xml:space="preserve"><value>Sort order</value></data>
+  <data name="Shop_ColumnPurchaseLimit" xml:space="preserve"><value>Purchase limit</value></data>
+  <data name="Shop_ColumnItemDefinition" xml:space="preserve"><value>ItemDefinitionId</value></data>
+  <data name="Shop_Empty" xml:space="preserve"><value>No offers found</value></data>
+  <data name="Shop_EmptyHelp" xml:space="preserve"><value>The owner catalog does not contain any offers yet.</value></data>
+  <data name="Shop_NoLimit" xml:space="preserve"><value>Unlimited</value></data>
+  <data name="Shop_ReadOnlyNote" xml:space="preserve"><value>This view shows the real offer and lifecycle data. Changes are made through the existing API.</value></data>
+  <data name="Shop_AlwaysAvailable" xml:space="preserve"><value>Always available</value></data>
+  <data name="Shop_AvailableFrom" xml:space="preserve"><value>From {0}</value></data>
+  <data name="Shop_AvailableUntil" xml:space="preserve"><value>Until {0}</value></data>
+  <data name="Automation_Description" xml:space="preserve"><value>Rules and their execution history – without run-now or replay actions.</value></data>
+  <data name="Automation_Rules" xml:space="preserve"><value>Rules</value></data>
+  <data name="Automation_ColumnName" xml:space="preserve"><value>Name</value></data>
+  <data name="Automation_ColumnTrigger" xml:space="preserve"><value>Trigger</value></data>
+  <data name="Automation_ColumnConditions" xml:space="preserve"><value>Conditions</value></data>
+  <data name="Automation_ColumnActions" xml:space="preserve"><value>Actions</value></data>
+  <data name="Automation_ColumnStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="Automation_TableCaption" xml:space="preserve"><value>Automation rules</value></data>
+  <data name="Automation_Empty" xml:space="preserve"><value>No rules found</value></data>
+  <data name="Automation_EmptyHelp" xml:space="preserve"><value>No automation rules have been created yet.</value></data>
+  <data name="Automation_ShowConfiguration" xml:space="preserve"><value>Show configuration</value></data>
+  <data name="Automation_TriggerKey" xml:space="preserve"><value>Trigger key</value></data>
+  <data name="Automation_Conditions" xml:space="preserve"><value>Conditions</value></data>
+  <data name="Automation_Actions" xml:space="preserve"><value>Actions</value></data>
+  <data name="Automation_None" xml:space="preserve"><value>None</value></data>
+  <data name="Automation_TriggerEngagement" xml:space="preserve"><value>Engagement message</value></data>
+  <data name="Automation_TriggerShopPurchase" xml:space="preserve"><value>Shop purchase</value></data>
+  <data name="Automation_ConditionIdentity" xml:space="preserve"><value>Community identity equals</value></data>
+  <data name="Automation_ConditionOffer" xml:space="preserve"><value>Shop offer equals</value></data>
+  <data name="Automation_ConditionItem" xml:space="preserve"><value>Item definition equals</value></data>
+  <data name="Automation_ConditionPriceAtLeast" xml:space="preserve"><value>Price at least</value></data>
+  <data name="Automation_ConditionPriceAtMost" xml:space="preserve"><value>Price at most</value></data>
+  <data name="Automation_ActionEconomy" xml:space="preserve"><value>Credit economy</value></data>
+  <data name="Automation_ActionNotification" xml:space="preserve"><value>Create notification</value></data>
+  <data name="Automation_ActionOverlay" xml:space="preserve"><value>Show overlay alert</value></data>
+  <data name="Integrations_Description" xml:space="preserve"><value>External identity mappings only; no OAuth or token management.</value></data>
+  <data name="Integrations_Mappings" xml:space="preserve"><value>Mappings</value></data>
+  <data name="Integrations_ColumnProvider" xml:space="preserve"><value>Provider</value></data>
+  <data name="Integrations_ColumnExternalId" xml:space="preserve"><value>ExternalUserId</value></data>
+  <data name="Integrations_ColumnCommunityId" xml:space="preserve"><value>CommunityIdentityId</value></data>
+  <data name="Integrations_TableCaption" xml:space="preserve"><value>External identity mappings</value></data>
+  <data name="Integrations_Empty" xml:space="preserve"><value>No mappings found</value></data>
+  <data name="Integrations_EmptyHelp" xml:space="preserve"><value>No external identity mappings are available.</value></data>
+  <data name="Integrations_ReadOnlyNote" xml:space="preserve"><value>This view is read-only. External identity mappings are managed through the existing integrations API.</value></data>
+  <data name="Overlay_Description" xml:space="preserve"><value>Channels, status and secure one-time source-key actions.</value></data>
+  <data name="Overlay_Channels" xml:space="preserve"><value>Channels</value></data>
+  <data name="Overlay_BrowserSources" xml:space="preserve"><value>Browser sources</value></data>
+  <data name="Overlay_ColumnName" xml:space="preserve"><value>Name</value></data>
+  <data name="Overlay_ColumnStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="Overlay_ColumnUpdated" xml:space="preserve"><value>Updated</value></data>
+  <data name="Overlay_ColumnId" xml:space="preserve"><value>ID</value></data>
+  <data name="Overlay_TableCaption" xml:space="preserve"><value>Overlay channels</value></data>
+  <data name="Overlay_Empty" xml:space="preserve"><value>No overlay channels</value></data>
+  <data name="Overlay_EmptyHelp" xml:space="preserve"><value>No channels have been created yet.</value></data>
+  <data name="Overlay_SourceKeyNote" xml:space="preserve"><value>Source keys and alerts are not shown in this overview for security reasons.</value></data>
+  <data name="Audit_Description" xml:space="preserve"><value>Historical, immutable record of administrative actions.</value></data>
+  <data name="Audit_Loaded" xml:space="preserve"><value>{0} entries loaded</value></data>
+  <data name="Audit_ColumnAction" xml:space="preserve"><value>Action</value></data>
+  <data name="Audit_ColumnTarget" xml:space="preserve"><value>Target</value></data>
+  <data name="Audit_ColumnRisk" xml:space="preserve"><value>Risk</value></data>
+  <data name="Audit_ColumnResult" xml:space="preserve"><value>Result</value></data>
+  <data name="Audit_ColumnTime" xml:space="preserve"><value>Timestamp</value></data>
+  <data name="Audit_TableCaption" xml:space="preserve"><value>Administrative audit history</value></data>
+  <data name="Audit_Empty" xml:space="preserve"><value>No history yet</value></data>
+  <data name="Audit_EmptyHelp" xml:space="preserve"><value>Audit entries become visible after successful admin actions.</value></data>
+  <data name="Status_Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Status_Disabled" xml:space="preserve"><value>Disabled</value></data>
+  <data name="Status_Archived" xml:space="preserve"><value>Archived</value></data>
+  <data name="Status_ReadOnly" xml:space="preserve"><value>Read-only</value></data>
+  <data name="Status_Connected" xml:space="preserve"><value>Connected</value></data>
+  <data name="Status_Disconnected" xml:space="preserve"><value>Disconnected</value></data>
+  <data name="Status_Succeeded" xml:space="preserve"><value>Succeeded</value></data>
+  <data name="Status_Rejected" xml:space="preserve"><value>Rejected</value></data>
+  <data name="Status_Failed" xml:space="preserve"><value>Failed</value></data>
+  <data name="Status_Unknown" xml:space="preserve"><value>Unknown</value></data>
+  <data name="Status_Unread" xml:space="preserve"><value>Unread</value></data>
+  <data name="Status_Read" xml:space="preserve"><value>Read</value></data>
+  <data name="Status_Current" xml:space="preserve"><value>Current</value></data>
+  <data name="Risk_Low" xml:space="preserve"><value>Low</value></data>
+  <data name="Risk_Medium" xml:space="preserve"><value>Medium</value></data>
+  <data name="Risk_High" xml:space="preserve"><value>High</value></data>
+  <data name="Error_InvalidCredentials" xml:space="preserve"><value>Credentials are invalid.</value></data>
+  <data name="Error_SetupFailed" xml:space="preserve"><value>Initial setup could not be completed.</value></data>
+  <data name="Error_CurrentPasswordInvalid" xml:space="preserve"><value>The current password is invalid.</value></data>
+  <data name="Error_PasswordChangeFailed" xml:space="preserve"><value>The password could not be changed.</value></data>
+  <data name="Error_IdentityCursorInvalid" xml:space="preserve"><value>The page cursor is invalid.</value></data>
+  <data name="Error_IdentitiesUnavailable" xml:space="preserve"><value>Identities are currently unavailable.</value></data>
+  <data name="Error_CatalogUnavailable" xml:space="preserve"><value>One or more catalog areas are currently unavailable.</value></data>
+  <data name="Error_ShopUnavailable" xml:space="preserve"><value>The shop catalog is currently unavailable.</value></data>
+  <data name="Error_AutomationUnavailable" xml:space="preserve"><value>Automation is currently unavailable.</value></data>
+  <data name="Error_IntegrationsUnavailable" xml:space="preserve"><value>Integration mappings are currently unavailable.</value></data>
+  <data name="Error_OverlayUnavailable" xml:space="preserve"><value>Overlay is currently unavailable.</value></data>
+  <data name="Error_AuditUnavailable" xml:space="preserve"><value>Audit history is currently unavailable.</value></data>
+  <data name="AuditAction_CredentialChanged" xml:space="preserve"><value>Administrative password changed</value></data>
+  <data name="AuditAction_CredentialRecovered" xml:space="preserve"><value>Administrative credential recovered</value></data>
+  <data name="AuditAction_PreferredCultureChanged" xml:space="preserve"><value>Language preference changed</value></data>
+  <data name="AuditAction_BalanceCredited" xml:space="preserve"><value>Balance credited</value></data>
+  <data name="AuditAction_BalanceDebited" xml:space="preserve"><value>Balance debited</value></data>
+  <data name="AuditAction_ExperienceGranted" xml:space="preserve"><value>Experience points granted</value></data>
+  <data name="AuditAction_QuantityAdded" xml:space="preserve"><value>Inventory increased</value></data>
+  <data name="AuditAction_QuantityRemoved" xml:space="preserve"><value>Inventory decreased</value></data>
+  <data name="AuditAction_AchievementDefinitionCreated" xml:space="preserve"><value>Achievement definition created</value></data>
+  <data name="AuditAction_AchievementDefinitionUpdated" xml:space="preserve"><value>Achievement definition updated</value></data>
+  <data name="AuditAction_AchievementUnlocked" xml:space="preserve"><value>Achievement unlocked</value></data>
+  <data name="AuditAction_TitleDefinitionCreated" xml:space="preserve"><value>Title definition created</value></data>
+  <data name="AuditAction_TitleDefinitionUpdated" xml:space="preserve"><value>Title definition updated</value></data>
+  <data name="AuditAction_TitleUnlocked" xml:space="preserve"><value>Title unlocked</value></data>
+  <data name="AuditAction_TitleLocked" xml:space="preserve"><value>Title locked</value></data>
+  <data name="AuditAction_RewardDefinitionCreated" xml:space="preserve"><value>Reward definition created</value></data>
+  <data name="AuditAction_RewardPackageCreated" xml:space="preserve"><value>Reward package created</value></data>
+  <data name="AuditAction_RewardPackageGranted" xml:space="preserve"><value>Reward package granted</value></data>
+  <data name="AuditAction_OfferUpdated" xml:space="preserve"><value>Shop offer updated</value></data>
+  <data name="AuditAction_OfferEnabled" xml:space="preserve"><value>Shop offer enabled</value></data>
+  <data name="AuditAction_OfferDisabled" xml:space="preserve"><value>Shop offer disabled</value></data>
+  <data name="AuditAction_OfferArchived" xml:space="preserve"><value>Shop offer archived</value></data>
+  <data name="AuditAction_RuleCreated" xml:space="preserve"><value>Automation rule created</value></data>
+  <data name="AuditAction_RuleUpdated" xml:space="preserve"><value>Automation rule updated</value></data>
+  <data name="AuditAction_RuleEnabled" xml:space="preserve"><value>Automation rule enabled</value></data>
+  <data name="AuditAction_RuleDisabled" xml:space="preserve"><value>Automation rule disabled</value></data>
+  <data name="AuditAction_RuleArchived" xml:space="preserve"><value>Automation rule archived</value></data>
+  <data name="AuditAction_ExternalIdentityLinked" xml:space="preserve"><value>External identity linked</value></data>
+  <data name="AuditAction_ExternalIdentityUnlinked" xml:space="preserve"><value>External identity unlinked</value></data>
+  <data name="AuditAction_ChannelCreated" xml:space="preserve"><value>Overlay channel created</value></data>
+  <data name="AuditAction_ChannelUpdated" xml:space="preserve"><value>Overlay channel updated</value></data>
+  <data name="AuditAction_ChannelEnabled" xml:space="preserve"><value>Overlay channel enabled</value></data>
+  <data name="AuditAction_ChannelDisabled" xml:space="preserve"><value>Overlay channel disabled</value></data>
+  <data name="AuditAction_ChannelArchived" xml:space="preserve"><value>Overlay channel archived</value></data>
+  <data name="AuditAction_SourceKeyRotated" xml:space="preserve"><value>Source key rotated</value></data>
+  <data name="AuditAction_PreviewPublished" xml:space="preserve"><value>Preview published</value></data>
+  <data name="AuditTarget_AdminCredential" xml:space="preserve"><value>Administrator account</value></data>
+  <data name="AuditTarget_CommunityIdentity" xml:space="preserve"><value>Community identity</value></data>
+  <data name="AuditTarget_AchievementDefinition" xml:space="preserve"><value>Achievement definition</value></data>
+  <data name="AuditTarget_TitleDefinition" xml:space="preserve"><value>Title definition</value></data>
+  <data name="AuditTarget_RewardDefinition" xml:space="preserve"><value>Reward definition</value></data>
+  <data name="AuditTarget_RewardPackage" xml:space="preserve"><value>Reward package</value></data>
+  <data name="AuditTarget_AutomationRule" xml:space="preserve"><value>Automation rule</value></data>
+  <data name="AuditTarget_OverlayChannel" xml:space="preserve"><value>Overlay channel</value></data>
+  <data name="AuditTarget_ShopOffer" xml:space="preserve"><value>Shop offer</value></data>
+  <data name="AuditTarget_ExternalIdentityMapping" xml:space="preserve"><value>External identity mapping</value></data>
+</root>

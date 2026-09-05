@@ -97,5 +97,17 @@ public sealed class AdministrationMigrationSource : IMigrationSource
     public IEnumerable<Migration> GetMigrations()
     {
         yield return new Migration("Administration", 1, "CreateAdministrationSecurityState", MigrationSql);
+        yield return new Migration(
+            "Administration",
+            2,
+            "AddAdministratorPreferredCulture",
+            """
+            ALTER TABLE administration_credentials
+                ADD COLUMN IF NOT EXISTS preferred_culture varchar(2) NULL;
+
+            ALTER TABLE administration_credentials
+                ADD CONSTRAINT ck_administration_credentials_preferred_culture
+                CHECK (preferred_culture IS NULL OR preferred_culture IN ('de', 'en'));
+            """);
     }
 }

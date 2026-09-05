@@ -91,7 +91,11 @@ schmale Economy-/Inventory-Capabilities. Die Management-Grenze verwendet die bes
 Shop-Use-Cases, führt keine neue Migration oder Events ein und verändert den Worker nicht.
 Die Administration besitzt im API-Host ein getrenntes lokales Cookie-Scheme mit Policies,
 CSRF, Audit und Operations; eine allgemeine Community-Authentication bleibt außerhalb des
-Scopes. Der API-Host produziert
+Scopes. Administration UI V1.1 ergänzt dafür eine serverseitig gerenderte Razor-Shell mit
+responsiver Mobile-Navigation, Skip-Link, ARIA-/Keyboard-/Focus-Baseline, Reduced-Motion-
+Unterstützung sowie nativer DE-/EN-Lokalisierung. Deutsch ist Default und Fallback; die
+individuelle Administrator-Sprache wird unter `/admin/account` persistiert und beim Login
+erneut angewendet. Der API-Host produziert
 `shop.purchase-completed` v1 in die Outbox; der separate Worker kennt das Event über
 `Shop.Contracts` und verarbeitet es mit dem Notifications-Consumer
 `notifications.shop-purchase`. Shop-Implementierung und Shop-Migrationen werden dort nicht

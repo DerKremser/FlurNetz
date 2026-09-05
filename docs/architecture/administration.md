@@ -1,8 +1,12 @@
-# Administration V1
+# Administration V1 und UI V1.1
 
 Administration V1 ist die lokale, cookie-basierte Betreibergrenze von FlurNetz. Sie besitzt
 nur administrative Zustände: Credentials, die statische Administrator-Rollenzuweisung,
 Audit-Einträge und idempotente Operationen. Fachliche Daten bleiben im jeweiligen Owner-Modul.
+Administration UI V1.1 ist die darauf aufbauende, serverseitig gerenderte Razor-Oberfläche im
+API-Host. Sie erweitert den Security-/Operations-Slice nicht um eine neue Fach- oder
+Domainfunktion, sondern konsolidiert dessen Bedienoberfläche, responsive Navigation,
+Accessibility-Baseline und Darstellung.
 
 ## Host- und Modulgrenze
 
@@ -22,7 +26,7 @@ Implementierungsassemblies.
 
 ## Eigener Zustand und Migration
 
-`Administration:1:CreateAdministrationState` legt im `public`-Schema ausschließlich diese
+`Administration:1:CreateAdministrationSecurityState` legt im `public`-Schema ausschließlich diese
 Administration-eigenen Tabellen an:
 
 - `administration_credentials`
@@ -31,6 +35,12 @@ Administration-eigenen Tabellen an:
 - `administration_operations`
 - `administration_setup_state` als Singleton für den First-Run-Abschluss
 
+`Administration:2:AddAdministratorPreferredCulture` ergänzt `administration_credentials` um
+`preferred_culture varchar(2) NULL`. Die Datenbank erlaubt dort ausschließlich `NULL`, `de` oder
+`en`; ein leerer oder nicht mehr unterstützter Wert fällt in der Anwendung auf Deutsch zurück.
+Die Migration V2 verändert keine fachlichen Identity-Daten und besitzt keine Cross-Module-
+Foreign-Key-Beziehung.
+
 Es gibt keine Cross-Module-Foreign-Keys, insbesondere keinen Foreign Key auf
 `community_identities`. Eine neue Identity für den First-Run wird ausschließlich über den
 öffentlichen `ICommunityIdentityCreator`-Vertrag des Identity-Moduls angelegt. Der
@@ -38,9 +48,10 @@ unveränderte MigrationRunner verwaltet Identität, Reihenfolge und SQL-Checksum
 
 Credentials enthalten `CommunityIdentityId`, Email, NormalizedEmail, einen
 ASP.NET-Core-PasswordHasher-Hash, CredentialVersion sowie Erstellungs- und
-Passwortänderungszeitpunkt. Email ist case-insensitive eindeutig und wird für den Lookup
-kanonisch normalisiert. Passwörter werden mit dem etablierten Microsoft-Hasher verarbeitet: 15 bis 128
-Zeichen, ohne Trim, Case- oder Unicode-Normalisierung und ohne eigene Kryptographie.
+Passwortänderungszeitpunkt sowie optional die individuelle `PreferredCulture`. Email ist
+case-insensitive eindeutig und wird für den Lookup kanonisch normalisiert. Passwörter werden mit
+dem etablierten Microsoft-Hasher verarbeitet: 15 bis 128 Zeichen, ohne Trim, Case- oder
+Unicode-Normalisierung und ohne eigene Kryptographie.
 
 ## First-Run-Setup und Recovery
 
@@ -157,21 +168,44 @@ Fehlerantworten enthalten keinen Source-Key. Die vorhandene Browser-Source bleib
 funktionalen Pfaden erreichbar; Security-Header sind für Admin-Web- und Admin-API-Pfade
 gescoped, damit die Overlay-Auslieferung nicht beschädigt wird.
 
-## Razor-Administration
+## Administration UI V1.1
 
-Die UI liegt in `src/FlurNetz.Api/Pages/Admin` und verwendet Razor Pages ohne SPA- oder
-Frontend-Build-Pipeline. Die gemeinsame Layout-/CSS-/JavaScript-Schicht bietet Dashboard,
-Identity-Liste und -Detail, Shop, Catalog für Achievements/Titles/Rewards, Automation,
-Integrations, Overlay, Audit, Account, geschütztes Setup, Login und Forbidden. Account und
-Setup bieten neben dem Passwortfeld einen optionalen clientseitigen Generator mit 24 Zeichen.
-Er verwendet ausschließlich `window.crypto.getRandomValues()` mit Rejection-Sampling; eigene
-Passphrasen bleiben erlaubt. Anzeigen/Verbergen, Kopieren und die Bestätigung sind reine
-Formularfunktionen. Der Wert wird weder automatisch erzeugt noch in Local-/Session-Storage,
-Cookies, Querystrings, Logs, Audit oder AdminOperations geschrieben und wird nach Reload nicht
-aus FlurNetz wiederhergestellt. Fachliche Texte werden durch Razor standardmäßig encoded;
-Formulare besitzen sichtbare Validierungs- und Fehlerzustände,
-Labels, Tabellen-Captions und Tastaturfokus. Empty States zeigen nur echte leere Owner-Daten,
-Fehler werden als „Nicht verfügbar“ behandelt und nicht als erfundene Defaultwerte.
+Die UI liegt in `src/FlurNetz.Api/Pages/Admin` und verwendet Razor Pages ohne SPA-,
+Frontend-Build- oder externe UI-/Lokalisierungsbibliothek. Die gemeinsame Layout-/CSS-/
+JavaScript-Schicht bietet Dashboard, Identity-Liste und -Detail, Shop, Catalog für
+Achievements/Titles/Rewards, Automation, Integrations, Overlay, Audit, Account, geschütztes
+Setup, Login und Forbidden. Design-Tokens, gemeinsame Panels und Formzustände bilden die
+visuelle Basis; responsive Layouts und der Mobile-Drawer bilden die Narrow-/Mobile-Baseline.
+
+Skip-Link, `aria-current`, beschriftete Navigations- und Drawer-Zustände, sichtbarer
+Keyboard-Fokus und `prefers-reduced-motion` bilden eine WCAG-2.2-AA-orientierte
+Accessibility-Baseline. Das ist eine technische Ausrichtung und keine formale
+Konformitätszertifizierung. Die Login-/Setup-Fokusdarstellung bleibt als beabsichtigter
+barrierefreier Fokuszustand erhalten; die statische Prüfung ergab dort keine versehentliche
+doppelte, konkurrierende Focus-Regel.
+
+Account und Setup bieten neben dem Passwortfeld einen optionalen clientseitigen Generator mit
+24 Zeichen. Er verwendet ausschließlich `window.crypto.getRandomValues()` mit Rejection-
+Sampling; eigene Passphrasen bleiben erlaubt. Anzeigen/Verbergen, Kopieren und die Bestätigung
+sind reine Formularfunktionen. Der Wert wird weder automatisch erzeugt noch in Local-/Session-
+Storage, Cookies, Querystrings, Logs, Audit oder AdminOperations geschrieben und wird nach Reload
+nicht aus FlurNetz wiederhergestellt. Fachliche Texte werden durch Razor standardmäßig encoded;
+Formulare besitzen sichtbare Validierungs- und Fehlerzustände, Labels, Tabellen-Captions und
+Tastaturfokus. Empty States zeigen nur echte leere Owner-Daten, Fehler werden als „Nicht
+verfügbar“ behandelt und nicht als erfundene Defaultwerte.
+
+Die Oberfläche unterstützt die nativen Ressourcen `SharedResource.de.resx` und
+`SharedResource.en.resx`. Deutsch (`de`) ist die Default- und Fallback-Sprache, Englisch (`en`)
+die zweite unterstützte Sprache. Die Auswahl unter `/admin/account` wird pro Administrator in
+`preferred_culture` persistiert, ist nicht global und wird beim nächsten Login erneut auf das
+Cookie `.AspNetCore.Culture` angewendet. Vor der Authentifizierung stehen nur die anonyme Login-/
+Setup-Auswahl und der deutsche Fallback zur Verfügung. Audit-Aktionen und Ressourcentypen werden
+über eine sichere Presentation-Grenze lokalisiert; unbekannte technische Werte bleiben als
+Fallback sichtbar.
+
+Identity-Detail-Links verwenden den echten `CommunityIdentityId` als Guid-Routenwert und zeigen
+keine Formatierungs-Literale an. Die Detailroute bleibt `/admin/identities/{communityIdentityId}`
+und validiert den Wert als Guid.
 
 ## Tests und Abnahme
 
@@ -189,4 +223,7 @@ Logout-Methode, CredentialVersion-Revocation sowie die Regressionen der
 bestehenden Management-Grenzen. Zusätzlich prüfen statische UI-Sicherheitstests den
 Generator auf `window.crypto.getRandomValues()`, die Abwesenheit von `Math.random()` und
 persistenten Browser-Speichern sowie die Verdrahtung beider Passwortseiten. Architekturtests sichern Contract-/Implementierungs-
-Richtung, die Administration-Tabellen und das Verbot fremder SQL-Tabellen ab.
+Richtung, die Administration-Tabellen und das Verbot fremder SQL-Tabellen ab. Die UI-Tests
+prüfen die gemeinsame Shell, Static Assets, ARIA-/Navigationsemantik, die Symmetrie der DE-/EN-
+Ressourcen, persistierte individuelle Sprachpräferenzen, lokalisierte Auditdarstellung und den
+Identity-Detail-Link einschließlich der korrekten Guid-Route.

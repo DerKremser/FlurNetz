@@ -13,7 +13,7 @@ FOR SHARE innerhalb der vom Messaging-Processor vorgegebenen Transaktion. Die Hi
 
 ## Administration-Persistenz
 
-Administration besitzt mit `Administration:1:CreateAdministrationState` eine eigene
+Administration besitzt mit `Administration:1:CreateAdministrationSecurityState` eine eigene
 unveränderliche SQL-Migration. Sie legt ausschließlich `administration_credentials`,
 `administration_role_assignments`, `administration_audit_entries`,
 `administration_operations` und den First-Run-Singleton `administration_setup_state` an. Die
@@ -21,8 +21,15 @@ Tabellen enthalten keine Cross-Module-Foreign-Keys und
 keine Kopien von Identity-, Economy-, Progression-, Inventory-, Titles-, Achievements-,
 Rewards-, Shop-, Notifications-, Automation-, Integrations- oder Overlay-Zustand.
 
+Die unveränderliche Migration `Administration:2:AddAdministratorPreferredCulture` ergänzt
+`administration_credentials.preferred_culture` als nullable `varchar(2)` mit der Datenbank-
+Constraint `NULL`, `de` oder `en`. Die Anwendung verwendet Deutsch als Fallback. Die
+Präferenz ist pro Administrator und nicht global; sie ist UI-Konfiguration und keine fachliche
+Identity-Eigenschaft.
+
 Credentials verwenden einen ASP.NET-Core-PasswordHasher-Hash, einen monoton erhöhten
-CredentialVersion-Wert sowie eindeutige Email/NormalizedEmail-Werte. Das First-Run-Setup
+CredentialVersion-Wert, eine optionale PreferredCulture sowie eindeutige Email/NormalizedEmail-
+Werte. Das First-Run-Setup
 prüft und sperrt `administration_setup_state` mit `FOR UPDATE`, erzeugt die Identity über
 `ICommunityIdentityCreator` und schreibt Identity, Credential, Administrator-Rolle und
 Abschlussstatus atomar. Das Setup-Gate stammt ausschließlich aus Runtime-Konfiguration und
@@ -102,7 +109,8 @@ Startup, damit kein nicht initialisierter Host als betriebsbereit erscheint. Der
 registriert die Identity-, Administration-, Economy-, Progression-, Inventory-, Shop-,
 Notifications-, Automation-, Integrations-, Overlay- und Messaging-Migrationsquellen und
 führt damit unter anderem die vorhandenen Migrationen `Identity:1:CreateCommunityIdentities`,
-`Administration:1:CreateAdministrationState`,
+`Administration:1:CreateAdministrationSecurityState`,
+`Administration:2:AddAdministratorPreferredCulture`,
 `Shop:1:CreateShopOffers`, `Shop:2:CreateShopPurchases`, `Shop:3:AddShopOfferSortOrder` und
 `Shop:4:AddShopOfferArchiveState` aus. Der erste fachliche
 Besitzer einer Migration ist Identity: `Identity:1:CreateCommunityIdentities` legt die Tabelle
@@ -187,8 +195,9 @@ vollständiger Rollback bei unzureichendem Saldo.
 Checksum, Tabellen-/Constraint-Grenzen, Snapshot-Roundtrip, Identity-Isolation, newest-first-
 Keyset-Pagination, Unread-Lifecycle sowie transaction-aware Commit und Rollback gegen echtes
 PostgreSQL. `FlurNetz.Modules.Administration.IntegrationTests` prüft zusätzlich Administration-
-Migration, Constraints, Audit, Operations, gate-geschützten First-Run, Recovery, Atomicity
-und Parallelität.
+Migrationen einschließlich V2 und Constraints, Audit, Operations, gate-geschützten First-Run,
+Recovery, Atomicity und Parallelität. Die API-UI-Tests prüfen die Persistenz der individuellen
+Administrator-Sprache und die Symmetrie der nativen Ressourcen.
 `FlurNetz.Api.IntegrationTests` prüft außerdem Startup auf leerer Datenbank, die registrierten
 Identity-, Administration-, Economy-, Progression-, Inventory-, Shop-, Notifications-, Automation-,
 Integrations-, Overlay- und Messaging-Migrationen, die read-only

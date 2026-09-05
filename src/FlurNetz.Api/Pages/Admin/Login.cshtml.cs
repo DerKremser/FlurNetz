@@ -2,25 +2,29 @@ using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using FlurNetz.Api.Administration;
 using FlurNetz.Modules.Administration.Contracts.Security;
+using FlurNetz.Modules.Administration.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Localization;
 
 namespace FlurNetz.Api.Pages.Admin;
 
 [AllowAnonymous]
 [EnableRateLimiting("AdminLogin")]
-public sealed class LoginModel(IAdminAuthenticationService authenticationService) : PageModel
+public sealed class LoginModel(
+    IAdminAuthenticationService authenticationService,
+    IStringLocalizer<SharedResource> localizer) : PageModel
 {
     [BindProperty]
-    [Required(ErrorMessage = "Die E-Mail-Adresse ist erforderlich.")]
-    [EmailAddress(ErrorMessage = "Die E-Mail-Adresse ist ungültig.")]
+    [Required(ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_EmailRequired))]
+    [EmailAddress(ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_EmailInvalid))]
     public string? Email { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "Das Passwort ist erforderlich.")]
+    [Required(ErrorMessageResourceType = typeof(SharedResource), ErrorMessageResourceName = nameof(SharedResource.Validation_PasswordRequired))]
     public string? Password { get; set; }
 
     [BindProperty(SupportsGet = true)]
@@ -49,7 +53,7 @@ public sealed class LoginModel(IAdminAuthenticationService authenticationService
         var result = await authenticationService.AuthenticateAsync(Email, Password, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded || result.Credential is null)
         {
-            ModelState.AddModelError(string.Empty, "Anmeldedaten sind ungültig.");
+            ModelState.AddModelError(string.Empty, localizer["Error_InvalidCredentials"].Value);
             return Page();
         }
 
@@ -63,6 +67,7 @@ public sealed class LoginModel(IAdminAuthenticationService authenticationService
                 IssuedUtc = DateTimeOffset.UtcNow,
                 ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30)
             }).ConfigureAwait(false);
+        AdminCultureCookie.Append(HttpContext, AdminPreferredCulture.Resolve(result.Credential.PreferredCulture));
         return LocalRedirect(ReturnUrl!);
     }
 

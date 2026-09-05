@@ -3,11 +3,15 @@ using FlurNetz.Modules.Administration.Contracts.Security;
 using FlurNetz.Modules.Identity.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Localization;
 
 namespace FlurNetz.Api.Pages.Admin;
 
 [Authorize(Policy = "Admin.Administration.Dashboard.Read")]
-public sealed class IndexModel(IAdminAuditStore auditStore, ICommunityIdentityRead identityRead) : PageModel
+public sealed class IndexModel(
+    IAdminAuditStore auditStore,
+    ICommunityIdentityRead identityRead,
+    IStringLocalizer<SharedResource> localizer) : PageModel
 {
     public IReadOnlyList<AdminAuditEntry> RecentAudit { get; private set; } = [];
     public int IdentityCount { get; private set; }
@@ -23,7 +27,7 @@ public sealed class IndexModel(IAdminAuditStore auditStore, ICommunityIdentityRe
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            DependencyError = "Identitäten";
+            DependencyError = localizer["Dependency_Identities"].Value;
         }
 
         try
@@ -32,7 +36,9 @@ public sealed class IndexModel(IAdminAuditStore auditStore, ICommunityIdentityRe
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            DependencyError = DependencyError is null ? "Audit" : $"{DependencyError} und Audit";
+            DependencyError = DependencyError is null
+                ? localizer["Dependency_Audit"].Value
+                : localizer["Dependency_IdentitiesAndAudit"].Value;
         }
     }
 }

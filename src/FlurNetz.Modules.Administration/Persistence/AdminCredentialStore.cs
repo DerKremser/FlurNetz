@@ -14,14 +14,16 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
     private const string SelectByEmailSql = """
         SELECT community_identity_id AS CommunityIdentityId, email AS Email,
                password_hash AS PasswordHash, credential_version AS CredentialVersion,
-               created_at_utc AS CreatedAtUtc, password_changed_at_utc AS PasswordChangedAtUtc
+               created_at_utc AS CreatedAtUtc, password_changed_at_utc AS PasswordChangedAtUtc,
+               preferred_culture AS PreferredCulture
         FROM administration_credentials
         WHERE normalized_email = @NormalizedEmail;
         """;
     private const string SelectByIdentitySql = """
         SELECT community_identity_id AS CommunityIdentityId, email AS Email,
                password_hash AS PasswordHash, credential_version AS CredentialVersion,
-               created_at_utc AS CreatedAtUtc, password_changed_at_utc AS PasswordChangedAtUtc
+               created_at_utc AS CreatedAtUtc, password_changed_at_utc AS PasswordChangedAtUtc,
+               preferred_culture AS PreferredCulture
         FROM administration_credentials
         WHERE community_identity_id = @CommunityIdentityId;
         """;
@@ -48,6 +50,11 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
         SET password_hash = @PasswordHash,
             credential_version = @CredentialVersion,
             password_changed_at_utc = @PasswordChangedAtUtc
+        WHERE community_identity_id = @CommunityIdentityId;
+        """;
+    private const string UpdatePreferredCultureSql = """
+        UPDATE administration_credentials
+        SET preferred_culture = @PreferredCulture
         WHERE community_identity_id = @CommunityIdentityId;
         """;
 
@@ -219,6 +226,26 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
         }
     }
 
+    public async Task ChangePreferredCultureAsync(AdminCredential credential, DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(credential);
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        var count = await connection.ExecuteAsync(new CommandDefinition(
+                UpdatePreferredCultureSql,
+                new
+                {
+                    CommunityIdentityId = credential.CommunityIdentityId.Value,
+                    PreferredCulture = credential.PreferredCulture
+                },
+                transaction: transaction,
+                cancellationToken: cancellationToken)).ConfigureAwait(false);
+        if (count != 1)
+        {
+            throw new InvalidOperationException("Die bevorzugte Admin-Sprache konnte nicht eindeutig aktualisiert werden.");
+        }
+    }
+
     private sealed class CredentialRow
     {
         public Guid CommunityIdentityId { get; set; }
@@ -227,6 +254,7 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
         public long CredentialVersion { get; set; }
         public DateTimeOffset CreatedAtUtc { get; set; }
         public DateTimeOffset PasswordChangedAtUtc { get; set; }
+        public string? PreferredCulture { get; set; }
 
         public AdminCredential ToDomain() => AdminCredential.Rehydrate(
             FlurNetz.Modules.Identity.Contracts.CommunityIdentityId.Create(CommunityIdentityId),
@@ -234,6 +262,7 @@ public sealed class AdminCredentialStore : IAdminCredentialStore
             PasswordHash,
             CredentialVersion,
             CreatedAtUtc,
-            PasswordChangedAtUtc);
+            PasswordChangedAtUtc,
+            PreferredCulture);
     }
 }

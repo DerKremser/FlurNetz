@@ -25,6 +25,33 @@
   JWT-Adminlogin, allgemeines Community-Account-/Profile-System und Role-/Permission-
   Management-UI.
 
+### Administration UI V1.1
+
+- Gemeinsame serverseitig gerenderte Razor-Admin-Shell mit konsolidierten Design-Tokens,
+  Panels, Formularzuständen, responsiver Desktop-/Narrow-Baseline und Mobile-Drawer poliert.
+- Skip-Link, `aria-current`, beschriftete Navigation, Drawer-ARIA-Zustände, sichtbarer
+  Keyboard-Fokus und `prefers-reduced-motion` als WCAG-2.2-AA-orientierte Accessibility-
+  Baseline ergänzt; es wird keine formale Konformitätszertifizierung behauptet.
+- Dashboard, Identity-Liste und -Detail, Shop, Katalog, Automation, Integrations, Overlay,
+  Audit, Account, Login, Setup und Forbidden konsistent in die gemeinsame UI-Grundlage eingebunden.
+- Native DE-/EN-Lokalisierung mit Deutsch als Default/Fallback und Englisch als zweiter Sprache
+  ergänzt; ohne externe UI- oder Lokalisierungsbibliothek.
+- Individuelle Administrator-Sprache unter `/admin/account` ergänzt: `de`/`en` werden in
+  `administration_credentials.preferred_culture` persistiert, `NULL` fällt auf Deutsch zurück,
+  und die Präferenz wird beim nächsten Login erneut angewendet. Migration
+  `Administration:2:AddAdministratorPreferredCulture` ergänzt die nullable Spalte mit Datenbank-
+  Constraint.
+- Audit-Aktions- und Ressourcentypen werden für bekannte Werte lokalisiert; unbekannte technische
+  Werte bleiben als sicherer Fallback sichtbar.
+- Identity-Detailnavigation korrigiert: Der gerenderte Guid-Link enthält keinen versehentlichen
+  `:D`-Literal-Suffix mehr; aktive Katalognavigation und Static-Asset-Auslieferung bleiben
+  abgesichert.
+- Mobile Brand-Kontrast der hellen Topbar über den vorhandenen semantischen Text-Token
+  korrigiert. Der beabsichtigte barrierefreie Focus Ring wurde technisch geprüft und nicht
+  kosmetisch abgeschwächt.
+- Regressionstests für Admin-Shell, Static Assets, Identity-Detailnavigation, DE-/EN-
+  Ressourcensymmetrie, persistierte individuelle Sprache und lokalisierte Auditdarstellung ergänzt.
+
 ### Integrations V1
 
 - Persistierte External-Identity-Mapping-Grenze ergänzt:

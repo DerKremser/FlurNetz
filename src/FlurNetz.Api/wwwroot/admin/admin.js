@@ -40,7 +40,9 @@
     navDrawer.classList.toggle('is-open', open);
     navDrawer.setAttribute('aria-hidden', open ? 'false' : 'true');
     navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    navToggle.setAttribute('aria-label', open ? 'Hauptmenü schließen' : 'Hauptmenü öffnen');
+    navToggle.setAttribute(
+      'aria-label',
+      open ? (navToggle.dataset.navLabelClose || '') : (navToggle.dataset.navLabelOpen || ''));
     navMain.inert = open;
     navScrim.hidden = !open;
     document.documentElement.classList.toggle('nav-open', open);
@@ -72,7 +74,7 @@
     navDrawer.classList.remove('is-open');
     navDrawer.removeAttribute('aria-hidden');
     navToggle.setAttribute('aria-expanded', 'false');
-    navToggle.setAttribute('aria-label', 'Hauptmenü öffnen');
+    navToggle.setAttribute('aria-label', navToggle.dataset.navLabelOpen || '');
     navMain.inert = false;
     navScrim.hidden = true;
     document.documentElement.classList.remove('nav-open');
@@ -109,7 +111,7 @@
       if (!value || !navigator.clipboard) return;
       await navigator.clipboard.writeText(value);
       const old = button.textContent;
-      button.textContent = 'Kopiert';
+      button.textContent = button.dataset.copySuccess || old;
       window.setTimeout(() => { button.textContent = old; }, 1600);
     });
   });
@@ -162,9 +164,9 @@
         confirmation.value = generated;
         password.dispatchEvent(new Event('input', { bubbles: true }));
         confirmation.dispatchEvent(new Event('input', { bubbles: true }));
-        if (status) status.textContent = 'Sicheres Passwort erzeugt. Bitte jetzt sicher speichern.';
+        if (status) status.textContent = generateButton.dataset.generatedMessage || '';
       } catch (error) {
-        if (status) status.textContent = 'Passwort konnte nicht sicher erzeugt werden. Verwende bitte eine eigene Passphrase.';
+        if (status) status.textContent = generateButton.dataset.generationError || '';
       }
     });
 
@@ -172,20 +174,22 @@
       const shouldShow = password.type === 'password';
       password.type = shouldShow ? 'text' : 'password';
       confirmation.type = shouldShow ? 'text' : 'password';
-      toggleButton.textContent = shouldShow ? 'Verbergen' : 'Anzeigen';
+      toggleButton.textContent = shouldShow
+        ? (toggleButton.dataset.hideLabel || '')
+        : (toggleButton.dataset.showLabel || '');
       toggleButton.setAttribute('aria-pressed', shouldShow ? 'true' : 'false');
     });
 
     copyButton.addEventListener('click', async () => {
       if (!password.value || !navigator.clipboard) {
-        if (status) status.textContent = 'Kopieren ist in diesem Browser nicht verfügbar.';
+        if (status) status.textContent = copyButton.dataset.copyUnavailable || '';
         return;
       }
       try {
         await navigator.clipboard.writeText(password.value);
-        if (status) status.textContent = 'Passwort kopiert. Lege es jetzt sicher ab.';
+        if (status) status.textContent = copyButton.dataset.copySuccess || '';
       } catch (error) {
-        if (status) status.textContent = 'Kopieren wurde vom Browser abgelehnt.';
+        if (status) status.textContent = copyButton.dataset.copyDenied || '';
       }
     });
 

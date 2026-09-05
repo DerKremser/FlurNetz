@@ -1,6 +1,82 @@
 @page "/admin/catalog"
 @model FlurNetz.Api.Pages.Admin.CatalogModel
-@{ ViewData["Title"] = "Inhalte"; }
-<header class="page-header"><div><div class="eyebrow">Inhalte</div><h1>Definitionen &amp; Rewards</h1><p class="muted">Owner-owned Kataloge, ohne künstliche Aktivierungs- oder Delete-Semantik.</p></div></header>
-@if (Model.Error is not null) { <div class="notice error" role="alert">@Model.Error</div> }
-<section class="detail-grid"><article class="panel"><div class="panel-heading"><h2>Achievements</h2><span class="badge">@Model.AchievementDefinitions.Count</span></div>@if (Model.AchievementDefinitions.Count == 0) { <div class="empty-inline">Keine Definitionen.</div> } else { foreach (var item in Model.AchievementDefinitions) { <div class="key-value"><span>@item.DisplayName</span><code>@item.Id.Value</code></div> } }</article><article class="panel"><div class="panel-heading"><h2>Titles</h2><span class="badge">@Model.TitleDefinitions.Count</span></div>@if (Model.TitleDefinitions.Count == 0) { <div class="empty-inline">Keine Definitionen.</div> } else { foreach (var item in Model.TitleDefinitions) { <div class="key-value"><span>@item.DisplayName</span><code>@item.Id.Value</code></div> } }</article><article id="rewards" class="panel"><div class="panel-heading"><h2>Reward Definitions</h2><span class="badge">@Model.RewardDefinitions.Count</span></div>@if (Model.RewardDefinitions.Count == 0) { <div class="empty-inline">Keine Definitionen.</div> } else { foreach (var item in Model.RewardDefinitions) { if (item is FlurNetz.Modules.Rewards.Domain.EconomyBalanceRewardDefinition economy) { <div class="key-value"><span>Economy Balance</span><strong>@economy.Amount</strong></div> } } }</article><article class="panel"><div class="panel-heading"><h2>Packages</h2><span class="badge">@Model.RewardPackages.Count</span></div>@if (Model.RewardPackages.Count == 0) { <div class="empty-inline">Keine Packages.</div> } else { foreach (var item in Model.RewardPackages) { <div class="key-value"><code>@item.Id.Value</code><strong>@item.RewardDefinitionIds.Count Definitions</strong></div> } }</article></section>
+@{
+    ViewData["Title"] = L["Page_Catalog"].Value;
+    string CountLabel(int count) => count.ToString("N0", CultureInfo.CurrentCulture);
+}
+<header class="page-header">
+    <div>
+        <div class="eyebrow">@L["Layout_Content"]</div>
+        <h1>@L["Catalog_Achievements"] <span aria-hidden="true">&amp;</span> @L["Catalog_Titles"]</h1>
+        <p class="muted">@L["Catalog_Description"]</p>
+    </div>
+</header>
+@if (Model.Error is not null)
+{
+    <div class="notice error" role="alert">@Model.Error</div>
+}
+<section class="detail-grid catalog-grid">
+    <article class="panel" aria-labelledby="achievements-title">
+        <div class="panel-heading"><div><div class="eyebrow">@L["Catalog_Achievements"]</div><h2 id="achievements-title">@L["Catalog_Achievements"]</h2></div><span class="badge">@CountLabel(Model.AchievementDefinitions.Count)</span></div>
+        @if (Model.AchievementDefinitions.Count == 0)
+        {
+            <div class="empty-inline">@L["Catalog_NoDefinitions"]</div>
+        }
+        else
+        {
+            foreach (var item in Model.AchievementDefinitions)
+            {
+                <div class="key-value"><span class="primary-value"><strong>@item.DisplayName</strong>@if (!string.IsNullOrWhiteSpace(item.Description)) { <small class="table-subtext">@item.Description</small> }</span><code>@item.Id.Value</code></div>
+            }
+        }
+    </article>
+    <article class="panel" aria-labelledby="titles-title">
+        <div class="panel-heading"><div><div class="eyebrow">@L["Catalog_Titles"]</div><h2 id="titles-title">@L["Catalog_Titles"]</h2></div><span class="badge">@CountLabel(Model.TitleDefinitions.Count)</span></div>
+        @if (Model.TitleDefinitions.Count == 0)
+        {
+            <div class="empty-inline">@L["Catalog_NoDefinitions"]</div>
+        }
+        else
+        {
+            foreach (var item in Model.TitleDefinitions)
+            {
+                <div class="key-value"><span class="primary-value"><strong>@item.DisplayName</strong>@if (!string.IsNullOrWhiteSpace(item.Description)) { <small class="table-subtext">@item.Description</small> }</span><code>@item.Id.Value</code></div>
+            }
+        }
+    </article>
+    <article id="rewards" class="panel" aria-labelledby="rewards-title">
+        <div class="panel-heading"><div><div class="eyebrow">@L["Catalog_Rewards"]</div><h2 id="rewards-title">@L["Catalog_Rewards"]</h2></div><span class="badge">@CountLabel(Model.RewardDefinitions.Count)</span></div>
+        @if (Model.RewardDefinitions.Count == 0)
+        {
+            <div class="empty-inline">@L["Catalog_NoDefinitions"]</div>
+        }
+        else
+        {
+            foreach (var item in Model.RewardDefinitions)
+            {
+                if (item is FlurNetz.Modules.Rewards.Domain.EconomyBalanceRewardDefinition economy)
+                {
+                    <div class="key-value"><span class="primary-value"><strong>@L["Catalog_EconomyBalance"]</strong><small class="table-subtext">@L["Status_ReadOnly"]</small></span><strong>@economy.Amount.ToString("N0", CultureInfo.CurrentCulture)</strong></div>
+                }
+                else
+                {
+                    <div class="key-value"><span class="primary-value"><strong>@L["Catalog_GenericReward"]</strong></span><code>@item.Id.Value</code></div>
+                }
+            }
+        }
+    </article>
+    <article class="panel" aria-labelledby="packages-title">
+        <div class="panel-heading"><div><div class="eyebrow">@L["Catalog_Packages"]</div><h2 id="packages-title">@L["Catalog_Packages"]</h2></div><span class="badge">@CountLabel(Model.RewardPackages.Count)</span></div>
+        @if (Model.RewardPackages.Count == 0)
+        {
+            <div class="empty-inline">@L["Catalog_NoPackages"]</div>
+        }
+        else
+        {
+            foreach (var item in Model.RewardPackages)
+            {
+                <div class="key-value"><code>@item.Id.Value</code><strong>@L["Catalog_DefinitionCount", CountLabel(item.RewardDefinitionIds.Count)]</strong></div>
+            }
+        }
+    </article>
+</section>

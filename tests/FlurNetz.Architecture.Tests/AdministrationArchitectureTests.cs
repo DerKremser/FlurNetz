@@ -40,7 +40,10 @@ public sealed class AdministrationArchitectureTests
     [Fact]
     public void AdministrationMigrationContainsOnlyAdministrationOwnedTables()
     {
-        var sql = Assert.Single(new AdministrationMigrationSource().GetMigrations()).Sql;
+        var migrations = new AdministrationMigrationSource().GetMigrations().ToArray();
+        Assert.Equal(2, migrations.Length);
+        var sql = migrations[0].Sql;
+        var preferredCultureMigration = migrations[1];
 
         Assert.Contains("administration_credentials", sql, StringComparison.Ordinal);
         Assert.Contains("administration_role_assignments", sql, StringComparison.Ordinal);
@@ -59,6 +62,10 @@ public sealed class AdministrationArchitectureTests
         }
 
         Assert.DoesNotContain("REFERENCES", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Administration", preferredCultureMigration.Owner);
+        Assert.Equal(2, preferredCultureMigration.Version);
+        Assert.Contains("preferred_culture", preferredCultureMigration.Sql, StringComparison.Ordinal);
+        Assert.Contains("'de', 'en'", preferredCultureMigration.Sql, StringComparison.Ordinal);
     }
 
     private static string[] GetReferencedAssemblyNames(Assembly assembly) => assembly

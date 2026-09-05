@@ -1,7 +1,63 @@
 @page "/admin/audit"
 @model FlurNetz.Api.Pages.Admin.AuditModel
 @{
-    ViewData["Title"] = "Audit";
+    ViewData["Title"] = L["Page_Audit"].Value;
+    string RiskLabel(FlurNetz.Modules.Administration.Contracts.Audit.AdminRiskLevel risk) => risk switch
+    {
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminRiskLevel.Low => L["Risk_Low"].Value,
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminRiskLevel.Medium => L["Risk_Medium"].Value,
+        _ => L["Risk_High"].Value
+    };
+    string RiskClass(FlurNetz.Modules.Administration.Contracts.Audit.AdminRiskLevel risk) => risk switch
+    {
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminRiskLevel.High => "danger",
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminRiskLevel.Medium => "warning",
+        _ => "neutral"
+    };
+    string OutcomeLabel(FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome result) => result switch
+    {
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded => L["Status_Succeeded"].Value,
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Rejected => L["Status_Rejected"].Value,
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Failed => L["Status_Failed"].Value,
+        _ => L["Status_Unknown"].Value
+    };
+    string OutcomeClass(FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome result) => result switch
+    {
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded => "success",
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Rejected => "warning",
+        _ => "danger"
+    };
 }
-<header class="page-header"><div><div class="eyebrow">Nachvollziehbarkeit</div><h1>Audit</h1><p class="muted">Append-only Verlauf der administrativen Aktionen.</p></div></header>
-<section class="panel"><div class="filter-bar"><span class="muted">@Model.Entries.Count Einträge geladen</span><span class="badge neutral">Append-only</span></div>@if (Model.Error is not null) { <div class="notice error">@Model.Error</div> } else if (Model.Entries.Count == 0) { <div class="empty-state"><span class="empty-icon">▤</span><strong>Noch kein Verlauf</strong><p>Audit-Einträge werden erst nach erfolgreichen Admin-Aktionen sichtbar.</p></div> } else { <div class="table-wrap"><table><caption class="visually-hidden">Administration Audit</caption><thead><tr><th>Aktion</th><th>Ziel</th><th>Risiko</th><th>Ergebnis</th><th>Zeitpunkt</th></tr></thead><tbody>@foreach (var entry in Model.Entries) { <tr><td><strong>@entry.Action</strong><small class="table-subtext">@entry.ActorIdentitySnapshot</small></td><td>@entry.TargetType<br /><small class="table-subtext">@entry.TargetId</small></td><td><span class="badge @(entry.RiskLevel == FlurNetz.Modules.Administration.Contracts.Audit.AdminRiskLevel.High ? "danger" : "neutral")">@entry.RiskLevel</span></td><td><span class="badge">@entry.Result</span></td><td>@entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</td></tr>}</tbody></table></div> }</section>
+<header class="page-header">
+    <div>
+        <div class="eyebrow">@L["IdentityDetail_Audit"]</div>
+        <h1>@L["Page_Audit"]</h1>
+        <p class="muted">@L["Audit_Description"]</p>
+    </div>
+</header>
+<section class="panel" aria-labelledby="audit-table-title">
+    <div class="filter-bar"><span class="muted">@L["Audit_Loaded", Model.Entries.Count.ToString("N0", CultureInfo.CurrentCulture)]</span><span class="badge neutral">@L["Status_ReadOnly"]</span></div>
+    @if (Model.Error is not null)
+    {
+        <div class="notice error" role="alert">@Model.Error</div>
+    }
+    else if (Model.Entries.Count == 0)
+    {
+        <div class="empty-state"><span class="empty-icon" aria-hidden="true">▤</span><strong>@L["Audit_Empty"]</strong><p>@L["Audit_EmptyHelp"]</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <caption id="audit-table-title" class="visually-hidden">@L["Audit_TableCaption"]</caption>
+                <thead><tr><th scope="col">@L["Audit_ColumnAction"]</th><th scope="col">@L["Audit_ColumnTarget"]</th><th scope="col">@L["Audit_ColumnRisk"]</th><th scope="col">@L["Audit_ColumnResult"]</th><th scope="col">@L["Audit_ColumnTime"]</th></tr></thead>
+                <tbody>
+                @foreach (var entry in Model.Entries)
+                {
+                    <tr><td><strong>@AdminAuditPresentation.Action(L, entry.Action)</strong><small class="table-subtext">@entry.ActorIdentitySnapshot</small></td><td>@AdminAuditPresentation.TargetType(L, entry.TargetType)<small class="table-subtext">@entry.TargetId</small></td><td><span class="badge @RiskClass(entry.RiskLevel)">@RiskLabel(entry.RiskLevel)</span></td><td><span class="status-chip @OutcomeClass(entry.Result)"><span class="status-dot" aria-hidden="true"></span>@OutcomeLabel(entry.Result)</span></td><td>@entry.OccurredAtUtc.ToLocalTime().ToString("G", CultureInfo.CurrentCulture)</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

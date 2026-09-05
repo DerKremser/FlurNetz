@@ -1,5 +1,83 @@
 @page "/admin/automation"
 @model FlurNetz.Api.Pages.Admin.AutomationModel
-@{ ViewData["Title"] = "Automation"; }
-<header class="page-header"><div><div class="eyebrow">System</div><h1>Automation</h1><p class="muted">Rules und ihre Ausführungsverläufe – ohne Run-Now oder Replay.</p></div></header>
-<section class="panel"><div class="panel-heading"><div><div class="eyebrow">Owner</div><h2>Rules</h2></div><span class="badge">@Model.Items.Count</span></div>@if (Model.Error is not null) { <div class="notice error" role="alert">@Model.Error</div> } else if (Model.Items.Count == 0) { <div class="empty-state"><strong>Keine Rules</strong><p>Es sind noch keine Automation-Rules vorhanden.</p></div> } else { <div class="table-wrap"><table><caption class="visually-hidden">Automation-Rules</caption><thead><tr><th>Name</th><th>Trigger</th><th>Status</th><th>Actions</th></tr></thead><tbody>@foreach (var item in Model.Items) { <tr><td><strong>@item.DisplayName</strong><small>@item.Description</small></td><td>@item.TriggerType</td><td><span class="badge">@(item.IsArchived ? "Archiviert" : item.IsEnabled ? "Aktiv" : "Deaktiviert")</span></td><td>@item.Actions.Count</td></tr> }</tbody></table></div> }</section>
+@{
+    ViewData["Title"] = L["Page_Automation"].Value;
+    string StatusLabel(bool archived, bool enabled) => archived
+        ? L["Status_Archived"].Value
+        : enabled ? L["Status_Active"].Value : L["Status_Disabled"].Value;
+    string StatusClass(bool archived, bool enabled) => archived
+        ? "archived"
+        : enabled ? "active" : "disabled";
+    string TriggerLabel(string key) => key switch
+    {
+        "engagement.message-recorded" => L["Automation_TriggerEngagement"].Value,
+        "shop.purchase-completed" => L["Automation_TriggerShopPurchase"].Value,
+        _ => key
+    };
+    string ConditionLabel(string key) => key switch
+    {
+        "community-identity.equals" => L["Automation_ConditionIdentity"].Value,
+        "shop.offer-id.equals" => L["Automation_ConditionOffer"].Value,
+        "shop.item-definition-id.equals" => L["Automation_ConditionItem"].Value,
+        "shop.price-paid.at-least" => L["Automation_ConditionPriceAtLeast"].Value,
+        "shop.price-paid.at-most" => L["Automation_ConditionPriceAtMost"].Value,
+        _ => key
+    };
+    string ConditionValue(FlurNetz.Modules.Automation.Domain.AutomationCondition condition) =>
+        condition.CommunityIdentityId?.ToString("D")
+        ?? condition.ShopOfferId?.ToString("D")
+        ?? condition.ItemDefinitionId?.ToString("D")
+        ?? condition.Amount?.ToString("N0", CultureInfo.CurrentCulture)
+        ?? "–";
+    string ActionLabel(string key) => key switch
+    {
+        "economy.credit" => L["Automation_ActionEconomy"].Value,
+        "notification.create" => L["Automation_ActionNotification"].Value,
+        "overlay.alert" => L["Automation_ActionOverlay"].Value,
+        _ => key
+    };
+    string ActionValue(FlurNetz.Modules.Automation.Domain.AutomationAction action) =>
+        action.Amount?.ToString("N0", CultureInfo.CurrentCulture)
+        ?? action.Title
+        ?? (action.OverlayChannelId is { } channelId ? channelId.Value.ToString("D") : null)
+        ?? "–";
+}
+<header class="page-header">
+    <div>
+        <div class="eyebrow">@L["Layout_System"]</div>
+        <h1>@L["Page_Automation"]</h1>
+        <p class="muted">@L["Automation_Description"]</p>
+    </div>
+</header>
+<section class="panel" aria-labelledby="automation-table-title">
+    <div class="panel-heading"><div><div class="eyebrow">@L["Automation_Rules"]</div><h2 id="automation-table-title">@L["Automation_Rules"]</h2></div><span class="badge">@Model.Items.Count.ToString("N0", CultureInfo.CurrentCulture)</span></div>
+    @if (Model.Error is not null)
+    {
+        <div class="notice error" role="alert">@Model.Error</div>
+    }
+    else if (Model.Items.Count == 0)
+    {
+        <div class="empty-state"><span class="empty-icon" aria-hidden="true">↗</span><strong>@L["Automation_Empty"]</strong><p>@L["Automation_EmptyHelp"]</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <caption class="visually-hidden">@L["Automation_TableCaption"]</caption>
+                <thead><tr><th scope="col">@L["Automation_ColumnName"]</th><th scope="col">@L["Automation_ColumnTrigger"]</th><th scope="col">@L["Automation_ColumnConditions"]</th><th scope="col">@L["Automation_ColumnActions"]</th><th scope="col">@L["Automation_ColumnStatus"]</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td><strong>@item.DisplayName</strong>@if (!string.IsNullOrWhiteSpace(item.Description)) { <small class="table-subtext">@item.Description</small> }<details class="rule-details"><summary>@L["Automation_ShowConfiguration"]</summary><div class="rule-configuration"><div><strong>@L["Automation_TriggerKey"]</strong><code>@item.TriggerType</code></div><div><strong>@L["Automation_Conditions"]</strong>@if (item.Conditions.Count == 0) { <span class="muted">@L["Automation_None"]</span> } else { <ul>@foreach (var condition in item.Conditions) { <li><span>@ConditionLabel(condition.ConditionType)</span><code>@ConditionValue(condition)</code></li> }</ul> }</div><div><strong>@L["Automation_Actions"]</strong><ul>@foreach (var action in item.Actions) { <li><span>@ActionLabel(action.ActionType)</span><code>@ActionValue(action)</code></li> }</ul></div></div></details></td>
+                        <td><span class="secondary-value">@TriggerLabel(item.TriggerType)</span><code class="table-subtext">@item.TriggerType</code></td>
+                        <td>@item.Conditions.Count.ToString("N0", CultureInfo.CurrentCulture)</td>
+                        <td>@item.Actions.Count.ToString("N0", CultureInfo.CurrentCulture)</td>
+                        <td><span class="status-chip @StatusClass(item.IsArchived, item.IsEnabled)"><span class="status-dot" aria-hidden="true"></span>@StatusLabel(item.IsArchived, item.IsEnabled)</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

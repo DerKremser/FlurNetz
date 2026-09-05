@@ -121,5 +121,5 @@ Unit-, Architecture-, PostgreSQL-Integration-, Workflow-, Worker- und API-Tests 
 Invarianten, Migration/Checks/FKs, Locking, deterministische Sortierung, Reservation,
 Keyset-History, Duplicate Delivery, Multi-Action-/Multi-Rule-Rollback, den realen Shop-Kauf
 und die laufende Worker-Verarbeitung ab. Cron, Scheduler, Delay, OR/NOT, Scripts, Templates,
-weitere Eventtypen, eigene Queues, eigenes Retry und ein Admin-Frontend sind nicht Bestandteil
+weitere Eventtypen, eigene Queues, eigenes Retry und ein Automation-eigenes Admin-Frontend sind nicht Bestandteil
 von Automation V1.

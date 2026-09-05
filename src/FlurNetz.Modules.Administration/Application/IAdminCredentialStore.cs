@@ -17,4 +17,5 @@ public interface IAdminCredentialStore
     Task<bool> IsFirstRunAvailableAsync(DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default);
     Task CompleteFirstRunSetupAsync(DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default);
     Task ChangePasswordAsync(AdminCredential credential, DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default);
+    Task ChangePreferredCultureAsync(AdminCredential credential, DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default);
 }

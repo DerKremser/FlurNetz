@@ -1,3 +1,5 @@
+using System.Xml.Linq;
+
 namespace FlurNetz.Api.IntegrationTests;
 
 public sealed class AdminShellUiTests
@@ -7,15 +9,19 @@ public sealed class AdminShellUiTests
     {
         var layout = ReadUiSource("_AdminLayout.cshtml");
 
-        Assert.Contains("href=\"#main-content\">Zum Hauptinhalt springen", layout, StringComparison.Ordinal);
-        Assert.Contains("<nav class=\"nav-groups\" aria-label=\"Hauptnavigation\">", layout, StringComparison.Ordinal);
+        Assert.Contains("href=\"#main-content\">@L[\"Layout_SkipToContent\"]", layout, StringComparison.Ordinal);
+        Assert.Contains("<nav class=\"nav-groups\" aria-label=\"@L[\"Layout_MainNavigation\"]\">", layout, StringComparison.Ordinal);
         Assert.Contains("<main id=\"main-content\" class=\"main-content\" tabindex=\"-1\">", layout, StringComparison.Ordinal);
         Assert.Contains("data-nav-toggle", layout, StringComparison.Ordinal);
         Assert.Contains("aria-controls=\"admin-navigation-drawer\"", layout, StringComparison.Ordinal);
         Assert.Contains("aria-expanded=\"false\"", layout, StringComparison.Ordinal);
         Assert.Contains("data-nav-close", layout, StringComparison.Ordinal);
-        Assert.Contains("aria-label=\"Navigation schließen\"", layout, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"@L[\"Nav_Close\"]\"", layout, StringComparison.Ordinal);
+        Assert.Contains("data-nav-label-open=\"@L[\"Nav_MenuOpen\"]\"", layout, StringComparison.Ordinal);
+        Assert.Contains("data-nav-label-close=\"@L[\"Nav_MenuClose\"]\"", layout, StringComparison.Ordinal);
         Assert.Contains("/admin/admin.js", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"language-switcher\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("/admin/culture", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("tabindex=\"1\"", layout, StringComparison.Ordinal);
     }
 
@@ -50,12 +56,29 @@ public sealed class AdminShellUiTests
         var page = ReadUiSource("IdentitiesIndex.cshtml");
 
         Assert.Contains("class=\"search-box search-box-disabled\"", page, StringComparison.Ordinal);
-        Assert.Contains("placeholder=\"Suche derzeit nicht verfügbar\"", page, StringComparison.Ordinal);
+        Assert.Contains("placeholder=\"@L[\"Identities_SearchUnavailable\"]\"", page, StringComparison.Ordinal);
         Assert.Contains("disabled", page, StringComparison.Ordinal);
         Assert.Contains("aria-describedby=\"identity-search-note\"", page, StringComparison.Ordinal);
         Assert.Contains("identity-search-note", page, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void GermanAndEnglishResourceKeysAreSymmetric()
+    {
+        var german = ReadResourceKeys("SharedResource.de.resx");
+        var english = ReadResourceKeys("SharedResource.en.resx");
+
+        Assert.Equal(german.OrderBy(key => key), english.OrderBy(key => key));
+    }
+
     private static string ReadUiSource(string fileName) => File.ReadAllText(
         Path.Combine(AppContext.BaseDirectory, "UiSource", fileName));
+
+    private static IReadOnlySet<string> ReadResourceKeys(string fileName) =>
+        XDocument.Load(Path.Combine(AppContext.BaseDirectory, "UiSource", fileName))
+            .Descendants("data")
+            .Select(element => element.Attribute("name")?.Value)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
 }

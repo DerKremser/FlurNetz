@@ -12,7 +12,8 @@ public sealed class AdminCredential
         string passwordHash,
         long credentialVersion,
         DateTimeOffset createdAtUtc,
-        DateTimeOffset passwordChangedAtUtc)
+        DateTimeOffset passwordChangedAtUtc,
+        string? preferredCulture)
     {
         CommunityIdentityId = CommunityIdentityId.Create(communityIdentityId.Value);
         Email = AdminEmail.Canonicalize(email);
@@ -35,6 +36,7 @@ public sealed class AdminCredential
         CredentialVersion = credentialVersion;
         CreatedAtUtc = createdAtUtc;
         PasswordChangedAtUtc = passwordChangedAtUtc;
+        PreferredCulture = AdminPreferredCulture.NormalizePersisted(preferredCulture);
     }
 
     public CommunityIdentityId CommunityIdentityId { get; }
@@ -44,6 +46,7 @@ public sealed class AdminCredential
     public long CredentialVersion { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; }
     public DateTimeOffset PasswordChangedAtUtc { get; private set; }
+    public string? PreferredCulture { get; private set; }
 
     public static AdminCredential Create(
         CommunityIdentityId communityIdentityId,
@@ -56,7 +59,8 @@ public sealed class AdminCredential
             passwordHash,
             1,
             EnsureUtc(nowUtc),
-            EnsureUtc(nowUtc));
+            EnsureUtc(nowUtc),
+            null);
 
     public static AdminCredential Rehydrate(
         CommunityIdentityId communityIdentityId,
@@ -64,14 +68,16 @@ public sealed class AdminCredential
         string passwordHash,
         long credentialVersion,
         DateTimeOffset createdAtUtc,
-        DateTimeOffset passwordChangedAtUtc) =>
+        DateTimeOffset passwordChangedAtUtc,
+        string? preferredCulture = null) =>
         new(
             communityIdentityId,
             email,
             passwordHash,
             credentialVersion,
             createdAtUtc,
-            passwordChangedAtUtc);
+            passwordChangedAtUtc,
+            preferredCulture);
 
     public void ChangePassword(string passwordHash, DateTimeOffset changedAtUtc)
     {
@@ -85,8 +91,13 @@ public sealed class AdminCredential
         PasswordChangedAtUtc = EnsureUtc(changedAtUtc);
     }
 
+    public void SetPreferredCulture(string preferredCulture)
+    {
+        PreferredCulture = AdminPreferredCulture.Require(preferredCulture);
+    }
+
     public AdminCredentialSnapshot ToSnapshot() =>
-        new(CommunityIdentityId, Email, CredentialVersion, CreatedAtUtc, PasswordChangedAtUtc);
+        new(CommunityIdentityId, Email, CredentialVersion, CreatedAtUtc, PasswordChangedAtUtc, PreferredCulture);
 
     private static DateTimeOffset EnsureUtc(DateTimeOffset value)
     {
@@ -96,6 +107,29 @@ public sealed class AdminCredential
         }
 
         return value;
+    }
+}
+
+public static class AdminPreferredCulture
+{
+    public const string German = "de";
+    public const string English = "en";
+    public const string Default = German;
+
+    public static string Require(string? value) =>
+        TryNormalize(value, out var normalized)
+            ? normalized
+            : throw new ArgumentException("Die bevorzugte Sprache muss de oder en sein.", nameof(value));
+
+    public static string Resolve(string? value) => NormalizePersisted(value) ?? Default;
+
+    public static string? NormalizePersisted(string? value) =>
+        TryNormalize(value, out var normalized) ? normalized : null;
+
+    public static bool TryNormalize(string? value, out string normalized)
+    {
+        normalized = value?.Trim().ToLowerInvariant() ?? string.Empty;
+        return normalized is German or English;
     }
 }
 

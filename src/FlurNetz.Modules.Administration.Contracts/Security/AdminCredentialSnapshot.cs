@@ -8,7 +8,8 @@ public sealed record AdminCredentialSnapshot(
     string Email,
     long CredentialVersion,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset PasswordChangedAtUtc);
+    DateTimeOffset PasswordChangedAtUtc,
+    string? PreferredCulture);
 
 /// <summary>Ergebnis eines Loginversuchs ohne unterscheidbare externe Fehlergründe.</summary>
 public sealed record AdminLoginResult(bool Succeeded, AdminCredentialSnapshot? Credential)

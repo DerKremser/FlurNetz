@@ -2,42 +2,61 @@
 @model FlurNetz.Api.Pages.Admin.SetupModel
 @{
     Layout = null;
-    ViewData["Title"] = "Ersteinrichtung";
+    ViewData["Title"] = L["Page_Setup"].Value;
+    var culture = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    var returnUrl = $"{Request.PathBase}{Request.Path}";
 }
 <!doctype html>
-<html lang="de">
+<html lang="@culture">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ersteinrichtung – FlurNetz</title>
+    <title>@L["Page_Setup"] – FlurNetz</title>
     <link rel="stylesheet" href="~/admin/admin.css" asp-append-version="true" />
 </head>
 <body class="login-page">
-    <main class="login-card" aria-labelledby="setup-title">
-        <div class="brand login-brand"><span class="brand-mark">F</span><span><strong>FlurNetz</strong><small>Administration</small></span></div>
-        <div class="eyebrow">Einmalige Ersteinrichtung</div>
-        <h1 id="setup-title">Administrator einrichten</h1>
-        <p class="muted">Lege den ersten Administrator mit einer E-Mail-Adresse und einem sicheren Passwort an. Dieser Flow ist danach dauerhaft geschlossen.</p>
+    <main class="login-card setup-card" aria-labelledby="setup-title">
+        <div class="brand login-brand"><span class="brand-mark" aria-hidden="true">F</span><span><strong>FlurNetz</strong><small>@L["Brand_AdminSubtitle"]</small></span></div>
+        <div class="eyebrow">@L["Setup_Eyebrow"]</div>
+        <h1 id="setup-title">@L["Setup_Heading"]</h1>
+        <p class="muted">@L["Setup_Description"]</p>
         <form method="post" class="stack-form" autocomplete="off" data-password-generator>
             @Html.AntiForgeryToken()
             <div asp-validation-summary="ModelOnly" class="form-error" role="alert"></div>
-            <label asp-for="Email">E-Mail-Adresse</label>
+            <label asp-for="Email">@L["Setup_Email"]</label>
             <input asp-for="Email" type="email" autocomplete="username" autofocus />
             <span asp-validation-for="Email" class="field-error"></span>
-            <label asp-for="NewPassword">Passwort</label>
-            <div class="password-input-row"><input asp-for="NewPassword" type="password" autocomplete="new-password" data-password-generator-password /><button class="secondary-button password-toggle-button" type="button" data-password-toggle aria-controls="NewPassword NewPasswordConfirmation" aria-pressed="false">Anzeigen</button></div>
+            <label asp-for="NewPassword">@L["Setup_Password"]</label>
+            <div class="password-input-row">
+                <input asp-for="NewPassword" type="password" autocomplete="new-password" data-password-generator-password />
+                <button class="secondary-button password-toggle-button" type="button" data-password-toggle data-show-label="@L["Setup_Show"]" data-hide-label="@L["Setup_Hide"]" aria-controls="NewPassword NewPasswordConfirmation" aria-pressed="false">@L["Setup_Show"]</button>
+            </div>
             <span asp-validation-for="NewPassword" class="field-error"></span>
-            <div class="password-actions"><button class="secondary-button" type="button" data-password-generate>Sicheres Passwort generieren</button><button class="secondary-button" type="button" data-password-copy disabled>Kopieren</button></div>
-            <p class="form-help">Der Generator läuft nur in diesem Browser. Speichere das Passwort jetzt sicher; es wird nicht in Browser-Speichern, Cookies, Logs, Auditdaten oder Operations abgelegt.</p>
-            <label asp-for="NewPasswordConfirmation">Passwort bestätigen</label>
+            <div class="password-actions">
+                <button class="secondary-button" type="button" data-password-generate data-generated-message="@L["Setup_Generated"]" data-generation-error="@L["Setup_GenerationError"]">@L["Setup_Generate"]</button>
+                <button class="secondary-button" type="button" data-password-copy data-copy-unavailable="@L["Setup_CopyUnavailable"]" data-copy-success="@L["Setup_Copied"]" data-copy-denied="@L["Setup_CopyDenied"]" disabled>@L["Setup_Copy"]</button>
+            </div>
+            <p class="form-help">@L["Setup_PasswordHelp"]</p>
+            <label asp-for="NewPasswordConfirmation">@L["Setup_ConfirmPassword"]</label>
             <input asp-for="NewPasswordConfirmation" type="password" autocomplete="new-password" data-password-generator-confirm />
             <span asp-validation-for="NewPasswordConfirmation" class="field-error"></span>
-            <label asp-for="SetupSecret">Einrichtungsschlüssel</label>
+            <label asp-for="SetupSecret">@L["Setup_Secret"]</label>
             <input asp-for="SetupSecret" type="password" autocomplete="off" />
             <span asp-validation-for="SetupSecret" class="field-error"></span>
-            <p class="form-help">Verwende den einmaligen Setup-Schlüssel aus der sicheren Runtime-Konfiguration. Er wird nie gespeichert oder protokolliert.</p>
+            <p class="form-help">@L["Setup_SecretHelp"]</p>
             <p class="form-status" data-password-status role="status" aria-live="polite"></p>
-            <button class="primary-button" type="submit">Administrator sicher einrichten</button>
+            <button class="primary-button" type="submit">@L["Setup_Submit"]</button>
+        </form>
+        <form class="login-language-switcher" method="get" action="/admin/culture">
+            <label for="setup-language">@L["Language_Label"]</label>
+            <div class="language-control">
+                <select id="setup-language" name="culture" aria-label="@L["Language_Label"]">
+                    @if (culture == "de") { <option value="de" selected>@L["Language_German"]</option> } else { <option value="de">@L["Language_German"]</option> }
+                    @if (culture == "en") { <option value="en" selected>@L["Language_English"]</option> } else { <option value="en">@L["Language_English"]</option> }
+                </select>
+                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                <button class="secondary-button" type="submit">@L["Language_Apply"]</button>
+            </div>
         </form>
     </main>
     <script src="~/admin/admin.js" asp-append-version="true"></script>

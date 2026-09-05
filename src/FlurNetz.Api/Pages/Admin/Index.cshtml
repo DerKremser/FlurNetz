@@ -1,33 +1,60 @@
 @page "/admin"
 @model FlurNetz.Api.Pages.Admin.IndexModel
 @{
-    ViewData["Title"] = "Dashboard";
+    ViewData["Title"] = L["Page_Dashboard"].Value;
+    string OutcomeLabel(FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome result) => result switch
+    {
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded => L["Status_Succeeded"].Value,
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Rejected => L["Status_Rejected"].Value,
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Failed => L["Status_Failed"].Value,
+        _ => L["Status_Unknown"].Value
+    };
+    string OutcomeClass(FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome result) => result switch
+    {
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded => "success",
+        FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Rejected => "warning",
+        _ => "danger"
+    };
 }
 <header class="page-header">
-    <div><div class="eyebrow">Übersicht</div><h1>Dashboard</h1><p class="muted">Der aktuelle Überblick über deine Administration.</p></div>
-    <a class="secondary-button" href="/admin/identities">Identitäten öffnen <span aria-hidden="true">→</span></a>
+    <div>
+        <div class="eyebrow">@L["Dashboard_Eyebrow"]</div>
+        <h1>@L["Page_Dashboard"]</h1>
+        <p class="muted">@L["Dashboard_Description"]</p>
+    </div>
+    <a class="secondary-button" href="/admin/identities">@L["Dashboard_OpenIdentities"] <span aria-hidden="true">→</span></a>
 </header>
 @if (Model.DependencyError is not null)
 {
-    <div class="notice error" role="status">Ein Bereich ist momentan nicht verfügbar: @Model.DependencyError</div>
+    <div class="notice error" role="alert">@L["Dashboard_Unavailable", Model.DependencyError]</div>
 }
-<section class="metric-grid" aria-label="Aktuelle Daten">
-    <article class="metric-card"><span class="metric-icon blue">◎</span><div><span class="metric-label">Identitäten geladen</span><strong>@Model.IdentityCount</strong><small>erste Seite</small></div></article>
-    <article class="metric-card"><span class="metric-icon purple">▤</span><div><span class="metric-label">Audit geladen</span><strong>@Model.AuditCount</strong><small>letzte Einträge</small></div></article>
-    <article class="metric-card"><span class="metric-icon green">✓</span><div><span class="metric-label">Administration</span><strong>Aktiv</strong><small>serverseitig geschützt</small></div></article>
+<section class="metric-grid" aria-label="@L["Dashboard_CurrentData"]">
+    <article class="metric-card"><span class="metric-icon blue" aria-hidden="true">◎</span><div><span class="metric-label">@L["Dashboard_IdentityCount"]</span><strong>@Model.IdentityCount.ToString("N0", CultureInfo.CurrentCulture)</strong><small>@L["Dashboard_FirstPage"]</small></div></article>
+    <article class="metric-card"><span class="metric-icon purple" aria-hidden="true">▤</span><div><span class="metric-label">@L["Dashboard_AuditCount"]</span><strong>@Model.AuditCount.ToString("N0", CultureInfo.CurrentCulture)</strong><small>@L["Dashboard_LastEntries"]</small></div></article>
+    <article class="metric-card"><span class="metric-icon green" aria-hidden="true">✓</span><div><span class="metric-label">@L["Dashboard_AdminStatus"]</span><strong>@L["Status_Active"]</strong><small>@L["Dashboard_ServerProtected"]</small></div></article>
 </section>
 <section class="content-grid">
-    <article class="panel panel-wide">
-        <div class="panel-heading"><div><div class="eyebrow">Verlauf</div><h2>Letzte Audit-Aktionen</h2></div><a class="text-link" href="/admin/audit">Alle ansehen →</a></div>
+    <article class="panel panel-wide" aria-labelledby="recent-audit-title">
+        <div class="panel-heading"><div><div class="eyebrow">@L["Dashboard_History"]</div><h2 id="recent-audit-title">@L["Dashboard_RecentAudit"]</h2></div><a class="text-link" href="/admin/audit">@L["Dashboard_ViewAll"] <span aria-hidden="true">→</span></a></div>
         @if (Model.RecentAudit.Count == 0)
-        { <div class="empty-state"><span class="empty-icon">▤</span><strong>Noch keine Audit-Aktionen</strong><p>Erfolgreiche administrative Änderungen erscheinen hier.</p></div> }
+        {
+            <div class="empty-state"><span class="empty-icon" aria-hidden="true">▤</span><strong>@L["Dashboard_NoAudit"]</strong><p>@L["Dashboard_NoAuditHelp"]</p></div>
+        }
         else
         {
             <div class="audit-list">
             @foreach (var entry in Model.RecentAudit)
-            { <div class="audit-row"><span class="status-dot @(entry.Result == FlurNetz.Modules.Administration.Contracts.Audit.AdminAuditOutcome.Succeeded ? "success" : "warning")"></span><div><strong>@entry.Action</strong><small>@entry.TargetType · @entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></div><span class="badge">@entry.Result</span></div> }
+            {
+                <div class="audit-row"><span class="status-dot @OutcomeClass(entry.Result)" aria-hidden="true"></span><div><strong>@AdminAuditPresentation.Action(L, entry.Action)</strong><small>@AdminAuditPresentation.TargetType(L, entry.TargetType) · @entry.OccurredAtUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</small></div><span class="badge @OutcomeClass(entry.Result)">@OutcomeLabel(entry.Result)</span></div>
+            }
             </div>
         }
     </article>
-    <article class="panel quick-panel"><div class="eyebrow">Schnellzugriff</div><h2>Arbeitsbereiche</h2><a class="quick-link" href="/admin/identities"><span>◎</span><div><strong>Identity Lookup</strong><small>Balances, XP und Notifications</small></div><b>→</b></a><a class="quick-link" href="/admin/audit"><span>▤</span><div><strong>Audit prüfen</strong><small>Nachvollziehbarer Verlauf</small></div><b>→</b></a><a class="quick-link" href="/admin/account"><span>⚙</span><div><strong>Account sichern</strong><small>Passwort und Sessions</small></div><b>→</b></a></article>
+    <article class="panel quick-panel" aria-labelledby="quick-access-title">
+        <div class="eyebrow">@L["Dashboard_QuickAccess"]</div>
+        <h2 id="quick-access-title">@L["Dashboard_Workspaces"]</h2>
+        <a class="quick-link" href="/admin/identities"><span aria-hidden="true">◎</span><div><strong>@L["Dashboard_IdentityLookup"]</strong><small>@L["Dashboard_IdentityLookupHelp"]</small></div><b aria-hidden="true">→</b></a>
+        <a class="quick-link" href="/admin/audit"><span aria-hidden="true">▤</span><div><strong>@L["Dashboard_AuditCheck"]</strong><small>@L["Dashboard_AuditCheckHelp"]</small></div><b aria-hidden="true">→</b></a>
+        <a class="quick-link" href="/admin/account"><span aria-hidden="true">⚙</span><div><strong>@L["Dashboard_SecureAccount"]</strong><small>@L["Dashboard_SecureAccountHelp"]</small></div><b aria-hidden="true">→</b></a>
+    </article>
 </section>

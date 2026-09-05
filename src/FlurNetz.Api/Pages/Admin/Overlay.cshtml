@@ -1,5 +1,45 @@
 @page "/admin/overlay"
 @model FlurNetz.Api.Pages.Admin.OverlayModel
-@{ ViewData["Title"] = "Overlay"; }
-<header class="page-header"><div><div class="eyebrow">System</div><h1>Overlay</h1><p class="muted">Channels, Status und sichere One-Time-Source-Key-Aktionen.</p></div></header>
-<section class="panel"><div class="panel-heading"><div><div class="eyebrow">Channels</div><h2>Browser Sources</h2></div><span class="badge">@Model.Items.Count</span></div>@if (Model.Error is not null) { <div class="notice error" role="alert">@Model.Error</div> } else if (Model.Items.Count == 0) { <div class="empty-state"><strong>Keine Overlay-Channels</strong><p>Es wurden noch keine Channels angelegt.</p></div> } else { <div class="table-wrap"><table><caption class="visually-hidden">Overlay-Channels</caption><thead><tr><th>Name</th><th>Status</th><th>Aktualisiert</th><th>ID</th></tr></thead><tbody>@foreach (var item in Model.Items) { <tr><td><strong>@item.DisplayName</strong><small>@item.Description</small></td><td><span class="badge">@(item.IsArchived ? "Archiviert" : item.IsEnabled ? "Aktiv" : "Deaktiviert")</span></td><td>@item.UpdatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td><td><code>@item.Id.Value</code></td></tr> }</tbody></table></div> }</section>
+@{
+    ViewData["Title"] = L["Page_Overlay"].Value;
+    string StatusLabel(bool archived, bool enabled) => archived
+        ? L["Status_Archived"].Value
+        : enabled ? L["Status_Active"].Value : L["Status_Disabled"].Value;
+    string StatusClass(bool archived, bool enabled) => archived
+        ? "archived"
+        : enabled ? "active" : "disabled";
+}
+<header class="page-header">
+    <div>
+        <div class="eyebrow">@L["Layout_System"]</div>
+        <h1>@L["Page_Overlay"]</h1>
+        <p class="muted">@L["Overlay_Description"]</p>
+    </div>
+</header>
+<section class="panel" aria-labelledby="channels-title">
+    <div class="panel-heading"><div><div class="eyebrow">@L["Overlay_Channels"]</div><h2 id="channels-title">@L["Overlay_BrowserSources"]</h2></div><span class="badge">@Model.Items.Count.ToString("N0", CultureInfo.CurrentCulture)</span></div>
+    @if (Model.Error is not null)
+    {
+        <div class="notice error" role="alert">@Model.Error</div>
+    }
+    else if (Model.Items.Count == 0)
+    {
+        <div class="empty-state"><span class="empty-icon" aria-hidden="true">◌</span><strong>@L["Overlay_Empty"]</strong><p>@L["Overlay_EmptyHelp"]</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <caption class="visually-hidden">@L["Overlay_TableCaption"]</caption>
+                <thead><tr><th scope="col">@L["Overlay_ColumnName"]</th><th scope="col">@L["Overlay_ColumnStatus"]</th><th scope="col">@L["Overlay_ColumnUpdated"]</th><th scope="col">@L["Overlay_ColumnId"]</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr><td><strong>@item.DisplayName</strong>@if (!string.IsNullOrWhiteSpace(item.Description)) { <small class="table-subtext">@item.Description</small> }</td><td><span class="status-chip @StatusClass(item.IsArchived, item.IsEnabled)"><span class="status-dot" aria-hidden="true"></span>@StatusLabel(item.IsArchived, item.IsEnabled)</span></td><td>@item.UpdatedAtUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</td><td><code>@item.Id.Value.ToString("D")</code></td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p class="panel-footnote">@L["Overlay_SourceKeyNote"]</p>
+    }
+</section>

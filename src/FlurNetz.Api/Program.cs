@@ -7,6 +7,7 @@ using FlurNetz.Messaging.Serialization;
 using FlurNetz.Modules.Administration;
 using FlurNetz.Modules.Administration.Application;
 using FlurNetz.Modules.Administration.Contracts.Security;
+using FlurNetz.Modules.Administration.Domain;
 using FlurNetz.Modules.Achievements;
 using FlurNetz.Modules.Economy;
 using FlurNetz.Modules.Identity;
@@ -24,6 +25,8 @@ using FlurNetz.Persistence.Configuration;
 using FlurNetz.Persistence.Connections;
 using FlurNetz.Persistence.Migrations;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Localization;
+using System.Globalization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -47,7 +50,22 @@ public sealed class Program
         var builder = WebApplication.CreateBuilder(args);
 
         builder.Services.AddProblemDetails();
-        builder.Services.AddRazorPages();
+        builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
+        builder.Services
+            .AddRazorPages()
+            .AddViewLocalization();
+        var supportedCultures = new[]
+        {
+            new CultureInfo("de"),
+            new CultureInfo("en")
+        };
+        builder.Services.Configure<RequestLocalizationOptions>(options =>
+        {
+            options.DefaultRequestCulture = new RequestCulture("de");
+            options.SupportedCultures = supportedCultures;
+            options.SupportedUICultures = supportedCultures;
+            options.ApplyCurrentCultureToResponseHeaders = true;
+        });
         builder.Services.AddAntiforgery(options =>
         {
             options.HeaderName = "X-CSRF-TOKEN";
@@ -144,6 +162,8 @@ public sealed class Program
 
         var app = builder.Build();
 
+        app.UseRequestLocalization();
+
         if (app.Environment.IsDevelopment())
         {
             app.UseDeveloperExceptionPage();
@@ -192,7 +212,29 @@ public sealed class Program
         app.MapAutomationManagementEndpoints();
         app.MapOverlayEndpoints();
         app.MapAdminAccountEndpoints();
+        app.MapGet("/admin/culture", (HttpContext context, string? culture, string? returnUrl) =>
+        {
+            if (context.User.Identity?.IsAuthenticated == true)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            if (!AdminPreferredCulture.TryNormalize(culture, out var selectedCulture))
+            {
+                return Results.BadRequest();
+            }
+
+            AdminCultureCookie.Append(context, selectedCulture);
+
+            return Results.LocalRedirect(IsLocalReturnUrl(returnUrl) ? returnUrl! : "/admin");
+        }).AllowAnonymous();
         app.MapRazorPages();
         await app.RunAsync();
     }
+
+    private static bool IsLocalReturnUrl(string? returnUrl) =>
+        !string.IsNullOrWhiteSpace(returnUrl)
+        && returnUrl.StartsWith("/", StringComparison.Ordinal)
+        && !returnUrl.StartsWith("//", StringComparison.Ordinal)
+        && !returnUrl.StartsWith("/\\", StringComparison.Ordinal);
 }

@@ -27,8 +27,8 @@ public sealed class AdministrationPostgreSqlIntegrationTests(AdministrationPostg
         await using var factory = CreateFactory();
         var first = await new MigrationRunner(factory, [new IdentityMigrationSource(), new AdministrationMigrationSource()]).RunAsync(cancellationToken);
         var second = await new MigrationRunner(factory, [new IdentityMigrationSource(), new AdministrationMigrationSource()]).RunAsync(cancellationToken);
-        Assert.Equal(new MigrationRunResult(2, 0), first);
-        Assert.Equal(new MigrationRunResult(0, 2), second);
+        Assert.Equal(new MigrationRunResult(3, 0), first);
+        Assert.Equal(new MigrationRunResult(0, 3), second);
 
         await using var connection = await factory.OpenConnectionAsync(cancellationToken);
         var tables = (await connection.QueryAsync<string>(new CommandDefinition("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'administration_%' ORDER BY table_name;", cancellationToken: cancellationToken))).ToArray();
@@ -64,10 +64,11 @@ public sealed class AdministrationPostgreSqlIntegrationTests(AdministrationPostg
 
         await using (var connection = await factory.OpenConnectionAsync(cancellationToken))
         {
-            var row = await connection.QuerySingleAsync<(Guid IdentityId, string Hash, string NormalizedEmail, long Version)>(new CommandDefinition("SELECT community_identity_id AS IdentityId, password_hash AS Hash, normalized_email AS NormalizedEmail, credential_version AS Version FROM administration_credentials;", cancellationToken: cancellationToken));
+            var row = await connection.QuerySingleAsync<(Guid IdentityId, string Hash, string NormalizedEmail, long Version, string? PreferredCulture)>(new CommandDefinition("SELECT community_identity_id AS IdentityId, password_hash AS Hash, normalized_email AS NormalizedEmail, credential_version AS Version, preferred_culture AS PreferredCulture FROM administration_credentials;", cancellationToken: cancellationToken));
             Assert.DoesNotContain("sentinel initial password", row.Hash, StringComparison.Ordinal);
             Assert.Equal("OPERATOR@EXAMPLE.COM", row.NormalizedEmail);
             Assert.Equal(1, row.Version);
+            Assert.Null(row.PreferredCulture);
             Assert.Equal(1, await connection.QuerySingleAsync<long>(new CommandDefinition("SELECT count(*) FROM community_identities;", cancellationToken: cancellationToken)));
             Assert.Equal(1, await connection.QuerySingleAsync<long>(new CommandDefinition("SELECT count(*) FROM administration_role_assignments;", cancellationToken: cancellationToken)));
             var completedAt = await connection.QuerySingleOrDefaultAsync<DateTime?>(new CommandDefinition("SELECT completed_at_utc FROM administration_setup_state WHERE id = 1;", cancellationToken: cancellationToken));

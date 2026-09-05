@@ -17,6 +17,8 @@
     <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Catalog.cshtml" Link="UiSource\Catalog.cshtml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Identities\Index.cshtml" Link="UiSource\IdentitiesIndex.cshtml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\FlurNetz.Api\Pages\Admin\Setup.cshtml" Link="UiSource\Setup.cshtml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\FlurNetz.Api\Resources\SharedResource.de.resx" Link="UiSource\SharedResource.de.resx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\FlurNetz.Api\Resources\SharedResource.en.resx" Link="UiSource\SharedResource.en.resx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

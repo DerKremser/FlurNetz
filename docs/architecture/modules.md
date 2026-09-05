@@ -19,6 +19,22 @@ FlurNetz bildet die vorgesehenen Fachmodule zunächst als physische Assembly-Gre
 | Integrations | `FlurNetz.Modules.Integrations.Contracts` | `FlurNetz.Modules.Integrations` |
 | Administration | `FlurNetz.Modules.Administration.Contracts` | `FlurNetz.Modules.Administration` |
 
+## Aktueller Stand des Administrationsmoduls und der UI
+
+Administration besitzt den eigenen Security-/Operations-Zustand für Credentials, statische
+Administrator-Rolle, Audit, idempotente Operations und den First-Run-State. Die unveränderliche
+Migration `Administration:1:CreateAdministrationSecurityState` legt diese Tabellen an;
+`Administration:2:AddAdministratorPreferredCulture` ergänzt die optionale, auf `de` und `en`
+begrenzte Administratorpräferenz `preferred_culture`.
+
+Die Administration UI V1.1 ist kein weiteres Modul, sondern ein serverseitig gerenderter
+Razor-UI-Adapter im API-Host. Sie verwendet die gemeinsame Admin-Shell, Design-Tokens,
+responsive Navigation, Mobile-Drawer, Skip-Link, ARIA-/Keyboard-Zustände, sichtbaren Fokus und
+Reduced-Motion-Unterstützung. Native DE-/EN-Ressourcen verwenden Deutsch als Default/Fallback;
+die Auswahl unter `/admin/account` ist pro Administrator persistiert und wird beim Login erneut
+angewendet. Die UI erweitert weder fachliche Domain-Modelle noch die öffentlichen Modul-
+Contracts; fachliche Reads und Mutationen laufen über die jeweiligen Owner-Capabilities.
+
 ## Aktueller Stand des Identity-Moduls
 
 Identity besitzt weiterhin den minimalen persistierten Vertical Slice für die zentrale
@@ -449,7 +465,7 @@ Atomicity und Inbox-Deduplizierung.
 11. Automation
 12. Overlay
 13. Integrations (umgesetzt: External-Identity-Mapping V1)
-14. Administration (umgesetzt: Administration V1)
+14. Administration (umgesetzt: Administration V1; UI V1.1 abgeschlossen)
 
 Diese Reihenfolge dokumentiert die Umsetzung. Administration ist der hostseitige
 Security-/Operations-Slice für die vorhandenen Owner-Module; weitere fachliche

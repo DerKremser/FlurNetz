@@ -23,6 +23,7 @@ public static class AdministrationModule
         services.AddScoped<IAdminFirstRunSetup, AdminFirstRunSetup>();
         services.AddScoped<IAdminCredentialRecovery, AdminCredentialRecovery>();
         services.AddScoped<AdminPasswordChange>();
+        services.AddScoped<AdminPreferredCultureChange>();
         services.AddScoped<AdminMutationCoordinator>();
         services.AddScoped<IAdminExecutionContextAccessor, AdminExecutionContextAccessor>();
         services.AddSingleton<IMigrationSource, AdministrationMigrationSource>();

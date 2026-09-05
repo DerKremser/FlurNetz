@@ -3,11 +3,14 @@ using FlurNetz.Modules.Identity.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Localization;
 
 namespace FlurNetz.Api.Pages.Admin.Identities;
 
 [Authorize(Policy = "Admin.Identity.Read")]
-public sealed class IndexModel(ICommunityIdentityRead identityRead) : PageModel
+public sealed class IndexModel(
+    ICommunityIdentityRead identityRead,
+    IStringLocalizer<SharedResource> localizer) : PageModel
 {
     public IReadOnlyList<CommunityIdentitySummary> Items { get; private set; } = [];
     public CommunityIdentityId? NextCursor { get; private set; }
@@ -20,7 +23,7 @@ public sealed class IndexModel(ICommunityIdentityRead identityRead) : PageModel
         {
             if (!Guid.TryParse(after, out var raw) || raw == Guid.Empty)
             {
-                Error = "Der Seiten-Cursor ist ungültig.";
+                Error = localizer["Error_IdentityCursorInvalid"].Value;
                 return;
             }
 
@@ -35,7 +38,7 @@ public sealed class IndexModel(ICommunityIdentityRead identityRead) : PageModel
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Error = "Die Identitäten sind momentan nicht verfügbar.";
+            Error = localizer["Error_IdentitiesUnavailable"].Value;
         }
     }
 }
